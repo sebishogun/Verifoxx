@@ -124,7 +124,7 @@ type Program struct {
 	Outcomes     result.OutcomeTable
 	Remediations result.RemediationTable
 	Resolutions  result.ResolutionTable
-	Resolver     result.Resolver
+	resolver     result.Resolver
 
 	// Retained source bytes of the policy document.
 	InputBytes []byte
@@ -141,6 +141,34 @@ type Program struct {
 // InstructionCount returns the number of compiled instructions.
 func (p *Program) InstructionCount() int {
 	return len(p.Opcodes)
+}
+
+// ClearResultResolver invalidates construction-time Resolver state before the
+// owning result columns are rebuilt.
+func (p *Program) ClearResultResolver() {
+	p.resolver = result.Resolver{}
+}
+
+// ValidateResultTables validates the Program-owned result columns and stores
+// the resulting immutable resolver. It is used while constructing a Program,
+// before publication.
+func (p *Program) ValidateResultTables() error {
+	p.ClearResultResolver()
+	resolver, err := result.NewResolver(p.Outcomes, p.Remediations, p.Resolutions)
+	if err != nil {
+		return err
+	}
+	p.resolver = resolver
+	return nil
+}
+
+// ResultResolver returns a read-only copy of the validated resolver over this
+// Program's immutable result tables.
+func (p *Program) ResultResolver() result.Resolver {
+	if p == nil {
+		return result.Resolver{}
+	}
+	return p.resolver
 }
 
 // Symbol returns the frozen bytes for id, or ok=false for the invalid zero
