@@ -31,6 +31,11 @@ type Program struct {
 	EvidenceKinds  []schema.EvidenceKindID
 	EvidenceStates []schema.EvidenceStateID
 	RootFlags      []RootFlags
+	// TruthSlots/ReasonSlots hold liveness-assigned evaluator scratch IDs.
+	// TruthSlots is nonzero for every instruction; a zero ReasonSlot means the
+	// row cannot contribute to a retained semantic reason.
+	TruthSlots  []schema.SlotID
+	ReasonSlots []schema.SlotID
 	// InstructionNodes and InstructionSourceStarts/Ends record the canonical
 	// first source NodeID and span for each instruction.
 	InstructionNodes        []schema.NodeID
@@ -130,12 +135,14 @@ type Program struct {
 	InputBytes []byte
 
 	// Fixed scalar tail. ContentHash is the SHA-256 of the retained source;
-	// PolicyName/PolicyVersion are canonical symbol IDs; ProgramSymbolCount
-	// is the number of frozen program symbols.
+	// PolicyName/PolicyVersion are canonical symbol IDs; ProgramSymbolCount is
+	// the number of frozen program symbols; slot counts size evaluator scratch.
 	ContentHash        [32]byte
 	PolicyName         schema.SymbolID
 	PolicyVersion      schema.SymbolID
 	ProgramSymbolCount uint32
+	TruthSlotCount     uint32
+	ReasonSlotCount    uint32
 }
 
 // InstructionCount returns the number of compiled instructions.

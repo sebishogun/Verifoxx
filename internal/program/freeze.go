@@ -27,6 +27,8 @@ func Freeze(src *Program) (Program, error) {
 		EvidenceKinds:             cloneExact(src.EvidenceKinds),
 		EvidenceStates:            cloneExact(src.EvidenceStates),
 		RootFlags:                 cloneExact(src.RootFlags),
+		TruthSlots:                cloneExact(src.TruthSlots),
+		ReasonSlots:               cloneExact(src.ReasonSlots),
 		InstructionNodes:          cloneExact(src.InstructionNodes),
 		InstructionSourceStarts:   cloneExact(src.InstructionSourceStarts),
 		InstructionSourceEnds:     cloneExact(src.InstructionSourceEnds),
@@ -84,6 +86,8 @@ func Freeze(src *Program) (Program, error) {
 		PolicyName:                src.PolicyName,
 		PolicyVersion:             src.PolicyVersion,
 		ProgramSymbolCount:        src.ProgramSymbolCount,
+		TruthSlotCount:            src.TruthSlotCount,
+		ReasonSlotCount:           src.ReasonSlotCount,
 		Outcomes: result.OutcomeTable{
 			Names:      cloneExact(src.Outcomes.Names),
 			Precedence: cloneExact(src.Outcomes.Precedence),
