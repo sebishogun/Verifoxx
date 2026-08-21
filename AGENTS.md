@@ -3,7 +3,15 @@
 ## Sources Of Truth
 
 - `Verifoxx_AI_Engineer_Assignment.pdf` is the original assignment; `Requirements.md` is its text transcription. Resolve any discrepancy in favor of the PDF.
-- The repository is not scaffolded yet: there is no module, source code, README, CI, or build/test configuration. Do not invent commands or assume Go solely from the parent directory name; update this file once the implementation establishes them.
+- `docs/plans/2026-08-20-verifoxx-policy-engine-design.md` is the approved architecture; `docs/plans/2026-08-20-verifoxx-policy-engine.md` is the ordered implementation plan.
+
+## Development
+
+- The module is `github.com/sebishogun/verifoxx`, targets Go 1.27, and enters through `cmd/verifoxx`.
+- Run all tests with `go test -timeout 60s ./...`; use `-count=1` when fresh evidence matters.
+- Bound every test, benchmark, build, vet, and fuzz command with an explicit timeout. Never use watch or repeat loops.
+- Keep per-node, per-row, and per-request paths allocation-free through capacity hints, reusable typed slabs, SoA columns, and CSR edges. Verify with `-benchmem` and `-gcflags=-m`.
+- PostgreSQL, JSON, CLI, TUI, HTTP, and gRPC are adapters. They must not introduce maps, reflection, database calls, or string conversion into evaluator kernels.
 
 ## Assignment Constraints
 
