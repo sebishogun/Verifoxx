@@ -158,6 +158,9 @@ func (l *Lowerer) Lower(dst *program.Program, doc *ast.Document, fields *schema.
 	if err := l.lowerSemantics(&l.output, doc); err != nil {
 		return err
 	}
+	if err := l.assignSlots(&l.output, slotReuse); err != nil {
+		return err
+	}
 	frozen, err := program.Freeze(&l.output)
 	if err != nil {
 		return ErrInvalidGeneratedProgram
@@ -437,6 +440,10 @@ func resetInstructionColumns(dst *program.Program) {
 	dst.EvidenceKinds = dst.EvidenceKinds[:0]
 	dst.EvidenceStates = dst.EvidenceStates[:0]
 	dst.RootFlags = dst.RootFlags[:0]
+	dst.TruthSlots = dst.TruthSlots[:0]
+	dst.ReasonSlots = dst.ReasonSlots[:0]
+	dst.TruthSlotCount = 0
+	dst.ReasonSlotCount = 0
 	dst.InstructionNodes = dst.InstructionNodes[:0]
 	dst.InstructionSourceStarts = dst.InstructionSourceStarts[:0]
 	dst.InstructionSourceEnds = dst.InstructionSourceEnds[:0]

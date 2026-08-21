@@ -20,6 +20,7 @@ func TestLowerAPI(t *testing.T) {
 	if got == nil || got.InstructionCount() == 0 {
 		t.Fatal("Lower returned an empty Program")
 	}
+	assertProgramSlots(t, got)
 	var lowerer Lowerer
 	var dst program.Program
 	if err := lowerer.Lower(&dst, doc, fields, syms); err != nil {
@@ -102,6 +103,29 @@ func TestLowerErrorsAreAtomic(t *testing.T) {
 	}
 }
 
+func TestLowerSlotPlanningErrorIsAtomic(t *testing.T) {
+	p := slotTestProgram(
+		[]program.Opcode{program.OpcodeInvalid},
+		[][]schema.InstructionID{nil},
+		[]program.RootFlags{program.RootAssertion},
+	)
+	p.TruthSlots = []schema.SlotID{7}
+	p.ReasonSlots = []schema.SlotID{8}
+	p.TruthSlotCount = 7
+	p.ReasonSlotCount = 8
+	wantTruth := append([]schema.SlotID(nil), p.TruthSlots...)
+	wantReasons := append([]schema.SlotID(nil), p.ReasonSlots...)
+	var lowerer Lowerer
+	if err := lowerer.assignSlots(&p, slotReuse); !errors.Is(err, ErrInvalidGeneratedProgram) {
+		t.Fatalf("assignSlots error = %v, want %v", err, ErrInvalidGeneratedProgram)
+	}
+	if !reflect.DeepEqual(p.TruthSlots, wantTruth) || !reflect.DeepEqual(p.ReasonSlots, wantReasons) ||
+		p.TruthSlotCount != 7 || p.ReasonSlotCount != 8 {
+		t.Fatalf("failed slot planning published %v/%v counts %d/%d",
+			p.TruthSlots, p.ReasonSlots, p.TruthSlotCount, p.ReasonSlotCount)
+	}
+}
+
 func TestLowerOwnership(t *testing.T) {
 	doc, fields, syms := lowerFixture(t)
 	var lowerer Lowerer
@@ -180,6 +204,49 @@ func TestLowerDeterministic(t *testing.T) {
 
 func TestProgramPointerlessColumns(t *testing.T) {
 	assertPointerlessColumns(t, reflect.TypeOf(program.Program{}), "Program")
+}
+
+func assertProgramSlots(t *testing.T, p *program.Program) {
+	t.Helper()
+	n := p.InstructionCount()
+	if len(p.TruthSlots) != n || len(p.ReasonSlots) != n {
+		t.Fatalf("slot column lengths = %d/%d, want %d", len(p.TruthSlots), len(p.ReasonSlots), n)
+	}
+	if p.TruthSlotCount == 0 || uint64(p.TruthSlotCount) > uint64(n) || uint64(p.ReasonSlotCount) > uint64(n) {
+		t.Fatalf("slot peaks = %d/%d for %d instructions", p.TruthSlotCount, p.ReasonSlotCount, n)
+	}
+	reasonLive := make([]uint8, n)
+	for row, flags := range p.RootFlags {
+		if flags != 0 {
+			reasonLive[row] = 1
+		}
+	}
+	for row := n; row > 0; {
+		row--
+		if reasonLive[row] == 0 {
+			continue
+		}
+		switch p.Opcodes[row] {
+		case program.OpcodeAll, program.OpcodeAny, program.OpcodeNot:
+			start := int(p.OperandStarts[row])
+			end := start + int(p.OperandCounts[row])
+			for _, operand := range p.Operands[start:end] {
+				reasonLive[operand-1] = 1
+			}
+		}
+	}
+	for row := range n {
+		if p.TruthSlots[row] == 0 || uint32(p.TruthSlots[row]) > p.TruthSlotCount {
+			t.Fatalf("truth slot[%d] = %d outside 1..%d", row, p.TruthSlots[row], p.TruthSlotCount)
+		}
+		if reasonLive[row] != 0 {
+			if p.ReasonSlots[row] == 0 || uint32(p.ReasonSlots[row]) > p.ReasonSlotCount {
+				t.Fatalf("reason slot[%d] = %d outside 1..%d", row, p.ReasonSlots[row], p.ReasonSlotCount)
+			}
+		} else if p.ReasonSlots[row] != 0 {
+			t.Fatalf("reason-irrelevant row %d has slot %d", row, p.ReasonSlots[row])
+		}
+	}
 }
 
 func snapshotExported(value reflect.Value) any {
