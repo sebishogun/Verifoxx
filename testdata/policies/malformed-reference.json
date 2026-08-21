@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "name": "verifoxx",
+  "version": "1.0.0",
+  "evidence_kinds": [
+    {"name": "approval_record"},
+    {"name": "usage_adjustment"}
+  ],
+  "evidence_states": [
+    {"name": "current"},
+    {"name": "missing"},
+    {"name": "stale"},
+    {"name": "unclear"},
+    {"name": "unverifiable"},
+    {"name": "conflict"}
+  ],
+  "outcomes": [
+    {"name": "Approve", "precedence": 1, "terminal": true},
+    {"name": "Reject", "precedence": 4, "terminal": true},
+    {"name": "Revise", "precedence": 2, "terminal": false},
+    {"name": "Escalate", "precedence": 3, "terminal": true}
+  ],
+  "requirements": [
+    {
+      "id": "R1",
+      "source": "External requests require approval.",
+      "applies": {
+        "op": "exists",
+        "field": "context.environment"
+      },
+      "clauses": [
+        {
+          "assert": {
+            "op": "exists",
+            "field": "subject.unknown"
+          },
+          "evidence": [
+            {"op": "evidence_matches", "kind": "approval_record", "state": "current"}
+          ],
+          "resolution": {
+            "satisfied": "Approve",
+            "false": "Reject",
+            "missing": "Escalate",
+            "stale": "Escalate",
+            "unclear": "Escalate",
+            "unverifiable": "Escalate",
+            "conflict": "Escalate"
+          },
+          "remediations": []
+        }
+      ]
+    }
+  ]
+}
