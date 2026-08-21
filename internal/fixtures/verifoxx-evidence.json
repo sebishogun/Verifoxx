@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "pack": "verifoxx",
+  "evidence": [
+    {
+      "id": "E1",
+      "type": "approval_record",
+      "attributes": {
+        "status": "valid",
+        "timing": "before_execution",
+        "reviewer": "designated_reviewer",
+        "timestamp_state": "current"
+      }
+    },
+    {
+      "id": "E2",
+      "type": "execution_environment_attestation",
+      "attributes": {
+        "subject": "local_approved_env",
+        "status": "verified",
+        "attestation_state": "valid"
+      }
+    },
+    {
+      "id": "E3",
+      "type": "usage_limit_adjustment",
+      "attributes": {
+        "status": "approved",
+        "scope": "trusted_internal_only",
+        "adjustment_type": "above_standard_limit",
+        "reviewer": "designated_reviewer",
+        "timestamp_state": "current"
+      }
+    },
+    {
+      "id": "E4",
+      "type": "approval_record",
+      "attributes": {
+        "status": "conflicting",
+        "timing": "before_execution",
+        "reviewer_state": "one_valid_one_revoked",
+        "timestamp_state": "conflicting"
+      }
+    }
+  ]
+}

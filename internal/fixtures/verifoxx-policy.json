@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "pack": "verifoxx",
+  "document": "requirements-source-text",
+  "requirements": [
+    {
+      "id": "R1",
+      "text": "External partners may request aggregate analytical outputs from the protected dataset only if no individual-level information is disclosed and a valid approval record exists before execution."
+    },
+    {
+      "id": "R2",
+      "text": "Any processing involving protected data must run in the approved local execution environment. If the execution environment cannot be verified, the request must not be automatically approved."
+    },
+    {
+      "id": "R3",
+      "text": "Trusted internal teams may request a temporary increase above the standard usage limit, but only where a specific usage-adjustment approval exists. Disclosure restrictions and pre-execution approval conditions cannot be relaxed. If approval evidence is unclear, stale or conflicting, the case should be escalated rather than assumed safe."
+    }
+  ]
+}

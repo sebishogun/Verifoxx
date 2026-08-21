@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "pack": "verifoxx",
+  "requests": [
+    {
+      "id": "R1",
+      "requester": { "team": "external_partner", "trust": "external" },
+      "action": { "type": "aggregate_analysis", "output": "aggregate_counts", "dataset": "protected_dataset" },
+      "environment": { "execution_env": "local_approved_env", "usage": "standard" },
+      "evidence_refs": ["E1", "E2"]
+    },
+    {
+      "id": "R2",
+      "requester": { "team": "external_partner", "trust": "external" },
+      "action": { "type": "row_level_export", "output": "individual_records", "dataset": "protected_dataset" },
+      "environment": { "execution_env": "local_approved_env", "usage": "standard" },
+      "evidence_refs": ["E1", "E2"]
+    },
+    {
+      "id": "R3",
+      "requester": { "team": "internal_team", "trust": "trusted_internal" },
+      "action": { "type": "aggregate_analysis", "output": "aggregate_counts", "dataset": "protected_dataset" },
+      "environment": { "execution_env": "local_approved_env", "usage": "above_standard_limit" },
+      "evidence_refs": ["E1", "E2"]
+    },
+    {
+      "id": "R4",
+      "requester": { "team": "external_partner", "trust": "external" },
+      "action": { "type": "aggregate_analysis", "output": "aggregate_counts", "dataset": "protected_dataset" },
+      "environment": { "execution_env": "unverified_remote_env", "usage": "standard" },
+      "evidence_refs": ["E1"]
+    },
+    {
+      "id": "R5",
+      "requester": { "team": "internal_team", "trust": "trusted_internal" },
+      "action": { "type": "aggregate_analysis", "output": "aggregate_counts", "dataset": "protected_dataset" },
+      "environment": { "execution_env": "local_approved_env", "usage": "above_standard_limit" },
+      "evidence_refs": ["E2", "E3", "E4"]
+    }
+  ]
+}
