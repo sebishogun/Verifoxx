@@ -501,6 +501,7 @@ go test -race -count=1 -timeout 120s ./internal/truth ./internal/result
 go test -count=1 -timeout 60s ./...
 timeout 120s go vet ./...
 timeout 120s go build ./cmd/verifoxx
+timeout 180s go run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@v0.47.1-0.20260707181000-a299dadba899 -test=false ./internal/truth ./internal/result
 timeout 30s gofmt -l .
 timeout 60s go mod tidy -diff
 git diff --check

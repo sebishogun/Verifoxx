@@ -11,6 +11,7 @@
 - Run all tests with `go test -timeout 60s ./...`; use `-count=1` when fresh evidence matters.
 - Bound every test, benchmark, build, vet, and fuzz command with an explicit timeout. Never use watch or repeat loops.
 - Keep per-node, per-row, and per-request paths allocation-free through capacity hints, reusable typed slabs, SoA columns, and CSR edges. Verify with `-benchmem` and `-gcflags=-m`.
+- Order struct fields deliberately when each type is introduced: reduce padding and GC pointer-scan bytes while preserving access locality and cache-line isolation. `gofmt` only aligns source text; audit production types with the pinned `fieldalignment` analyzer and review each suggested reorder instead of applying fixes blindly.
 - PostgreSQL, JSON, CLI, TUI, HTTP, and gRPC are adapters. They must not introduce maps, reflection, database calls, or string conversion into evaluator kernels.
 
 ## Assignment Constraints
