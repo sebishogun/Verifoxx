@@ -2,6 +2,7 @@ package result
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/sebishogun/verifoxx/internal/schema"
@@ -312,6 +313,221 @@ func TestRemediationValid(t *testing.T) {
 		if table.valid() {
 			t.Fatalf("malformed table %d must be invalid", i)
 		}
+	}
+}
+
+// newResolverFixture returns a valid outcome table, remediation table, and
+// one nine-row rule set for constructor tests: four outcomes with precedence
+// [1,4,2,3], two remediations, and a rule set whose Missing row selects
+// outcome 3 with remediation edges [1,2] and whose other rows select
+// outcome 4 with empty ranges.
+func newResolverFixture() (OutcomeTable, RemediationTable, ResolutionTable) {
+	return OutcomeTable{
+			Names:      []schema.SymbolID{10, 20, 30, 40},
+			Precedence: []uint8{1, 4, 2, 3},
+			Terminal:   []bool{true, true, false, true},
+		},
+		RemediationTable{
+			Kinds:         []RemediationKind{RemediationSetField, RemediationAddEvidence},
+			Fields:        []schema.FieldID{7, 0},
+			Values:        []schema.ValueID{42, 0},
+			EvidenceKinds: []schema.EvidenceKindID{0, 9},
+		},
+		ResolutionTable{
+			OutcomeIDs:        []schema.OutcomeID{3, 4, 4, 4, 4, 4, 4, 4, 4},
+			RemediationStarts: []uint32{0, 2, 2, 2, 2, 2, 2, 2, 2},
+			RemediationCounts: []uint16{2, 0, 0, 0, 0, 0, 0, 0, 0},
+			RemediationIDs:    []schema.RemediationID{1, 2},
+		}
+}
+
+// assertBorrows fails if got and backing do not share the same backing
+// array. Both slices must be nonempty for the first-element address to exist.
+func assertBorrows[T any](t *testing.T, name string, got, backing []T) {
+	t.Helper()
+	if len(got) == 0 || len(backing) == 0 {
+		t.Fatalf("%s must be nonempty to compare first-element addresses", name)
+	}
+	if &got[0] != &backing[0] {
+		t.Fatalf("%s must borrow the input backing array", name)
+	}
+}
+
+func TestNewResolverValid(t *testing.T) {
+	outcomes, remediations, rules := newResolverFixture()
+	got, err := NewResolver(outcomes, remediations, rules)
+	if err != nil {
+		t.Fatalf("NewResolver = %v, want nil", err)
+	}
+
+	assertBorrows(t, "outcomes.Names", got.outcomes.Names, outcomes.Names)
+	assertBorrows(t, "outcomes.Precedence", got.outcomes.Precedence, outcomes.Precedence)
+	assertBorrows(t, "outcomes.Terminal", got.outcomes.Terminal, outcomes.Terminal)
+	assertBorrows(t, "remediations.Kinds", got.remediations.Kinds, remediations.Kinds)
+	assertBorrows(t, "remediations.Fields", got.remediations.Fields, remediations.Fields)
+	assertBorrows(t, "remediations.Values", got.remediations.Values, remediations.Values)
+	assertBorrows(t, "remediations.EvidenceKinds", got.remediations.EvidenceKinds, remediations.EvidenceKinds)
+	assertBorrows(t, "rules.OutcomeIDs", got.rules.OutcomeIDs, rules.OutcomeIDs)
+	assertBorrows(t, "rules.RemediationStarts", got.rules.RemediationStarts, rules.RemediationStarts)
+	assertBorrows(t, "rules.RemediationCounts", got.rules.RemediationCounts, rules.RemediationCounts)
+	assertBorrows(t, "rules.RemediationIDs", got.rules.RemediationIDs, rules.RemediationIDs)
+
+	wantOutcomes := OutcomeTable{
+		Names:      []schema.SymbolID{10, 20, 30, 40},
+		Precedence: []uint8{1, 4, 2, 3},
+		Terminal:   []bool{true, true, false, true},
+	}
+	wantRemediations := RemediationTable{
+		Kinds:         []RemediationKind{RemediationSetField, RemediationAddEvidence},
+		Fields:        []schema.FieldID{7, 0},
+		Values:        []schema.ValueID{42, 0},
+		EvidenceKinds: []schema.EvidenceKindID{0, 9},
+	}
+	wantRules := ResolutionTable{
+		OutcomeIDs:        []schema.OutcomeID{3, 4, 4, 4, 4, 4, 4, 4, 4},
+		RemediationStarts: []uint32{0, 2, 2, 2, 2, 2, 2, 2, 2},
+		RemediationCounts: []uint16{2, 0, 0, 0, 0, 0, 0, 0, 0},
+		RemediationIDs:    []schema.RemediationID{1, 2},
+	}
+	if !slices.Equal(outcomes.Names, wantOutcomes.Names) {
+		t.Fatalf("outcomes.Names = %v, want %v", outcomes.Names, wantOutcomes.Names)
+	}
+	if !slices.Equal(outcomes.Precedence, wantOutcomes.Precedence) {
+		t.Fatalf("outcomes.Precedence = %v, want %v", outcomes.Precedence, wantOutcomes.Precedence)
+	}
+	if !slices.Equal(outcomes.Terminal, wantOutcomes.Terminal) {
+		t.Fatalf("outcomes.Terminal = %v, want %v", outcomes.Terminal, wantOutcomes.Terminal)
+	}
+	if !slices.Equal(remediations.Kinds, wantRemediations.Kinds) {
+		t.Fatalf("remediations.Kinds = %v, want %v", remediations.Kinds, wantRemediations.Kinds)
+	}
+	if !slices.Equal(remediations.Fields, wantRemediations.Fields) {
+		t.Fatalf("remediations.Fields = %v, want %v", remediations.Fields, wantRemediations.Fields)
+	}
+	if !slices.Equal(remediations.Values, wantRemediations.Values) {
+		t.Fatalf("remediations.Values = %v, want %v", remediations.Values, wantRemediations.Values)
+	}
+	if !slices.Equal(remediations.EvidenceKinds, wantRemediations.EvidenceKinds) {
+		t.Fatalf("remediations.EvidenceKinds = %v, want %v", remediations.EvidenceKinds, wantRemediations.EvidenceKinds)
+	}
+	if !slices.Equal(rules.OutcomeIDs, wantRules.OutcomeIDs) {
+		t.Fatalf("rules.OutcomeIDs = %v, want %v", rules.OutcomeIDs, wantRules.OutcomeIDs)
+	}
+	if !slices.Equal(rules.RemediationStarts, wantRules.RemediationStarts) {
+		t.Fatalf("rules.RemediationStarts = %v, want %v", rules.RemediationStarts, wantRules.RemediationStarts)
+	}
+	if !slices.Equal(rules.RemediationCounts, wantRules.RemediationCounts) {
+		t.Fatalf("rules.RemediationCounts = %v, want %v", rules.RemediationCounts, wantRules.RemediationCounts)
+	}
+	if !slices.Equal(rules.RemediationIDs, wantRules.RemediationIDs) {
+		t.Fatalf("rules.RemediationIDs = %v, want %v", rules.RemediationIDs, wantRules.RemediationIDs)
+	}
+}
+
+func TestNewResolverValidEmptyRemediations(t *testing.T) {
+	outcomes, _, _ := newResolverFixture()
+	rules := ResolutionTable{
+		OutcomeIDs:        []schema.OutcomeID{4, 4, 4, 4, 4, 4, 4, 4, 4},
+		RemediationStarts: make([]uint32, 9),
+		RemediationCounts: make([]uint16, 9),
+	}
+	got, err := NewResolver(outcomes, RemediationTable{}, rules)
+	if err != nil {
+		t.Fatalf("NewResolver = %v, want nil", err)
+	}
+	if len(got.rules.RemediationIDs) != 0 {
+		t.Fatalf("rule set edge slice = %v, want empty", got.rules.RemediationIDs)
+	}
+}
+
+func TestNewResolverAllowsDanglingValidRemediationEdge(t *testing.T) {
+	outcomes, remediations, rules := newResolverFixture()
+	rules.RemediationIDs = append(rules.RemediationIDs, 1)
+	got, err := NewResolver(outcomes, remediations, rules)
+	if err != nil {
+		t.Fatalf("NewResolver = %v, want nil", err)
+	}
+	if len(got.rules.RemediationIDs) != 3 {
+		t.Fatalf("edge slice length = %d, want 3", len(got.rules.RemediationIDs))
+	}
+}
+
+func TestNewResolverMalformed(t *testing.T) {
+	cases := []struct {
+		name string
+		bad  func(*OutcomeTable, *RemediationTable, *ResolutionTable)
+		want error
+	}{
+		{"outcome column mismatch", func(o *OutcomeTable, _ *RemediationTable, _ *ResolutionTable) {
+			o.Names = o.Names[:3]
+		}, ErrInvalidOutcomeTable},
+		{"zero outcome name", func(o *OutcomeTable, _ *RemediationTable, _ *ResolutionTable) {
+			o.Names[2] = 0
+		}, ErrInvalidOutcomeTable},
+		{"remediation column mismatch", func(_ *OutcomeTable, r *RemediationTable, _ *ResolutionTable) {
+			r.Kinds = r.Kinds[:1]
+		}, ErrInvalidRemediationTable},
+		{"invalid remediation kind", func(_ *OutcomeTable, r *RemediationTable, _ *ResolutionTable) {
+			r.Kinds[1] = RemediationInvalid
+		}, ErrInvalidRemediationTable},
+		{"invalid remediation payload", func(_ *OutcomeTable, r *RemediationTable, _ *ResolutionTable) {
+			r.Fields[0] = 0
+		}, ErrInvalidRemediationTable},
+		{"empty resolution rows", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.OutcomeIDs = nil
+			x.RemediationStarts = nil
+			x.RemediationCounts = nil
+		}, ErrInvalidResolutionTable},
+		{"outcome row column mismatch", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.OutcomeIDs = x.OutcomeIDs[:8]
+		}, ErrInvalidResolutionTable},
+		{"start row column mismatch", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.RemediationStarts = x.RemediationStarts[:8]
+		}, ErrInvalidResolutionTable},
+		{"count row column mismatch", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.RemediationCounts = x.RemediationCounts[:8]
+		}, ErrInvalidResolutionTable},
+		{"row count not divisible by nine (8 rows)", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.OutcomeIDs = x.OutcomeIDs[:8]
+			x.RemediationStarts = x.RemediationStarts[:8]
+			x.RemediationCounts = x.RemediationCounts[:8]
+		}, ErrInvalidResolutionTable},
+		{"row count not divisible by nine (10 rows)", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.OutcomeIDs = append(x.OutcomeIDs, 4)
+			x.RemediationStarts = append(x.RemediationStarts, 2)
+			x.RemediationCounts = append(x.RemediationCounts, 0)
+		}, ErrInvalidResolutionTable},
+		{"zero outcome reference", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.OutcomeIDs[0] = 0
+		}, ErrInvalidOutcomeReference},
+		{"out-of-range outcome reference", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.OutcomeIDs[0] = 5
+		}, ErrInvalidOutcomeReference},
+		{"csr range beyond edge length", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.RemediationStarts[1] = 3
+		}, ErrInvalidResolutionTable},
+		{"csr near-MaxUint32 start", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.RemediationStarts[1] = math.MaxUint32
+			x.RemediationCounts[1] = 1
+		}, ErrInvalidResolutionTable},
+		{"zero remediation edge", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.RemediationIDs[1] = 0
+		}, ErrInvalidRemediationReference},
+		{"out-of-range remediation edge", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.RemediationIDs[1] = 3
+		}, ErrInvalidRemediationReference},
+		{"dangling invalid edge", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.RemediationIDs = append(x.RemediationIDs, 3)
+		}, ErrInvalidRemediationReference},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			outcomes, remediations, rules := newResolverFixture()
+			c.bad(&outcomes, &remediations, &rules)
+			if _, err := NewResolver(outcomes, remediations, rules); err != c.want {
+				t.Fatalf("NewResolver err = %v, want %v", err, c.want)
+			}
+		})
 	}
 }
 
