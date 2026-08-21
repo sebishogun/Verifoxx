@@ -9,6 +9,16 @@ import (
 	"github.com/sebishogun/verifoxx/internal/truth"
 )
 
+// Package-level typed scalar sinks absorb the fields of a Resolve result so
+// the measured closure in TestResolveAllocs never formats or boxes it.
+var (
+	sinkOutcome     schema.OutcomeID
+	sinkReason      schema.ReasonID
+	sinkTerminal    bool
+	sinkOK          bool
+	sinkRemediation schema.RemediationID
+)
+
 // outcomeTable returns the four-row fixture shared by the lookup and
 // precedence tests: precedence [1,4,2,3], terminal [true,true,false,true].
 func outcomeTable() *OutcomeTable {
@@ -832,5 +842,154 @@ func TestResolveSecondRuleSetBlock(t *testing.T) {
 	}
 	if !slices.Equal(second.Remediations, []schema.RemediationID{1, 2}) {
 		t.Fatalf("Resolve(2, bit(Missing)).Remediations = %v, want [1 2]", second.Remediations)
+	}
+}
+
+// resolverSnap is a deep copy of every backing slice a Resolver borrows, for
+// proving Resolve never mutates its tables.
+type resolverSnap struct {
+	names      []schema.SymbolID
+	precedence []uint8
+	terminal   []bool
+	kinds      []RemediationKind
+	fields     []schema.FieldID
+	values     []schema.ValueID
+	evidence   []schema.EvidenceKindID
+	outcomes   []schema.OutcomeID
+	starts     []uint32
+	counts     []uint16
+	edges      []schema.RemediationID
+}
+
+func snapshotResolver(r *Resolver) resolverSnap {
+	return resolverSnap{
+		names:      slices.Clone(r.outcomes.Names),
+		precedence: slices.Clone(r.outcomes.Precedence),
+		terminal:   slices.Clone(r.outcomes.Terminal),
+		kinds:      slices.Clone(r.remediations.Kinds),
+		fields:     slices.Clone(r.remediations.Fields),
+		values:     slices.Clone(r.remediations.Values),
+		evidence:   slices.Clone(r.remediations.EvidenceKinds),
+		outcomes:   slices.Clone(r.rules.OutcomeIDs),
+		starts:     slices.Clone(r.rules.RemediationStarts),
+		counts:     slices.Clone(r.rules.RemediationCounts),
+		edges:      slices.Clone(r.rules.RemediationIDs),
+	}
+}
+
+func (s resolverSnap) same(r *Resolver) bool {
+	return slices.Equal(s.names, r.outcomes.Names) &&
+		slices.Equal(s.precedence, r.outcomes.Precedence) &&
+		slices.Equal(s.terminal, r.outcomes.Terminal) &&
+		slices.Equal(s.kinds, r.remediations.Kinds) &&
+		slices.Equal(s.fields, r.remediations.Fields) &&
+		slices.Equal(s.values, r.remediations.Values) &&
+		slices.Equal(s.evidence, r.remediations.EvidenceKinds) &&
+		slices.Equal(s.outcomes, r.rules.OutcomeIDs) &&
+		slices.Equal(s.starts, r.rules.RemediationStarts) &&
+		slices.Equal(s.counts, r.rules.RemediationCounts) &&
+		slices.Equal(s.edges, r.rules.RemediationIDs)
+}
+
+func TestResolverReuse(t *testing.T) {
+	r := resolveFixture()
+	snap := snapshotResolver(r)
+	mask := truth.ReasonBit(truth.ReasonMissing) | truth.ReasonBit(truth.ReasonStale)
+
+	first, ok := r.Resolve(1, mask)
+	if !ok {
+		t.Fatal("Resolve(nonempty mask) = ok=false, want true")
+	}
+
+	empty, ok := r.Resolve(1, 0)
+	if ok {
+		t.Fatal("Resolve(empty mask) = ok=true, want false")
+	}
+	if empty.Outcome != 0 || empty.Reason != 0 || empty.Terminal || len(empty.Remediations) != 0 {
+		t.Fatalf("Resolve(empty mask) = %+v, want zero scalars and no remediations", empty)
+	}
+	if !snap.same(r) {
+		t.Fatal("backing slices changed after empty resolve")
+	}
+
+	for i := 0; i < 3; i++ {
+		repeat, ok := r.Resolve(1, mask)
+		if !ok {
+			t.Fatalf("repeated Resolve %d = ok=false, want true", i)
+		}
+		if repeat.Outcome != first.Outcome || repeat.Reason != first.Reason || repeat.Terminal != first.Terminal {
+			t.Fatalf("repeated Resolve %d scalars = %d/%d/%v, want %d/%d/%v",
+				i, repeat.Outcome, repeat.Reason, repeat.Terminal, first.Outcome, first.Reason, first.Terminal)
+		}
+		if !slices.Equal(repeat.Remediations, first.Remediations) {
+			t.Fatalf("repeated Resolve %d remediations = %v, want %v", i, repeat.Remediations, first.Remediations)
+		}
+	}
+
+	if !snap.same(r) {
+		t.Fatal("backing slices changed after repeated resolves")
+	}
+}
+
+func TestResolveAllocs(t *testing.T) {
+	r := resolveFixture()
+	mask := truth.ReasonBit(truth.ReasonMissing)
+	n := testing.AllocsPerRun(1000, func() {
+		got, ok := r.Resolve(1, mask)
+		sinkOutcome = got.Outcome
+		sinkReason = got.Reason
+		sinkTerminal = got.Terminal
+		sinkOK = ok
+		if len(got.Remediations) != 0 {
+			sinkRemediation = got.Remediations[0]
+		}
+	})
+	if n != 0 {
+		t.Fatalf("Resolve allocates %.0f times per run, want 0", n)
+	}
+}
+
+func TestResolveConflictRemediationBoundary(t *testing.T) {
+	outcomes, remediations, _ := newResolverFixture()
+	rules := ResolutionTable{
+		OutcomeIDs:        []schema.OutcomeID{4, 4, 4, 4, 4, 4, 4, 4, 3},
+		RemediationStarts: make([]uint32, 9),
+		RemediationCounts: []uint16{0, 0, 0, 0, 0, 0, 0, 0, 2},
+		RemediationIDs:    []schema.RemediationID{1, 2},
+	}
+	r, err := NewResolver(outcomes, remediations, rules)
+	if err != nil {
+		t.Fatalf("NewResolver = %v, want nil", err)
+	}
+	got, ok := r.Resolve(1, truth.ReasonBit(truth.ReasonConflict))
+	if !ok {
+		t.Fatal("Resolve(bit(Conflict)) = ok=false, want true")
+	}
+	if got.Outcome != 3 {
+		t.Fatalf("Resolve(bit(Conflict)).Outcome = %d, want 3", got.Outcome)
+	}
+	if !slices.Equal(got.Remediations, []schema.RemediationID{1, 2}) {
+		t.Fatalf("Resolve(bit(Conflict)).Remediations = %v, want [1 2]", got.Remediations)
+	}
+	assertBorrows(t, "Remediations", got.Remediations, r.rules.RemediationIDs)
+}
+
+func TestResolveAllReasons(t *testing.T) {
+	r := resolveFixture()
+	got, ok := r.Resolve(1, truth.AllReasonsMask)
+	if !ok {
+		t.Fatal("Resolve(AllReasonsMask) = ok=false, want true")
+	}
+	if got.Outcome != 4 {
+		t.Fatalf("Resolve(AllReasonsMask).Outcome = %d, want 4", got.Outcome)
+	}
+	if got.Reason != truth.ReasonStale {
+		t.Fatalf("Resolve(AllReasonsMask).Reason = %d, want Stale as first driver of outcome 4", got.Reason)
+	}
+	if !got.Terminal {
+		t.Fatal("Resolve(AllReasonsMask).Terminal = false, want true")
+	}
+	if len(got.Remediations) != 0 {
+		t.Fatalf("Resolve(AllReasonsMask).Remediations = %v, want empty", got.Remediations)
 	}
 }
