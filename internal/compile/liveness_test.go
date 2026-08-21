@@ -232,3 +232,56 @@ func TestAssignTruthSlotsReusesDeterministically(t *testing.T) {
 		})
 	}
 }
+
+func reasonSlotTestProgram() program.Program {
+	return slotTestProgram(
+		[]program.Opcode{
+			program.OpcodeExists,
+			program.OpcodeExists,
+			program.OpcodeExists,
+			program.OpcodeAll,
+			program.OpcodeNot,
+		},
+		[][]schema.InstructionID{nil, nil, nil, {2, 3}, {4}},
+		[]program.RootFlags{0, 0, 0, 0, program.RootAssertion},
+	)
+}
+
+func TestAssignReasonSlotsUsesRootClosure(t *testing.T) {
+	p := reasonSlotTestProgram()
+	var lowerer Lowerer
+	if err := lowerer.assignSlots(&p, slotReuse); err != nil {
+		t.Fatalf("assignSlots: %v", err)
+	}
+	wantLive := []uint8{0, 1, 1, 1, 1}
+	wantReasons := []schema.SlotID{0, 1, 2, 1, 1}
+	if !reflect.DeepEqual(lowerer.slotReasonLive, wantLive) {
+		t.Fatalf("reason live = %v, want %v", lowerer.slotReasonLive, wantLive)
+	}
+	if !reflect.DeepEqual(p.ReasonSlots, wantReasons) || p.ReasonSlotCount != 2 {
+		t.Fatalf("reason slots/peak = %v/%d, want %v/2", p.ReasonSlots, p.ReasonSlotCount, wantReasons)
+	}
+	if !reflect.DeepEqual(p.TruthSlots, []schema.SlotID{1, 1, 2, 1, 1}) || p.TruthSlotCount != 2 {
+		t.Fatalf("truth slots/peak = %v/%d", p.TruthSlots, p.TruthSlotCount)
+	}
+	assertSafeSlotIntervals(t, p.TruthSlots, lowerer.slotLastUses, nil)
+	assertSafeSlotIntervals(t, p.ReasonSlots, lowerer.slotLastUses, lowerer.slotReasonLive)
+}
+
+func TestAssignSlotsRetainAll(t *testing.T) {
+	p := reasonSlotTestProgram()
+	var lowerer Lowerer
+	if err := lowerer.assignSlots(&p, slotRetainAll); err != nil {
+		t.Fatalf("assignSlots: %v", err)
+	}
+	wantTruth := []schema.SlotID{1, 2, 3, 4, 5}
+	wantReasons := []schema.SlotID{0, 1, 2, 3, 4}
+	if !reflect.DeepEqual(p.TruthSlots, wantTruth) || p.TruthSlotCount != 5 {
+		t.Fatalf("truth slots/peak = %v/%d, want %v/5", p.TruthSlots, p.TruthSlotCount, wantTruth)
+	}
+	if !reflect.DeepEqual(p.ReasonSlots, wantReasons) || p.ReasonSlotCount != 4 {
+		t.Fatalf("reason slots/peak = %v/%d, want %v/4", p.ReasonSlots, p.ReasonSlotCount, wantReasons)
+	}
+	assertSafeSlotIntervals(t, p.TruthSlots, lowerer.slotLastUses, nil)
+	assertSafeSlotIntervals(t, p.ReasonSlots, lowerer.slotLastUses, lowerer.slotReasonLive)
+}

@@ -199,3 +199,47 @@ func (l *Lowerer) assignTruthSlots(p *program.Program, mode slotMode) (uint32, e
 	l.slotTruth = resizeSlots(l.slotTruth, len(lastUses))
 	return l.allocateSlots(lastUses, nil, l.slotTruth, mode)
 }
+
+func (l *Lowerer) computeReasonLive(p *program.Program) {
+	n := len(p.Opcodes)
+	l.slotReasonLive = resizeSlots(l.slotReasonLive, n)
+	for row, flags := range p.RootFlags {
+		if flags != 0 {
+			l.slotReasonLive[row] = 1
+		}
+	}
+	for row := n; row > 0; {
+		row--
+		if l.slotReasonLive[row] == 0 {
+			continue
+		}
+		switch p.Opcodes[row] {
+		case program.OpcodeAll, program.OpcodeAny, program.OpcodeNot:
+			start := int(p.OperandStarts[row])
+			end := start + int(p.OperandCounts[row])
+			for _, operand := range p.Operands[start:end] {
+				l.slotReasonLive[int(operand)-1] = 1
+			}
+		}
+	}
+}
+
+// assignSlots computes both independent scratch plans into Lowerer-owned
+// buffers. Program columns are replaced only after both allocations succeed.
+func (l *Lowerer) assignSlots(p *program.Program, mode slotMode) error {
+	truthPeak, err := l.assignTruthSlots(p, mode)
+	if err != nil {
+		return err
+	}
+	l.computeReasonLive(p)
+	l.slotReasons = resizeSlots(l.slotReasons, len(l.slotLastUses))
+	reasonPeak, err := l.allocateSlots(l.slotLastUses, l.slotReasonLive, l.slotReasons, mode)
+	if err != nil {
+		return err
+	}
+	p.TruthSlots = l.slotTruth
+	p.ReasonSlots = l.slotReasons
+	p.TruthSlotCount = truthPeak
+	p.ReasonSlotCount = reasonPeak
+	return nil
+}
