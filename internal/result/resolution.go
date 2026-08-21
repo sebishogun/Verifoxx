@@ -78,3 +78,56 @@ func NewResolver(outcomes OutcomeTable, remediations RemediationTable, rules Res
 	}
 	return Resolver{outcomes: outcomes, remediations: remediations, rules: rules}, nil
 }
+
+// Resolution is one deterministic policy decision produced by Resolve.
+type Resolution struct {
+	Remediations []schema.RemediationID
+	Outcome      schema.OutcomeID
+	Reason       schema.ReasonID
+	Terminal     bool
+}
+
+// Resolve selects the winning outcome for a reason mask within one rule set.
+// An invalid mask or an out-of-range rule set panics with a static string
+// before any rule row is read; an empty valid mask returns (Resolution{},
+// false). The scan visits reason offsets 0..8 in ascending order and skips
+// unset bits. Higher numeric precedence wins, an equal-precedence tie keeps
+// the lower OutcomeID, and a repeated winning outcome keeps the first reason.
+// Terminal is metadata only and never stops the scan. The returned
+// remediation slice borrows the CSR edge array; Resolve never allocates.
+func (r *Resolver) Resolve(ruleSet RuleSetID, reasons truth.ReasonMask) (Resolution, bool) {
+	if !reasons.Valid() {
+		panic("result: invalid reason mask")
+	}
+	blocks := uint64(len(r.rules.OutcomeIDs)) / uint64(truth.ReasonCount)
+	if ruleSet == 0 || uint64(ruleSet) > blocks {
+		panic("result: invalid rule set")
+	}
+	if reasons == 0 {
+		return Resolution{}, false
+	}
+	base := int(uint64(ruleSet-1) * uint64(truth.ReasonCount))
+	var current schema.OutcomeID
+	var reason schema.ReasonID
+	winRow := base
+	for off := 0; off < truth.ReasonCount; off++ {
+		if reasons&(1<<off) == 0 {
+			continue
+		}
+		row := base + off
+		winner := r.outcomes.preferKnown(current, r.rules.OutcomeIDs[row])
+		if winner != current {
+			current = winner
+			reason = schema.ReasonID(off + 1)
+			winRow = row
+		}
+	}
+	start := int(r.rules.RemediationStarts[winRow])
+	count := int(r.rules.RemediationCounts[winRow])
+	return Resolution{
+		Outcome:      current,
+		Reason:       reason,
+		Terminal:     r.outcomes.Terminal[int(current-1)],
+		Remediations: r.rules.RemediationIDs[start : start+count],
+	}, true
+}

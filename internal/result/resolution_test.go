@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/verifoxx/internal/truth"
 )
 
 // outcomeTable returns the four-row fixture shared by the lookup and
@@ -570,5 +571,266 @@ func TestOutcomePreferKnownAgreement(t *testing.T) {
 		if got := table.preferKnown(pair[0], pair[1]); got != want {
 			t.Fatalf("preferKnown(%d,%d) = %d, want Prefer result %d", pair[0], pair[1], got, want)
 		}
+	}
+}
+
+// resolveFixture returns a resolver built from newResolverFixture: outcomes
+// 1..4 with precedence [1,4,2,3] and terminal [true,true,false,true], and one
+// rule set whose Missing row selects outcome 3 with remediation edges [1,2]
+// and whose other rows select outcome 4 with empty ranges.
+func resolveFixture() *Resolver {
+	outcomes, remediations, rules := newResolverFixture()
+	r, err := NewResolver(outcomes, remediations, rules)
+	if err != nil {
+		panic(err)
+	}
+	return &r
+}
+
+// assertPanics runs fn and fails the test unless it panics with exactly the
+// string want.
+func assertPanics(t *testing.T, want string, fn func()) {
+	t.Helper()
+	defer func() {
+		if got := recover(); got != want {
+			t.Fatalf("panic = %v, want %q", got, want)
+		}
+	}()
+	fn()
+}
+
+func TestResolveOneHotReasons(t *testing.T) {
+	r := resolveFixture()
+	for id := schema.ReasonID(1); id <= truth.ReasonConflict; id++ {
+		got, ok := r.Resolve(1, truth.ReasonBit(id))
+		if !ok {
+			t.Fatalf("Resolve(1, bit(%d)) = ok=false, want true", id)
+		}
+		if got.Reason != id {
+			t.Fatalf("Resolve(1, bit(%d)).Reason = %d, want %d", id, got.Reason, id)
+		}
+		switch id {
+		case truth.ReasonMissing:
+			if got.Outcome != 3 || got.Terminal {
+				t.Fatalf("Resolve(1, bit(Missing)) = outcome %d terminal %v, want nonterminal outcome 3", got.Outcome, got.Terminal)
+			}
+			if !slices.Equal(got.Remediations, []schema.RemediationID{1, 2}) {
+				t.Fatalf("Resolve(1, bit(Missing)).Remediations = %v, want [1 2]", got.Remediations)
+			}
+		default:
+			if got.Outcome != 4 || !got.Terminal {
+				t.Fatalf("Resolve(1, bit(%d)) = outcome %d terminal %v, want terminal outcome 4", id, got.Outcome, got.Terminal)
+			}
+			if len(got.Remediations) != 0 {
+				t.Fatalf("Resolve(1, bit(%d)).Remediations = %v, want empty", id, got.Remediations)
+			}
+		}
+	}
+}
+
+func TestResolveMissingRemediationShapes(t *testing.T) {
+	r := resolveFixture()
+	got, ok := r.Resolve(1, truth.ReasonBit(truth.ReasonMissing))
+	if !ok {
+		t.Fatal("Resolve(1, bit(Missing)) = ok=false, want true")
+	}
+	if got.Outcome != 3 || got.Terminal {
+		t.Fatalf("Resolve(1, bit(Missing)) = outcome %d terminal %v, want nonterminal outcome 3", got.Outcome, got.Terminal)
+	}
+	if !slices.Equal(got.Remediations, []schema.RemediationID{1, 2}) {
+		t.Fatalf("Remediations = %v, want [1 2]", got.Remediations)
+	}
+	assertBorrows(t, "Remediations", got.Remediations, r.rules.RemediationIDs)
+
+	setField, ok := r.remediations.Lookup(1)
+	if !ok || setField != (Remediation{Kind: RemediationSetField, Field: 7, Value: 42}) {
+		t.Fatalf("remediation 1 = %+v, ok=%v; want set-usage-to-standard shape", setField, ok)
+	}
+	addEvidence, ok := r.remediations.Lookup(2)
+	if !ok || addEvidence != (Remediation{Kind: RemediationAddEvidence, EvidenceKind: 9}) {
+		t.Fatalf("remediation 2 = %+v, ok=%v; want add-evidence usage-approval shape", addEvidence, ok)
+	}
+}
+
+func TestResolveStaleTerminalNoRemediation(t *testing.T) {
+	r := resolveFixture()
+	got, ok := r.Resolve(1, truth.ReasonBit(truth.ReasonStale))
+	if !ok {
+		t.Fatal("Resolve(1, bit(Stale)) = ok=false, want true")
+	}
+	if got.Outcome != 4 || !got.Terminal {
+		t.Fatalf("Resolve(1, bit(Stale)) = outcome %d terminal %v, want terminal outcome 4", got.Outcome, got.Terminal)
+	}
+	if got.Reason != truth.ReasonStale {
+		t.Fatalf("Reason = %d, want %d", got.Reason, truth.ReasonStale)
+	}
+	if len(got.Remediations) != 0 {
+		t.Fatalf("Remediations = %v, want empty", got.Remediations)
+	}
+}
+
+func TestResolveMissingStalePrecedence(t *testing.T) {
+	r := resolveFixture()
+	got, ok := r.Resolve(1, truth.ReasonBit(truth.ReasonMissing)|truth.ReasonBit(truth.ReasonStale))
+	if !ok {
+		t.Fatal("Resolve = ok=false, want true")
+	}
+	if got.Outcome != 4 || got.Reason != truth.ReasonStale {
+		t.Fatalf("Resolve({1,2}) = outcome %d reason %d, want outcome 4 reason Stale", got.Outcome, got.Reason)
+	}
+}
+
+func TestResolvePolicyPrecedence(t *testing.T) {
+	outcomes, remediations, rules := newResolverFixture()
+	outcomes.Precedence = []uint8{1, 4, 5, 3}
+	r, err := NewResolver(outcomes, remediations, rules)
+	if err != nil {
+		t.Fatalf("NewResolver = %v, want nil", err)
+	}
+	got, ok := r.Resolve(1, truth.ReasonBit(truth.ReasonMissing)|truth.ReasonBit(truth.ReasonStale))
+	if !ok {
+		t.Fatal("Resolve = ok=false, want true")
+	}
+	if got.Outcome != 3 || got.Reason != truth.ReasonMissing {
+		t.Fatalf("Resolve({1,2}) = outcome %d reason %d, want outcome 3 reason Missing", got.Outcome, got.Reason)
+	}
+}
+
+func TestResolveEqualPrecedenceLowerID(t *testing.T) {
+	outcomes, remediations, _ := newResolverFixture()
+	outcomes.Precedence = []uint8{1, 4, 3, 3}
+	mask := truth.ReasonBit(truth.ReasonMissing) | truth.ReasonBit(truth.ReasonStale)
+	assignments := []struct {
+		name   string
+		first  schema.OutcomeID // row 1 (Missing)
+		second schema.OutcomeID // row 2 (Stale)
+		reason schema.ReasonID  // row driving outcome 3
+	}{
+		{"lower id first", 3, 4, truth.ReasonMissing},
+		{"lower id second", 4, 3, truth.ReasonStale},
+	}
+	for _, a := range assignments {
+		t.Run(a.name, func(t *testing.T) {
+			rules := ResolutionTable{
+				OutcomeIDs:        []schema.OutcomeID{a.first, a.second, 4, 4, 4, 4, 4, 4, 4},
+				RemediationStarts: make([]uint32, 9),
+				RemediationCounts: make([]uint16, 9),
+			}
+			r, err := NewResolver(outcomes, remediations, rules)
+			if err != nil {
+				t.Fatalf("NewResolver = %v, want nil", err)
+			}
+			got, ok := r.Resolve(1, mask)
+			if !ok {
+				t.Fatal("Resolve = ok=false, want true")
+			}
+			if got.Outcome != 3 {
+				t.Fatalf("Outcome = %d, want 3", got.Outcome)
+			}
+			if got.Reason != a.reason {
+				t.Fatalf("Reason = %d, want %d", got.Reason, a.reason)
+			}
+		})
+	}
+}
+
+func TestResolveSameOutcomeLowerReason(t *testing.T) {
+	outcomes, remediations, _ := newResolverFixture()
+	rules := ResolutionTable{
+		OutcomeIDs:        []schema.OutcomeID{4, 4, 4, 4, 4, 4, 4, 4, 4},
+		RemediationStarts: make([]uint32, 9),
+		RemediationCounts: make([]uint16, 9),
+	}
+	r, err := NewResolver(outcomes, remediations, rules)
+	if err != nil {
+		t.Fatalf("NewResolver = %v, want nil", err)
+	}
+	got, ok := r.Resolve(1, truth.ReasonBit(truth.ReasonMissing)|truth.ReasonBit(truth.ReasonStale))
+	if !ok {
+		t.Fatal("Resolve = ok=false, want true")
+	}
+	if got.Outcome != 4 || got.Reason != truth.ReasonMissing {
+		t.Fatalf("Resolve({1,2}) = outcome %d reason %d, want outcome 4 reason Missing", got.Outcome, got.Reason)
+	}
+}
+
+func TestResolveTerminalDoesNotStopScan(t *testing.T) {
+	outcomes, remediations, rules := newResolverFixture()
+	outcomes.Terminal = []bool{true, true, true, true}
+	r, err := NewResolver(outcomes, remediations, rules)
+	if err != nil {
+		t.Fatalf("NewResolver = %v, want nil", err)
+	}
+	got, ok := r.Resolve(1, truth.ReasonBit(truth.ReasonMissing)|truth.ReasonBit(truth.ReasonStale))
+	if !ok {
+		t.Fatal("Resolve = ok=false, want true")
+	}
+	if got.Outcome != 4 || got.Reason != truth.ReasonStale {
+		t.Fatalf("Resolve({1,2}) = outcome %d reason %d, want outcome 4 reason Stale despite terminal outcome 3", got.Outcome, got.Reason)
+	}
+}
+
+func TestResolveEmptyMask(t *testing.T) {
+	r := resolveFixture()
+	got, ok := r.Resolve(1, 0)
+	if ok {
+		t.Fatalf("Resolve(1, 0) = ok=true, want false")
+	}
+	if got.Outcome != 0 || got.Reason != 0 || got.Terminal || got.Remediations != nil {
+		t.Fatalf("Resolve(1, 0) = %+v, want all-zero fields", got)
+	}
+}
+
+func TestResolveInvalidMaskPanics(t *testing.T) {
+	r := resolveFixture()
+	for _, mask := range []truth.ReasonMask{1 << 9, 1 << 15, truth.ReasonMask(math.MaxUint16)} {
+		assertPanics(t, "result: invalid reason mask", func() { r.Resolve(1, mask) })
+	}
+}
+
+func TestResolveInvalidRuleSetPanics(t *testing.T) {
+	r := resolveFixture()
+	for _, id := range []RuleSetID{0, 2, math.MaxUint32} {
+		assertPanics(t, "result: invalid rule set", func() { r.Resolve(id, truth.ReasonBit(truth.ReasonMissing)) })
+	}
+	assertPanics(t, "result: invalid rule set", func() { r.Resolve(2, 0) })
+	assertPanics(t, "result: invalid reason mask", func() { r.Resolve(0, 1<<9) })
+}
+
+func TestResolveSecondRuleSetBlock(t *testing.T) {
+	outcomes, remediations, _ := newResolverFixture()
+	rows := make([]schema.OutcomeID, 2*truth.ReasonCount)
+	starts := make([]uint32, 2*truth.ReasonCount)
+	counts := make([]uint16, 2*truth.ReasonCount)
+	for i := range rows {
+		rows[i] = 4
+		starts[i] = 2
+	}
+	rows[truth.ReasonCount] = 3
+	starts[truth.ReasonCount] = 0
+	counts[truth.ReasonCount] = 2
+	rules := ResolutionTable{
+		OutcomeIDs:        rows,
+		RemediationStarts: starts,
+		RemediationCounts: counts,
+		RemediationIDs:    []schema.RemediationID{1, 2},
+	}
+	r, err := NewResolver(outcomes, remediations, rules)
+	if err != nil {
+		t.Fatalf("NewResolver = %v, want nil", err)
+	}
+	first, ok := r.Resolve(1, truth.ReasonBit(truth.ReasonMissing))
+	if !ok || first.Outcome != 4 {
+		t.Fatalf("Resolve(1, bit(Missing)) = %+v ok=%v, want outcome 4 from first block", first, ok)
+	}
+	second, ok := r.Resolve(2, truth.ReasonBit(truth.ReasonMissing))
+	if !ok {
+		t.Fatal("Resolve(2, bit(Missing)) = ok=false, want true")
+	}
+	if second.Outcome != 3 || second.Reason != truth.ReasonMissing {
+		t.Fatalf("Resolve(2, bit(Missing)) = outcome %d reason %d, want outcome 3 reason Missing from second block", second.Outcome, second.Reason)
+	}
+	if !slices.Equal(second.Remediations, []schema.RemediationID{1, 2}) {
+		t.Fatalf("Resolve(2, bit(Missing)).Remediations = %v, want [1 2]", second.Remediations)
 	}
 }
