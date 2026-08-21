@@ -35,11 +35,11 @@ var (
 // use; separate compiler workers use separate Lowerers.
 //
 // Field order follows fieldalignment while keeping hot scratch locality:
-// pointer-bearing slice and table fields precede the fixed Validator state.
+// pointer-bearing scratch precedes the fixed scheduler state.
 type Lowerer struct {
 	// validator and diagnostics are the reusable validation state the public
-	// Lower orchestration (Task 7) runs before any stage reads unchecked
-	// columns. Constant lowering itself never validates.
+	// Lower orchestration runs before any stage reads unchecked columns.
+	// Constant lowering itself never validates.
 	validator   Validator
 	diagnostics []Diagnostic
 
@@ -97,15 +97,64 @@ type Lowerer struct {
 	candidateToFinal []schema.InstructionID
 
 	// Deterministic opcode-run scheduling scratch.
-	scheduleIndegree    []uint32
-	scheduleUserStarts  []uint32
-	scheduleUsers       []uint32
-	scheduleFill        []uint32
-	scheduleReadyBits   []uint64
-	scheduleOrder       []uint32
-	scheduleOldToNew    []schema.InstructionID
+	scheduleIndegree   []uint32
+	scheduleUserStarts []uint32
+	scheduleUsers      []uint32
+	scheduleFill       []uint32
+	scheduleReadyBits  []uint64
+	scheduleOrder      []uint32
+	scheduleOldToNew   []schema.InstructionID
+
+	// output owns reusable stage output. It follows every scratch slice so its
+	// scalar tail and the fixed scheduler arrays remain outside GC pointer scan.
+	// Public Lower freezes exact copies before publication.
+	output program.Program
+
 	scheduleReadyCount  [13]uint32
 	scheduleReadyCursor [13]uint32
+}
+
+// Lower validates and compiles doc into a frozen, self-contained Program.
+// The returned Program owns all backing memory and remains valid after the
+// source document, schema interner, and local compiler are reused.
+func Lower(doc *ast.Document, fields *schema.Schema, symbols *schema.Interner) (*program.Program, error) {
+	var lowerer Lowerer
+	var dst program.Program
+	if err := lowerer.Lower(&dst, doc, fields, symbols); err != nil {
+		return nil, err
+	}
+	return &dst, nil
+}
+
+// Lower validates and compiles doc atomically into dst. On any error dst is
+// unchanged. Lowerer retains validation, normalization, scheduling, and stage
+// output buffers for reuse, but the published Program never borrows them.
+func (l *Lowerer) Lower(dst *program.Program, doc *ast.Document, fields *schema.Schema, symbols *schema.Interner) error {
+	if l == nil || dst == nil || doc == nil || fields == nil || symbols == nil {
+		return ErrInvalidDocument
+	}
+	l.diagnostics = l.validator.Validate(l.diagnostics[:0], doc, fields)
+	if len(l.diagnostics) != 0 {
+		return ErrInvalidDocument
+	}
+	if len(doc.RequirementIDs) == 0 || len(doc.ClauseAssertionRoots) == 0 {
+		return ErrEmptyPolicy
+	}
+	if err := l.lowerConstants(&l.output, doc, fields, symbols); err != nil {
+		return err
+	}
+	if err := l.lowerInstructions(&l.output, doc); err != nil {
+		return err
+	}
+	if err := l.lowerSemantics(&l.output, doc); err != nil {
+		return err
+	}
+	frozen, err := program.Freeze(&l.output)
+	if err != nil {
+		return ErrInvalidGeneratedProgram
+	}
+	*dst = frozen
+	return nil
 }
 
 // lowerFrame is one iterative lowering frame: the source node whose
