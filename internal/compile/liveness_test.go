@@ -8,6 +8,7 @@ import (
 
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/verifoxx/internal/truth"
 )
 
 func slotTestProgram(opcodes []program.Opcode, operands [][]schema.InstructionID, roots []program.RootFlags) program.Program {
@@ -284,4 +285,92 @@ func TestAssignSlotsRetainAll(t *testing.T) {
 	}
 	assertSafeSlotIntervals(t, p.TruthSlots, lowerer.slotLastUses, nil)
 	assertSafeSlotIntervals(t, p.ReasonSlots, lowerer.slotLastUses, lowerer.slotReasonLive)
+}
+
+func branchingSlotProgram(rows int) program.Program {
+	if rows < 4 || rows&1 != 0 {
+		panic("branchingSlotProgram requires an even row count of at least four")
+	}
+	opcodes := make([]program.Opcode, rows)
+	roots := make([]program.RootFlags, rows)
+	edges := make([][]schema.InstructionID, rows)
+	edgeIDs := make([]schema.InstructionID, rows-1)
+	edgeAt := 0
+	opcodes[0] = program.OpcodeExists
+	for row := 1; row < rows-1; row++ {
+		if row&1 != 0 {
+			opcodes[row] = program.OpcodeExists
+			continue
+		}
+		opcodes[row] = program.OpcodeAll
+		edges[row] = edgeIDs[edgeAt : edgeAt+2]
+		edges[row][0] = schema.InstructionID(row - 1)
+		edges[row][1] = schema.InstructionID(row)
+		edgeAt += 2
+	}
+	opcodes[rows-1] = program.OpcodeNot
+	edges[rows-1] = edgeIDs[edgeAt : edgeAt+1]
+	edges[rows-1][0] = schema.InstructionID(rows - 1)
+	roots[rows-1] = program.RootAssertion
+	return slotTestProgram(opcodes, edges, roots)
+}
+
+func slotPeakBytes(p *program.Program, rows uint32) uint64 {
+	words := uint64(truth.WordCount(rows))
+	truthBytes := words * 8 * 2 * uint64(p.TruthSlotCount)
+	reasonBytes := words * 8 * uint64(truth.ReasonCount) * uint64(p.ReasonSlotCount)
+	return truthBytes + reasonBytes
+}
+
+func TestAssignSlotsReuse(t *testing.T) {
+	const rows = 8192
+	freshProgram := branchingSlotProgram(rows)
+	var fresh Lowerer
+	if err := fresh.assignSlots(&freshProgram, slotReuse); err != nil {
+		t.Fatalf("fresh assignSlots: %v", err)
+	}
+	wantTruth := append([]schema.SlotID(nil), freshProgram.TruthSlots...)
+	wantReasons := append([]schema.SlotID(nil), freshProgram.ReasonSlots...)
+	wantTruthPeak := freshProgram.TruthSlotCount
+	wantReasonPeak := freshProgram.ReasonSlotCount
+
+	warmProgram := branchingSlotProgram(rows)
+	var warm Lowerer
+	if err := warm.assignSlots(&warmProgram, slotReuse); err != nil {
+		t.Fatalf("prime assignSlots: %v", err)
+	}
+	var allocErr error
+	allocs := testing.AllocsPerRun(100, func() {
+		allocErr = warm.assignSlots(&warmProgram, slotReuse)
+	})
+	if allocErr != nil {
+		t.Fatalf("warm assignSlots: %v", allocErr)
+	}
+	if allocs != 0 {
+		t.Fatalf("warm assignSlots allocations = %g, want 0", allocs)
+	}
+
+	small := branchingSlotProgram(4)
+	if err := warm.assignSlots(&small, slotReuse); err != nil {
+		t.Fatalf("small assignSlots: %v", err)
+	}
+	if err := warm.assignSlots(&warmProgram, slotReuse); err != nil {
+		t.Fatalf("re-plan after small Program: %v", err)
+	}
+	if !reflect.DeepEqual(warmProgram.TruthSlots, wantTruth) ||
+		!reflect.DeepEqual(warmProgram.ReasonSlots, wantReasons) ||
+		warmProgram.TruthSlotCount != wantTruthPeak || warmProgram.ReasonSlotCount != wantReasonPeak {
+		t.Fatalf("warm re-plan differs: peaks %d/%d, want %d/%d",
+			warmProgram.TruthSlotCount, warmProgram.ReasonSlotCount, wantTruthPeak, wantReasonPeak)
+	}
+	assertProgramSlots(t, &warmProgram)
+
+	retained := branchingSlotProgram(rows)
+	var debug Lowerer
+	if err := debug.assignSlots(&retained, slotRetainAll); err != nil {
+		t.Fatalf("retain-all assignSlots: %v", err)
+	}
+	if reuseBytes, retainBytes := slotPeakBytes(&warmProgram, rows), slotPeakBytes(&retained, rows); reuseBytes >= retainBytes {
+		t.Fatalf("reuse peak = %d B, retain-all peak = %d B", reuseBytes, retainBytes)
+	}
 }
