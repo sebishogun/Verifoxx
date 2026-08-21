@@ -95,6 +95,17 @@ type Lowerer struct {
 	candidateIDs     []schema.InstructionID
 	candidateLive    []uint8
 	candidateToFinal []schema.InstructionID
+
+	// Deterministic opcode-run scheduling scratch.
+	scheduleIndegree    []uint32
+	scheduleUserStarts  []uint32
+	scheduleUsers       []uint32
+	scheduleFill        []uint32
+	scheduleReadyBits   []uint64
+	scheduleOrder       []uint32
+	scheduleOldToNew    []schema.InstructionID
+	scheduleReadyCount  [13]uint32
+	scheduleReadyCursor [13]uint32
 }
 
 // lowerFrame is one iterative lowering frame: the source node whose
@@ -411,6 +422,15 @@ func (l *Lowerer) resetInstructionScratch() {
 	l.candidateIDs = l.candidateIDs[:0]
 	l.candidateLive = l.candidateLive[:0]
 	l.candidateToFinal = l.candidateToFinal[:0]
+	l.scheduleIndegree = l.scheduleIndegree[:0]
+	l.scheduleUserStarts = l.scheduleUserStarts[:0]
+	l.scheduleUsers = l.scheduleUsers[:0]
+	l.scheduleFill = l.scheduleFill[:0]
+	l.scheduleReadyBits = l.scheduleReadyBits[:0]
+	l.scheduleOrder = l.scheduleOrder[:0]
+	l.scheduleOldToNew = l.scheduleOldToNew[:0]
+	l.scheduleReadyCount = [13]uint32{}
+	l.scheduleReadyCursor = [13]uint32{}
 }
 
 // lowerInstructions emits the normalized topological instruction DAG into dst.
@@ -489,7 +509,10 @@ func (l *Lowerer) lowerInstructions(dst *program.Program, doc *ast.Document) err
 			l.stack = l.stack[:top]
 		}
 	}
-	return l.compactInstructions(dst, doc)
+	if err := l.compactInstructions(dst, doc); err != nil {
+		return err
+	}
+	return l.scheduleInstructions(dst)
 }
 
 // markRootFlags ORs the semantic root-role flags into one byte per source
