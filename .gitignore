@@ -4,6 +4,9 @@
 *.exe
 *.test
 
+# Project-local Git worktrees
+/.worktrees/
+
 # Test and coverage artifacts
 *.out
 coverage.html
