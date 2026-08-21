@@ -290,6 +290,45 @@ func (l *Lowerer) canonicalizeValues(dst *program.Program, doc *ast.Document) er
 	return nil
 }
 
+// compareOpcode maps an AST CompareOp to the matching Program opcode. An
+// invalid operation reports ok=false; the instruction stage rejects it.
+func compareOpcode(op ast.CompareOp) (program.Opcode, bool) {
+	switch op {
+	case ast.CompareOpEqual:
+		return program.OpcodeEqual, true
+	case ast.CompareOpNotEqual:
+		return program.OpcodeNotEqual, true
+	case ast.CompareOpIn:
+		return program.OpcodeIn, true
+	case ast.CompareOpExists:
+		return program.OpcodeExists, true
+	case ast.CompareOpLess:
+		return program.OpcodeLess, true
+	case ast.CompareOpLessEqual:
+		return program.OpcodeLessEqual, true
+	case ast.CompareOpGreater:
+		return program.OpcodeGreater, true
+	case ast.CompareOpGreaterEqual:
+		return program.OpcodeGreaterEqual, true
+	}
+	return 0, false
+}
+
+// canonicalValue returns the canonical Program ValueID of a source AST
+// ValueID through the constant-stage remap column. The remap is filled for
+// every AST ValueID by lowerConstants, so a zero or out-of-range source ID
+// or a missing remap row reports corrupt input.
+func (l *Lowerer) canonicalValue(id schema.ValueID) (schema.ValueID, error) {
+	if id == 0 || uint64(id) > uint64(len(l.valueRemap)) {
+		return 0, ErrInvalidDocument
+	}
+	canonical := l.valueRemap[id-1]
+	if canonical == 0 {
+		return 0, ErrInvalidDocument
+	}
+	return canonical, nil
+}
+
 // freezeSymbolSlots freezes the immutable open-address symbol probe table
 // over the canonical symbol slab. The slot count is the smallest power of two
 // at least twice the symbol count, so occupancy never exceeds 50% and every

@@ -939,6 +939,581 @@ func TestLowerConstantsZeroPayloadKindsDistinct(t *testing.T) {
 	}
 }
 
+// buildInstructionFixture builds a validator-clean document exercising every
+// compare op, Evidence, All, Any, Not, a shared NodeID reached through several
+// parents, and an 8,192-deep Not chain. Every node is reachable from semantic
+// roots: requirement applicability roots, clause assertion roots, and clause
+// evidence edges. The chain leaf (NodeID 13) and the chain Not nodes
+// (NodeIDs 14..8205) are the only nodes past the 12-node core.
+func buildInstructionFixture(t *testing.T) (*ast.Document, *schema.Schema, *schema.Interner) {
+	t.Helper()
+	syms := schema.NewSymbolInterner(16)
+	b := schema.NewBuilder()
+	add := func(name string, kind schema.ValueKind, group schema.FieldGroup) schema.FieldID {
+		id, err := syms.Intern([]byte(name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		fid, err := b.AddField(id, kind, group)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fid
+	}
+	trust := add("subject.trust", schema.ValueKindSymbol, schema.FieldGroupSubject)
+	env := add("context.environment", schema.ValueKindPresence, schema.FieldGroupContext)
+	usage := add("context.usage", schema.ValueKindSymbol, schema.FieldGroupContext)
+	count := add("usage.count", schema.ValueKindInteger, schema.FieldGroupAction)
+	since := add("context.since", schema.ValueKindTimestamp, schema.FieldGroupContext)
+
+	src := []byte("{}")
+	ab := ast.NewBuilder(ast.Hints{
+		Nodes: 8205, CompareNodes: 9, CompareListValues: 2, GroupNodes: 2,
+		ChildEdges: 4, NotNodes: 8193, EvidenceNodes: 1,
+		Values: 16, SymbolValues: 8, SymbolBytes: 256,
+		IntegerValues: 1, TimestampValues: 1,
+		EvidenceKinds: 1, EvidenceStates: 1, Outcomes: 1,
+		Clauses: 6, ClauseEvidenceEdges: 5,
+		Requirements: 5, RequirementClauseEdges: 6,
+		SourceBytes: len(src),
+	})
+	if err := ab.SetSource(src); err != nil {
+		t.Fatal(err)
+	}
+	span := ast.SourceSpan{Start: 0, End: 2}
+
+	high, err := ab.AddSymbolValue([]byte("high"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	standard, err := ab.AddSymbolValue([]byte("standard"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	five, err := ab.AddIntegerValue(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts, err := ab.AddTimestampValue(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, err := ab.AddSymbolValue([]byte("meta-name"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	version, err := ab.AddSymbolValue([]byte("meta-version"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ab.SetMetadata(name, version); err != nil {
+		t.Fatal(err)
+	}
+
+	kindName, err := ab.AddSymbolValue([]byte("attestation"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateName, err := ab.AddSymbolValue([]byte("current"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ek, err := ab.AddEvidenceKind(kindName, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	es, err := ab.AddEvidenceState(stateName, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outName, err := ab.AddSymbolValue([]byte("approve"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := ab.AddOutcome(outName, 1, true, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	eq, err := ab.AddCompare(trust, ast.CompareOpEqual, high, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ne, err := ab.AddCompare(trust, ast.CompareOpNotEqual, standard, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := ab.AddIn(usage, []schema.ValueID{standard, high}, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exists, err := ab.AddExists(env, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lt, err := ab.AddCompare(count, ast.CompareOpLess, five, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	le, err := ab.AddCompare(count, ast.CompareOpLessEqual, five, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gt, err := ab.AddCompare(since, ast.CompareOpGreater, ts, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ge, err := ab.AddCompare(since, ast.CompareOpGreaterEqual, ts, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, err := ab.AddGroup(ast.NodeKindAll, []schema.NodeID{exists, eq}, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	any, err := ab.AddGroup(ast.NodeKindAny, []schema.NodeID{exists, in}, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	not1, err := ab.AddNot(eq, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, err := ab.AddEvidence(ek, es, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, err := ab.AddExists(env, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain := leaf
+	for i := 0; i < 8192; i++ {
+		chain, err = ab.AddNot(chain, span)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	resolution := ast.Resolution{
+		OnSatisfied: out, OnFalse: out, OnMissing: out, OnStale: out,
+		OnUnclear: out, OnUnverifiable: out, OnConflict: out,
+	}
+	c1, err := ab.AddClause(any, []schema.NodeID{ev}, resolution, nil, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c2, err := ab.AddClause(not1, []schema.NodeID{ev}, resolution, nil, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c3, err := ab.AddClause(exists, nil, resolution, nil, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c4, err := ab.AddClause(le, []schema.NodeID{ev}, resolution, nil, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c5, err := ab.AddClause(ge, []schema.NodeID{ev}, resolution, nil, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c6, err := ab.AddClause(ne, []schema.NodeID{ev}, resolution, nil, span)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ab.AddRequirement(1, all, []schema.ClauseID{c1, c2}, span); err != nil {
+		t.Fatal(err)
+	}
+	if err := ab.AddRequirement(2, chain, []schema.ClauseID{c1}, span); err != nil {
+		t.Fatal(err)
+	}
+	if err := ab.AddRequirement(3, exists, []schema.ClauseID{c3}, span); err != nil {
+		t.Fatal(err)
+	}
+	if err := ab.AddRequirement(4, lt, []schema.ClauseID{c4}, span); err != nil {
+		t.Fatal(err)
+	}
+	if err := ab.AddRequirement(5, gt, []schema.ClauseID{c5, c6}, span); err != nil {
+		t.Fatal(err)
+	}
+
+	fields := b.Finish()
+	doc := ab.Document()
+	if diags := Validate(nil, doc, fields); len(diags) != 0 {
+		t.Fatalf("instruction fixture produced %d diagnostics: %+v", len(diags), diags)
+	}
+	return doc, fields, syms
+}
+
+// canonicalSymbolValue returns the canonical Program ValueID carrying the
+// symbol bytes b.
+func canonicalSymbolValue(t *testing.T, p *program.Program, b []byte) schema.ValueID {
+	t.Helper()
+	sym, ok := p.LookupSymbol(b)
+	if !ok {
+		t.Fatalf("symbol %q not frozen", b)
+	}
+	for j := range p.ValueKinds {
+		if p.ValueKinds[j] == schema.ValueKindSymbol && p.ValueRefs[j] == uint32(sym) {
+			return schema.ValueID(j + 1)
+		}
+	}
+	t.Fatalf("no canonical symbol value for %q", b)
+	return 0
+}
+
+// instructionColumnsEqual compares every instruction-stage destination column
+// pair, including the ListValues and Operands CSR backings.
+func instructionColumnsEqual(a, b program.Program) bool {
+	return reflect.DeepEqual(a.Opcodes, b.Opcodes) &&
+		reflect.DeepEqual(a.Fields, b.Fields) &&
+		reflect.DeepEqual(a.Values, b.Values) &&
+		reflect.DeepEqual(a.ListStarts, b.ListStarts) &&
+		reflect.DeepEqual(a.ListCounts, b.ListCounts) &&
+		reflect.DeepEqual(a.OperandStarts, b.OperandStarts) &&
+		reflect.DeepEqual(a.OperandCounts, b.OperandCounts) &&
+		reflect.DeepEqual(a.EvidenceKinds, b.EvidenceKinds) &&
+		reflect.DeepEqual(a.EvidenceStates, b.EvidenceStates) &&
+		reflect.DeepEqual(a.RootFlags, b.RootFlags) &&
+		reflect.DeepEqual(a.InstructionNodes, b.InstructionNodes) &&
+		reflect.DeepEqual(a.InstructionSourceStarts, b.InstructionSourceStarts) &&
+		reflect.DeepEqual(a.InstructionSourceEnds, b.InstructionSourceEnds) &&
+		reflect.DeepEqual(a.ListValues, b.ListValues) &&
+		reflect.DeepEqual(a.Operands, b.Operands)
+}
+
+func TestLowerInstructionsFixture(t *testing.T) {
+	doc, fields, syms := buildInstructionFixture(t)
+	var lowerer Lowerer
+	var got program.Program
+	if err := lowerer.lowerConstants(&got, doc, fields, syms); err != nil {
+		t.Fatalf("lowerConstants: %v", err)
+	}
+	if err := lowerer.lowerInstructions(&got, doc); err != nil {
+		t.Fatalf("lowerInstructions: %v", err)
+	}
+
+	// One instruction per source node in deterministic topological order:
+	// every node appears exactly once in the canonical node column.
+	nodes := doc.Len()
+	if got.InstructionCount() != nodes {
+		t.Fatalf("instruction count = %d, want %d", got.InstructionCount(), nodes)
+	}
+	tempOf := map[schema.NodeID]int{}
+	for i, n := range got.InstructionNodes {
+		if n == 0 || uint64(n) > uint64(nodes) {
+			t.Fatalf("InstructionNodes[%d] = %d out of range", i, n)
+		}
+		if _, dup := tempOf[n]; dup {
+			t.Fatalf("node %d emitted more than once", n)
+		}
+		tempOf[n] = i
+	}
+	if len(tempOf) != nodes {
+		t.Fatalf("distinct emitted nodes = %d, want %d", len(tempOf), nodes)
+	}
+
+	// Canonical source spans match the owning node's exact span.
+	for n, row := range tempOf {
+		span, ok := doc.Span(n)
+		if !ok {
+			t.Fatalf("fixture span for node %d missing", n)
+		}
+		if got.InstructionSourceStarts[row] != span.Start || got.InstructionSourceEnds[row] != span.End {
+			t.Fatalf("node %d span = (%d,%d), want (%d,%d)",
+				n, got.InstructionSourceStarts[row], got.InstructionSourceEnds[row], span.Start, span.End)
+		}
+	}
+
+	// Every AST operation maps to the exact Program opcode.
+	wantOps := map[schema.NodeID]program.Opcode{
+		1: program.OpcodeEqual, 2: program.OpcodeNotEqual, 3: program.OpcodeIn,
+		4: program.OpcodeExists, 5: program.OpcodeLess, 6: program.OpcodeLessEqual,
+		7: program.OpcodeGreater, 8: program.OpcodeGreaterEqual,
+		9: program.OpcodeAll, 10: program.OpcodeAny, 11: program.OpcodeNot,
+		12: program.OpcodeEvidence, 13: program.OpcodeExists,
+	}
+	for n, row := range tempOf {
+		if want, ok := wantOps[n]; ok && got.Opcodes[row] != want {
+			t.Fatalf("node %d opcode = %v, want %v", n, got.Opcodes[row], want)
+		}
+	}
+
+	// The 8,192-node Not chain lowers without recursion or stack overflow:
+	// every chain node is present, and node k's operand is the temporary ID
+	// of node k-1 (which equals row k-1 in the 1:1 chain mapping).
+	for n := schema.NodeID(14); n <= schema.NodeID(nodes); n++ {
+		row, ok := tempOf[n]
+		if !ok {
+			t.Fatalf("chain node %d missing", n)
+		}
+		if got.Opcodes[row] != program.OpcodeNot {
+			t.Fatalf("chain node %d opcode = %v, want Not", n, got.Opcodes[row])
+		}
+		if got.OperandCounts[row] != 1 {
+			t.Fatalf("chain node %d operand count = %d, want 1", n, got.OperandCounts[row])
+		}
+		start := got.OperandStarts[row]
+		if operand := got.Operands[int(start)]; uint64(operand) != uint64(row) {
+			t.Fatalf("chain node %d operand = %d, want %d", n, operand, row)
+		}
+	}
+
+	// Compare payload columns: exact fields and canonical values, with the In
+	// list translated into the ListValues CSR.
+	highValue := canonicalSymbolValue(t, &got, []byte("high"))
+	standardValue := canonicalSymbolValue(t, &got, []byte("standard"))
+	fiveValue := canonicalInteger(t, &got, 5)
+	tsValue := canonicalTimestamp(t, &got, 1)
+	for n, row := range tempOf {
+		switch got.Opcodes[row] {
+		case program.OpcodeEqual, program.OpcodeNotEqual, program.OpcodeLess,
+			program.OpcodeLessEqual, program.OpcodeGreater, program.OpcodeGreaterEqual:
+			if got.Values[row] == 0 {
+				t.Fatalf("scalar node %d has a zero canonical value", n)
+			}
+		}
+	}
+	if got.Fields[tempOf[1]] != 1 || got.Values[tempOf[1]] != highValue {
+		t.Fatalf("equal node = (field %d, value %d), want (1, %d)",
+			got.Fields[tempOf[1]], got.Values[tempOf[1]], highValue)
+	}
+	if got.Fields[tempOf[2]] != 1 || got.Values[tempOf[2]] != standardValue {
+		t.Fatalf("not-equal node = (field %d, value %d), want (1, %d)",
+			got.Fields[tempOf[2]], got.Values[tempOf[2]], standardValue)
+	}
+	if got.Fields[tempOf[4]] != 2 || got.Values[tempOf[4]] != 0 {
+		t.Fatalf("exists node = (field %d, value %d), want (2, 0)",
+			got.Fields[tempOf[4]], got.Values[tempOf[4]])
+	}
+	if got.Fields[tempOf[5]] != 4 || got.Values[tempOf[5]] != fiveValue {
+		t.Fatalf("less node = (field %d, value %d), want (4, %d)",
+			got.Fields[tempOf[5]], got.Values[tempOf[5]], fiveValue)
+	}
+	if got.Fields[tempOf[6]] != 4 || got.Values[tempOf[6]] != fiveValue {
+		t.Fatalf("less-equal node = (field %d, value %d), want (4, %d)",
+			got.Fields[tempOf[6]], got.Values[tempOf[6]], fiveValue)
+	}
+	if got.Fields[tempOf[7]] != 5 || got.Values[tempOf[7]] != tsValue {
+		t.Fatalf("greater node = (field %d, value %d), want (5, %d)",
+			got.Fields[tempOf[7]], got.Values[tempOf[7]], tsValue)
+	}
+	if got.Fields[tempOf[8]] != 5 || got.Values[tempOf[8]] != tsValue {
+		t.Fatalf("greater-equal node = (field %d, value %d), want (5, %d)",
+			got.Fields[tempOf[8]], got.Values[tempOf[8]], tsValue)
+	}
+	inRow := tempOf[3]
+	if got.Fields[inRow] != 3 || got.Values[inRow] != 0 {
+		t.Fatalf("in node = (field %d, value %d), want (3, 0)",
+			got.Fields[inRow], got.Values[inRow])
+	}
+	if got.ListStarts[inRow] != 0 || got.ListCounts[inRow] != 2 {
+		t.Fatalf("in node list range = (%d, %d), want (0, 2)",
+			got.ListStarts[inRow], got.ListCounts[inRow])
+	}
+	if got.ListValues[0] != standardValue || got.ListValues[1] != highValue {
+		t.Fatalf("in list values = (%d, %d), want (%d, %d)",
+			got.ListValues[0], got.ListValues[1], standardValue, highValue)
+	}
+
+	// Group and Not operands are ordered temporary IDs in child CSR order.
+	if got.OperandStarts[tempOf[9]] != 0 || got.OperandCounts[tempOf[9]] != 2 {
+		t.Fatalf("all node operand range = (%d, %d), want (0, 2)",
+			got.OperandStarts[tempOf[9]], got.OperandCounts[tempOf[9]])
+	}
+	if got.Operands[0] != schema.InstructionID(tempOf[4]+1) || got.Operands[1] != schema.InstructionID(tempOf[1]+1) {
+		t.Fatalf("all node operands = (%d, %d), want (%d, %d)",
+			got.Operands[0], got.Operands[1], tempOf[4]+1, tempOf[1]+1)
+	}
+	if got.OperandStarts[tempOf[10]] != 2 || got.OperandCounts[tempOf[10]] != 2 {
+		t.Fatalf("any node operand range = (%d, %d), want (2, 2)",
+			got.OperandStarts[tempOf[10]], got.OperandCounts[tempOf[10]])
+	}
+	if got.Operands[2] != schema.InstructionID(tempOf[4]+1) || got.Operands[3] != schema.InstructionID(tempOf[3]+1) {
+		t.Fatalf("any node operands = (%d, %d), want (%d, %d)",
+			got.Operands[2], got.Operands[3], tempOf[4]+1, tempOf[3]+1)
+	}
+	if got.OperandStarts[tempOf[11]] != 4 || got.OperandCounts[tempOf[11]] != 1 {
+		t.Fatalf("not node operand range = (%d, %d), want (4, 1)",
+			got.OperandStarts[tempOf[11]], got.OperandCounts[tempOf[11]])
+	}
+	if got.Operands[4] != schema.InstructionID(tempOf[1]+1) {
+		t.Fatalf("not node operand = %d, want %d", got.Operands[4], tempOf[1]+1)
+	}
+
+	// Every operand InstructionID is nonzero and lower than its consumer's.
+	for row, op := range got.Opcodes {
+		if !op.IsGroup() && op != program.OpcodeNot {
+			continue
+		}
+		for j := uint32(0); j < uint32(got.OperandCounts[row]); j++ {
+			operand := got.Operands[int(got.OperandStarts[row])+int(j)]
+			if operand == 0 || operand >= schema.InstructionID(row+1) {
+				t.Fatalf("instruction %d operand %d = %d, want nonzero and < %d", row+1, j, operand, row+1)
+			}
+		}
+	}
+
+	// Evidence payload columns.
+	if got.EvidenceKinds[tempOf[12]] != 1 || got.EvidenceStates[tempOf[12]] != 1 {
+		t.Fatalf("evidence payload = (%d, %d), want (1, 1)",
+			got.EvidenceKinds[tempOf[12]], got.EvidenceStates[tempOf[12]])
+	}
+
+	// Root flags OR per role: the shared node is both an applicability root
+	// (requirement 3) and an assertion root (clause 3).
+	if got.RootFlags[tempOf[4]] != program.RootApplicability|program.RootAssertion {
+		t.Fatalf("shared node flags = %v, want %v",
+			got.RootFlags[tempOf[4]], program.RootApplicability|program.RootAssertion)
+	}
+	if got.RootFlags[tempOf[9]] != program.RootApplicability {
+		t.Fatalf("all node flags = %v, want %v", got.RootFlags[tempOf[9]], program.RootApplicability)
+	}
+	if got.RootFlags[tempOf[10]] != program.RootAssertion {
+		t.Fatalf("any node flags = %v, want %v", got.RootFlags[tempOf[10]], program.RootAssertion)
+	}
+	if got.RootFlags[tempOf[11]] != program.RootAssertion {
+		t.Fatalf("not node flags = %v, want %v", got.RootFlags[tempOf[11]], program.RootAssertion)
+	}
+	if got.RootFlags[tempOf[12]] != program.RootEvidence {
+		t.Fatalf("evidence node flags = %v, want %v", got.RootFlags[tempOf[12]], program.RootEvidence)
+	}
+	if got.RootFlags[tempOf[8205]] != program.RootApplicability {
+		t.Fatalf("chain root flags = %v, want %v", got.RootFlags[tempOf[8205]], program.RootApplicability)
+	}
+	if got.RootFlags[tempOf[1]] != 0 {
+		t.Fatalf("leaf node flags = %v, want 0", got.RootFlags[tempOf[1]])
+	}
+
+	// Unused scalar columns are zero per row shape.
+	for n, row := range tempOf {
+		switch got.Opcodes[row] {
+		case program.OpcodeEqual, program.OpcodeNotEqual, program.OpcodeExists,
+			program.OpcodeLess, program.OpcodeLessEqual, program.OpcodeGreater,
+			program.OpcodeGreaterEqual:
+			if got.ListStarts[row] != 0 || got.ListCounts[row] != 0 ||
+				got.OperandStarts[row] != 0 || got.OperandCounts[row] != 0 ||
+				got.EvidenceKinds[row] != 0 || got.EvidenceStates[row] != 0 {
+				t.Fatalf("scalar compare node %d has nonzero unused columns", n)
+			}
+		case program.OpcodeIn:
+			if got.OperandStarts[row] != 0 || got.OperandCounts[row] != 0 ||
+				got.EvidenceKinds[row] != 0 || got.EvidenceStates[row] != 0 {
+				t.Fatalf("in node %d has nonzero unused columns", n)
+			}
+		case program.OpcodeAll, program.OpcodeAny, program.OpcodeNot:
+			if got.Fields[row] != 0 || got.Values[row] != 0 ||
+				got.ListStarts[row] != 0 || got.ListCounts[row] != 0 ||
+				got.EvidenceKinds[row] != 0 || got.EvidenceStates[row] != 0 {
+				t.Fatalf("group/not node %d has nonzero unused columns", n)
+			}
+		case program.OpcodeEvidence:
+			if got.Fields[row] != 0 || got.Values[row] != 0 ||
+				got.ListStarts[row] != 0 || got.ListCounts[row] != 0 ||
+				got.OperandStarts[row] != 0 || got.OperandCounts[row] != 0 {
+				t.Fatalf("evidence node %d has nonzero unused columns", n)
+			}
+		}
+	}
+}
+
+func TestLowerInstructionsReuse(t *testing.T) {
+	doc, fields, syms := buildInstructionFixture(t)
+	fixtureDoc, fixtureFields, fixtureSyms := lowerFixture(t)
+	var lowerer Lowerer
+	var dst program.Program
+	lower := func(p *program.Program, d *ast.Document, f *schema.Schema, s *schema.Interner) {
+		t.Helper()
+		if err := lowerer.lowerConstants(p, d, f, s); err != nil {
+			t.Fatalf("lowerConstants: %v", err)
+		}
+		if err := lowerer.lowerInstructions(p, d); err != nil {
+			t.Fatalf("lowerInstructions: %v", err)
+		}
+	}
+	lower(&dst, doc, fields, syms)
+
+	// Warm reuse of the same destination, document, and Lowerer allocates
+	// nothing: every instruction column and scratch buffer retains capacity.
+	if allocs := testing.AllocsPerRun(3, func() { lower(&dst, doc, fields, syms) }); allocs != 0 {
+		t.Fatalf("warm reuse allocated %f B/op", allocs)
+	}
+
+	// A fresh destination on the same Lowerer emits byte-identical columns.
+	var fresh program.Program
+	lower(&fresh, doc, fields, syms)
+	if !instructionColumnsEqual(fresh, dst) {
+		t.Fatal("fresh lowering differs from the reused destination")
+	}
+
+	// Interleaving a different, smaller document leaves no stale operands or
+	// visit state: its columns match a fresh Lowerer's output exactly.
+	var small program.Program
+	lower(&small, fixtureDoc, fixtureFields, fixtureSyms)
+	var smallFresh program.Program
+	var freshLowerer Lowerer
+	if err := freshLowerer.lowerConstants(&smallFresh, fixtureDoc, fixtureFields, fixtureSyms); err != nil {
+		t.Fatalf("lowerConstants (small): %v", err)
+	}
+	if err := freshLowerer.lowerInstructions(&smallFresh, fixtureDoc); err != nil {
+		t.Fatalf("lowerInstructions (small): %v", err)
+	}
+	if !instructionColumnsEqual(smallFresh, small) {
+		t.Fatal("interleaved small lowering differs from a fresh Lowerer")
+	}
+
+	// Returning to the fixture still allocates nothing and emits identical
+	// columns, proving scratch capacity survived the interleaving.
+	if allocs := testing.AllocsPerRun(3, func() { lower(&dst, doc, fields, syms) }); allocs != 0 {
+		t.Fatalf("post-interleave warm reuse allocated %f B/op", allocs)
+	}
+	var fresh2 program.Program
+	lower(&fresh2, doc, fields, syms)
+	if !instructionColumnsEqual(fresh2, dst) {
+		t.Fatal("post-interleave lowering differs from the reused destination")
+	}
+}
+
+func TestLowerInstructionsErrors(t *testing.T) {
+	doc, fields, syms := lowerFixture(t)
+	var lowerer Lowerer
+	var base program.Program
+	if err := lowerer.lowerConstants(&base, doc, fields, syms); err != nil {
+		t.Fatalf("lowerConstants: %v", err)
+	}
+
+	// A truncated CompareOps peer column makes the Compare accessor fail:
+	// the stage returns ErrInvalidDocument instead of panicking.
+	badOps := *doc
+	badOps.CompareOps = badOps.CompareOps[:len(badOps.CompareOps)-1]
+	var p program.Program
+	if err := lowerer.lowerConstants(&p, &badOps, fields, syms); err != nil {
+		t.Fatalf("lowerConstants (bad ops): %v", err)
+	}
+	if err := lowerer.lowerInstructions(&p, &badOps); !errors.Is(err, ErrInvalidDocument) {
+		t.Fatalf("truncated CompareOps: err = %v, want ErrInvalidDocument", err)
+	}
+
+	// A truncated ListValueIDs CSR backing makes the In range accessor fail.
+	badList := *doc
+	badList.ListValueIDs = badList.ListValueIDs[:len(badList.ListValueIDs)-1]
+	var p2 program.Program
+	if err := lowerer.lowerConstants(&p2, &badList, fields, syms); err != nil {
+		t.Fatalf("lowerConstants (bad list): %v", err)
+	}
+	if err := lowerer.lowerInstructions(&p2, &badList); !errors.Is(err, ErrInvalidDocument) {
+		t.Fatalf("truncated ListValueIDs: err = %v, want ErrInvalidDocument", err)
+	}
+
+	// A nil document is rejected before any column is touched.
+	if err := lowerer.lowerInstructions(nil, nil); !errors.Is(err, ErrInvalidDocument) {
+		t.Fatalf("nil document: err = %v, want ErrInvalidDocument", err)
+	}
+}
+
 func TestLowerConstantsErrors(t *testing.T) {
 	doc, fields, syms := lowerFixture(t)
 	var lowerer Lowerer
