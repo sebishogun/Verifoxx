@@ -131,3 +131,104 @@ func TestSlotLastUseRejectsMalformedProgram(t *testing.T) {
 		})
 	}
 }
+
+func assertSafeSlotIntervals(t *testing.T, slots []schema.SlotID, lastUses []uint32, live []uint8) {
+	t.Helper()
+	for row, slot := range slots {
+		if live != nil && live[row] == 0 {
+			if slot != 0 {
+				t.Fatalf("ineligible row %d has slot %d", row, slot)
+			}
+			continue
+		}
+		if slot == 0 {
+			t.Fatalf("eligible row %d has zero slot", row)
+		}
+		for prior := range row {
+			if slots[prior] == slot && lastUses[prior] > uint32(row) {
+				t.Fatalf("slot %d reused at row %d before row %d last use %d",
+					slot, row, prior, lastUses[prior])
+			}
+		}
+	}
+}
+
+func TestAssignTruthSlotsReusesDeterministically(t *testing.T) {
+	tests := []struct {
+		name          string
+		program       program.Program
+		expectedSlots []schema.SlotID
+		expectedPeak  uint32
+	}{
+		{
+			name: "linear chain",
+			program: slotTestProgram(
+				[]program.Opcode{program.OpcodeExists, program.OpcodeNot, program.OpcodeNot},
+				[][]schema.InstructionID{nil, {1}, {2}},
+				[]program.RootFlags{0, 0, program.RootAssertion},
+			),
+			expectedSlots: []schema.SlotID{1, 1, 1},
+			expectedPeak:  1,
+		},
+		{
+			name: "simultaneously live branches",
+			program: slotTestProgram(
+				[]program.Opcode{program.OpcodeExists, program.OpcodeExists, program.OpcodeAll},
+				[][]schema.InstructionID{nil, nil, {1, 2}},
+				[]program.RootFlags{0, 0, program.RootAssertion},
+			),
+			expectedSlots: []schema.SlotID{1, 2, 1},
+			expectedPeak:  2,
+		},
+		{
+			name: "shared dependency",
+			program: slotTestProgram(
+				[]program.Opcode{program.OpcodeExists, program.OpcodeNot, program.OpcodeNot, program.OpcodeAll},
+				[][]schema.InstructionID{nil, {1}, {1}, {2, 3}},
+				[]program.RootFlags{0, 0, 0, program.RootAssertion},
+			),
+			expectedSlots: []schema.SlotID{1, 2, 1, 1},
+			expectedPeak:  2,
+		},
+		{
+			name: "independent retained roots",
+			program: slotTestProgram(
+				[]program.Opcode{program.OpcodeExists, program.OpcodeExists},
+				[][]schema.InstructionID{nil, nil},
+				[]program.RootFlags{program.RootApplicability, program.RootAssertion},
+			),
+			expectedSlots: []schema.SlotID{1, 2},
+			expectedPeak:  2,
+		},
+		{
+			name: "lowest released ID",
+			program: slotTestProgram(
+				[]program.Opcode{program.OpcodeExists, program.OpcodeExists, program.OpcodeAll, program.OpcodeExists},
+				[][]schema.InstructionID{nil, nil, {1, 2}, nil},
+				[]program.RootFlags{0, 0, 0, program.RootAssertion},
+			),
+			expectedSlots: []schema.SlotID{1, 2, 1, 1},
+			expectedPeak:  2,
+		},
+	}
+
+	var lowerer Lowerer
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			peak, err := lowerer.assignTruthSlots(&tt.program, slotReuse)
+			if err != nil {
+				t.Fatalf("assignTruthSlots: %v", err)
+			}
+			if !reflect.DeepEqual(lowerer.slotTruth, tt.expectedSlots) || peak != tt.expectedPeak {
+				t.Fatalf("slots/peak = %v/%d, want %v/%d",
+					lowerer.slotTruth, peak, tt.expectedSlots, tt.expectedPeak)
+			}
+			for row, slot := range lowerer.slotTruth {
+				if slot == 0 || uint32(slot) > peak {
+					t.Fatalf("slot[%d] = %d outside 1..%d", row, slot, peak)
+				}
+			}
+			assertSafeSlotIntervals(t, lowerer.slotTruth, lowerer.slotLastUses, nil)
+		})
+	}
+}
