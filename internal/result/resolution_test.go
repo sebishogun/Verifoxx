@@ -203,6 +203,118 @@ func TestOutcomeValid(t *testing.T) {
 	}
 }
 
+// remediationFixture returns the two-row remediation table: row 1 sets
+// context.usage (field 7) to standard (value 42); row 2 requests one allowed
+// usage-adjustment evidence kind (9).
+func remediationFixture() *RemediationTable {
+	return &RemediationTable{
+		Kinds:         []RemediationKind{RemediationSetField, RemediationAddEvidence},
+		Fields:        []schema.FieldID{7, 0},
+		Values:        []schema.ValueID{42, 0},
+		EvidenceKinds: []schema.EvidenceKindID{0, 9},
+	}
+}
+
+func TestRemediationLookupRows(t *testing.T) {
+	table := remediationFixture()
+	want := []Remediation{
+		{Kind: RemediationSetField, Field: 7, Value: 42},
+		{Kind: RemediationAddEvidence, EvidenceKind: 9},
+	}
+	for i, record := range want {
+		got, ok := table.Lookup(schema.RemediationID(i + 1))
+		if !ok {
+			t.Fatalf("Lookup(%d) = ok=false, want record %+v", i+1, record)
+		}
+		if got != record {
+			t.Fatalf("Lookup(%d) = %+v, want %+v", i+1, got, record)
+		}
+	}
+}
+
+func TestRemediationLookupInvalidIDs(t *testing.T) {
+	table := remediationFixture()
+	for _, id := range []schema.RemediationID{0, 3, math.MaxUint32} {
+		if got, ok := table.Lookup(id); ok || got != (Remediation{}) {
+			t.Fatalf("Lookup(%d) = %+v, ok=%v; want zero record, ok=false", id, got, ok)
+		}
+	}
+}
+
+func TestRemediationLookupShortColumns(t *testing.T) {
+	base := remediationFixture()
+	tables := []*RemediationTable{
+		{Kinds: base.Kinds[:1], Fields: base.Fields, Values: base.Values, EvidenceKinds: base.EvidenceKinds},
+		{Kinds: base.Kinds, Fields: base.Fields[:1], Values: base.Values, EvidenceKinds: base.EvidenceKinds},
+		{Kinds: base.Kinds, Fields: base.Fields, Values: base.Values[:1], EvidenceKinds: base.EvidenceKinds},
+		{Kinds: base.Kinds, Fields: base.Fields, Values: base.Values, EvidenceKinds: base.EvidenceKinds[:1]},
+	}
+	for i, table := range tables {
+		if got, ok := table.Lookup(2); ok {
+			t.Fatalf("table %d: Lookup(2) = %+v, ok=true; want false for short column", i, got)
+		}
+		if _, ok := table.Lookup(1); !ok {
+			t.Fatalf("table %d: Lookup(1) must still succeed on a short table", i)
+		}
+	}
+}
+
+func TestRemediationKindValid(t *testing.T) {
+	for _, kind := range []RemediationKind{RemediationSetField, RemediationAddEvidence} {
+		if !kind.Valid() {
+			t.Fatalf("kind %d must be valid", kind)
+		}
+	}
+	for _, kind := range []RemediationKind{RemediationInvalid, 255} {
+		if kind.Valid() {
+			t.Fatalf("kind %d must be invalid", kind)
+		}
+	}
+}
+
+func TestRemediationValid(t *testing.T) {
+	base := remediationFixture()
+	if !base.valid() {
+		t.Fatal("two-row table must be valid")
+	}
+	if !(&RemediationTable{}).valid() {
+		t.Fatal("aligned empty table must be valid")
+	}
+	mismatched := []*RemediationTable{
+		{Kinds: base.Kinds[:1], Fields: base.Fields, Values: base.Values, EvidenceKinds: base.EvidenceKinds},
+		{Kinds: base.Kinds, Fields: base.Fields[:1], Values: base.Values, EvidenceKinds: base.EvidenceKinds},
+		{Kinds: base.Kinds, Fields: base.Fields, Values: base.Values[:1], EvidenceKinds: base.EvidenceKinds},
+		{Kinds: base.Kinds, Fields: base.Fields, Values: base.Values, EvidenceKinds: base.EvidenceKinds[:1]},
+	}
+	for i, table := range mismatched {
+		if table.valid() {
+			t.Fatalf("mismatched table %d must be invalid", i)
+		}
+	}
+	badKind := &RemediationTable{
+		Kinds:         []RemediationKind{RemediationInvalid},
+		Fields:        []schema.FieldID{7},
+		Values:        []schema.ValueID{42},
+		EvidenceKinds: []schema.EvidenceKindID{0},
+	}
+	if badKind.valid() {
+		t.Fatal("invalid kind must make the table invalid")
+	}
+	malformed := []*RemediationTable{
+		{Kinds: []RemediationKind{RemediationSetField}, Fields: []schema.FieldID{0}, Values: []schema.ValueID{42}, EvidenceKinds: []schema.EvidenceKindID{0}},
+		{Kinds: []RemediationKind{RemediationSetField}, Fields: []schema.FieldID{7}, Values: []schema.ValueID{0}, EvidenceKinds: []schema.EvidenceKindID{0}},
+		{Kinds: []RemediationKind{RemediationSetField}, Fields: []schema.FieldID{7}, Values: []schema.ValueID{42}, EvidenceKinds: []schema.EvidenceKindID{9}},
+		{Kinds: []RemediationKind{RemediationAddEvidence}, Fields: []schema.FieldID{7}, Values: []schema.ValueID{0}, EvidenceKinds: []schema.EvidenceKindID{9}},
+		{Kinds: []RemediationKind{RemediationAddEvidence}, Fields: []schema.FieldID{0}, Values: []schema.ValueID{42}, EvidenceKinds: []schema.EvidenceKindID{9}},
+		{Kinds: []RemediationKind{RemediationAddEvidence}, Fields: []schema.FieldID{0}, Values: []schema.ValueID{0}, EvidenceKinds: []schema.EvidenceKindID{0}},
+	}
+	for i, table := range malformed {
+		if table.valid() {
+			t.Fatalf("malformed table %d must be invalid", i)
+		}
+	}
+}
+
 func TestOutcomePreferKnownAgreement(t *testing.T) {
 	table := outcomeTable()
 	direct := []struct {
