@@ -5,6 +5,22 @@ import (
 	"testing"
 )
 
+func TestHashSymbolKnownVectors(t *testing.T) {
+	cases := []struct {
+		input string
+		want  uint64
+	}{
+		{"", 0xcbf29ce484222325},
+		{"a", 0xaf63dc4c8601ec8c},
+		{"foobar", 0x85944171f73967e8},
+	}
+	for _, c := range cases {
+		if got := HashSymbol([]byte(c.input)); got != c.want {
+			t.Fatalf("HashSymbol(%q) = %#x, want %#x", c.input, got, c.want)
+		}
+	}
+}
+
 func TestInternAssignsSequentialIDs(t *testing.T) {
 	in := NewSymbolInterner(0)
 	a, err := in.Intern([]byte("alpha"))
@@ -101,7 +117,7 @@ func TestMaskedSlotCollisionResolvesDistinctly(t *testing.T) {
 found:
 	for i := 0; i < len(dict); i++ {
 		for j := i + 1; j < len(dict); j++ {
-			if fnv1a64([]byte(dict[i]))&mask == fnv1a64([]byte(dict[j]))&mask {
+			if HashSymbol([]byte(dict[i]))&mask == HashSymbol([]byte(dict[j]))&mask {
 				first, second = dict[i], dict[j]
 				break found
 			}

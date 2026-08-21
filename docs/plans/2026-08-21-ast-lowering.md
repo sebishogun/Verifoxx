@@ -110,11 +110,12 @@ func (p *Program) LookupSymbol(value []byte) (schema.SymbolID, bool)
 func (p *Program) ValueKind(id schema.ValueID) (schema.ValueKind, bool)
 ```
 
-`LookupSymbol` hashes bytes directly with FNV-1a, probes power-of-two slot
-arrays, verifies stored hash, and compares slab bytes. It never converts bytes
-to string or allocates. Keep the local hash implementation byte-identical to
-`schema.Interner` so later batch extension lookup uses the same hash contract.
-Reject mismatched slot columns safely.
+`LookupSymbol` hashes bytes through the shared `schema.HashSymbol` primitive,
+probes power-of-two slot arrays, verifies stored hash, and compares slab bytes.
+It never converts bytes to string or allocates. The shared primitive is the one
+hash contract for interning, frozen lookup, and batch extension, so compiler
+slot construction in Task 2 cannot drift from it. Reject mismatched slot
+columns safely.
 
 **Step 4: Verify GREEN and layout**
 
@@ -202,10 +203,10 @@ Define a non-concurrent `Lowerer` with reusable typed slices for:
 
 Order fields based on `fieldalignment`, but preserve hot scratch locality.
 
-In `normalize.go`, implement direct byte/value hashes, exact collision checks,
-and helpers that append canonical symbols and typed values into a scratch
-Program. Do not use `map`, `fmt`, reflection, interface callbacks, or
-`[]byte`-to-string conversion.
+In `normalize.go`, hash symbol bytes through `schema.HashSymbol`, intern typed
+values with exact collision checks, and append canonical symbols and typed
+values into a scratch Program. Do not use `map`, `fmt`, reflection, interface
+callbacks, or `[]byte`-to-string conversion.
 
 `lowerConstants` must:
 

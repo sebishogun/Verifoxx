@@ -12,8 +12,11 @@ const (
 	fnvPrime  = uint64(1099511628211)
 )
 
-// fnv1a64 hashes b directly; it never allocates or converts to a string.
-func fnv1a64(b []byte) uint64 {
+// HashSymbol hashes symbol bytes with FNV-1a 64-bit directly; it never
+// allocates or converts to a string. It is the one shared hash contract for
+// symbol interning, frozen Program symbol lookup, and batch extension
+// interning, so all three stay byte-identical by construction.
+func HashSymbol(b []byte) uint64 {
 	h := fnvOffset
 	for _, c := range b {
 		h ^= uint64(c)
@@ -100,7 +103,7 @@ func (in *Interner) Intern(b []byte) (SymbolID, error) {
 	in.ensureArena()
 	for {
 		mask := uint64(len(in.ids) - 1)
-		slot := int(fnv1a64(b) & mask)
+		slot := int(HashSymbol(b) & mask)
 		for {
 			id := in.ids[slot]
 			if id == 0 {
@@ -136,7 +139,7 @@ func (in *Interner) Lookup(b []byte) (SymbolID, bool) {
 		return 0, false
 	}
 	mask := uint64(len(in.ids) - 1)
-	slot := int(fnv1a64(b) & mask)
+	slot := int(HashSymbol(b) & mask)
 	for {
 		id := in.ids[slot]
 		if id == 0 {
@@ -197,7 +200,7 @@ func (in *Interner) grow() {
 			continue
 		}
 		b := in.arena.Bytes(oldRefs[i])
-		slot := int(fnv1a64(b) & mask)
+		slot := int(HashSymbol(b) & mask)
 		for in.ids[slot] != 0 {
 			slot = (slot + 1) & int(mask)
 		}
