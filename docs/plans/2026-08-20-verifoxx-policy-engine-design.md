@@ -235,6 +235,7 @@ type OutcomeCatalog struct {
 }
 
 type ResolutionTable struct {
+    OnSatisfied    []OutcomeID
     OnFalse        []OutcomeID
     OnMissing      []OutcomeID
     OnStale        []OutcomeID
@@ -269,12 +270,18 @@ The source AST will use one owning document, integer node references, retained s
 
 ```go
 type Document struct {
+    Metadata PolicyMetadata
+
     NodeKinds []NodeKind
     NodeRefs  []uint32
 
     CompareFields []FieldID
     CompareOps    []CompareOp
     CompareValues []ValueID
+
+    CompareListStarts []uint32
+    CompareListCounts []uint16
+    ListValueIDs      []ValueID
 
     GroupChildStarts []uint32
     GroupChildCounts []uint16
@@ -287,8 +294,37 @@ type Document struct {
     SourceEnds   []uint32
 
     InputBytes    []byte
+    SymbolBytes   []byte
     SymbolStarts  []uint32
     SymbolLengths []uint32
+
+    ValueKinds []ValueKind
+    ValueRefs  []uint32
+
+    EvidenceKindNames  []ValueID
+    EvidenceStateNames []ValueID
+
+    RequirementIDs                []RequirementID
+    RequirementApplicabilityRoots []NodeID
+    RequirementClauseStarts       []uint32
+    RequirementClauseCounts       []uint16
+    RequirementClauseIDs          []ClauseID
+
+    ClauseAssertionRoots     []NodeID
+    ClauseEvidenceStarts     []uint32
+    ClauseEvidenceCounts     []uint16
+    ClauseEvidenceNodeIDs    []NodeID
+    ClauseRemediationStarts  []uint32
+    ClauseRemediationCounts  []uint16
+    ClauseRemediationIDs     []RemediationID
+
+    ClauseOnSatisfied    []OutcomeID
+    ClauseOnFalse        []OutcomeID
+    ClauseOnMissing      []OutcomeID
+    ClauseOnStale        []OutcomeID
+    ClauseOnUnclear      []OutcomeID
+    ClauseOnUnverifiable []OutcomeID
+    ClauseOnConflict     []OutcomeID
 }
 ```
 
@@ -304,9 +340,13 @@ ChildNodeIDs[start:end] -> child IDs
 
 ### 8.2 Strings and symbols
 
-Source strings remain ranges in one input byte arena. Compilation interns recurring values into integer IDs. The interner will use a capacity-sized open-addressed table over byte references. It will not convert every source token into a separately allocated Go string.
+Source spans remain ranges in one retained input byte arena. Decoded symbol literals use ranges in a second document-owned byte slab so JSON escapes are resolved once during parsing without allocating one Go string per token. `ValueID` indexes parallel kind/ref columns; refs select symbol, integer, Boolean, or timestamp payload tables. `In` operands use one CSR value-ID edge column. Compilation interns recurring symbol bytes into integer IDs. The interner will use a capacity-sized open-addressed table over byte references. It will not convert every source token into a separately allocated Go string.
 
-### 8.3 Builder lifetime
+### 8.3 Requirements, clauses, and remediation
+
+Requirements and clauses are typed tables, not expression node variants. A requirement stores its applicability root and a CSR range of `ClauseID`s. A clause stores its assertion root, CSR evidence-node and remediation ranges, and one outcome ID for satisfied, false, and each unresolved state. Outcome, evidence-kind, and evidence-state catalogues map IDs to symbol values. Fixed metadata stores the policy name, semantic version, and SHA-256 of retained source. Source remediation is deliberately bounded to two actions: setting a field to a typed value or requesting an allowed evidence kind. This covers reduced scope/usage and additional evidence without introducing arbitrary executable actions or maps.
+
+### 8.4 Builder lifetime
 
 The parser writes into chunked typed builder slabs. Builder objects share one compilation lifetime. The final lowering pass computes exact sizes and freezes the program into immutable slabs. The mutable builder can then be discarded as one group.
 
@@ -328,6 +368,49 @@ The compiler performs these stages:
 12. Freeze the program into immutable slabs.
 
 Normalization, lowering, and final compaction will be fused where doing so avoids a redundant pass without obscuring correctness.
+
+### 9.1 Validation measurements
+
+Validation is a policy-load operation, not a request-evaluation operation. On
+2026-08-21, Go 1.27.0 on Linux/amd64 with an AMD Ryzen AI MAX+ 395 measured the
+warm, valid-document path as follows. Values are medians of five one-second
+runs; the range is across those runs.
+
+| Nodes | Median ns/op | Median ns/node | ns/node range | B/op | allocs/op |
+|---:|---:|---:|---:|---:|---:|
+| 16 | 360.7 | 22.55 | 22.10-23.35 | 0 | 0 |
+| 128 | 1,996 | 15.59 | 15.31-15.77 | 0 | 0 |
+| 1,024 | 14,993 | 14.64 | 14.35-14.82 | 0 | 0 |
+| 8,192 | 119,087 | 14.54 | 14.24-14.62 | 0 | 0 |
+
+A fresh validator used four allocations for reusable state: 48 B at 16 nodes
+and 8,224 B at 8,192 nodes. Priming the validator and caller-owned diagnostic
+buffer removes those allocations.
+
+Structural checks and iterative graph traversal are linear in columns, nodes,
+and edges. Exact-byte catalog-name uniqueness and requirement-ID uniqueness use
+deterministic predecessor scans, so total validation complexity is:
+
+```text
+O(columns + nodes + edges + evidenceKinds^2 + evidenceStates^2
+  + outcomes^2 + requirements^2)
+```
+
+Worst-case unique-row fixtures measured the quadratic scans separately:
+
+| Rows | Catalog names | Requirement IDs | B/op | allocs/op |
+|---:|---:|---:|---:|---:|
+| 16 | 0.762 us | 0.224 us | 0 | 0 |
+| 128 | 39.3 us | 3.20 us | 0 | 0 |
+| 1,024 | 2.37 ms | 0.129 ms | 0 | 0 |
+| 8,192 | 147.7 ms | 7.02 ms | 0 | 0 |
+
+The 8,192-row catalog result is the median of five three-second runs
+(146.7-148.8 ms); the requirement result is the median of five one-second runs
+(6.99-7.18 ms). Production decoders must set nonzero `MaxCatalogItems` and
+`MaxRequirements`; zero disables those limits and leaves programmatically
+constructed ASTs unbounded. The measured linear path does not justify pass
+fusion, while the quadratic scans make admission limits mandatory.
 
 ## 10. Compiled Program
 

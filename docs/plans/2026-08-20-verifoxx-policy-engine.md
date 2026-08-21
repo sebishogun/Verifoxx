@@ -137,19 +137,22 @@ SoA data + grouped lifetimes + zero per-record allocation
 - Create: `internal/ast/document.go`
 - Create: `internal/ast/builder.go`
 - Create: `internal/ast/source.go`
+- Create: `internal/ast/value.go`
+- Create: `internal/ast/semantic.go`
 - Test: `internal/ast/builder_test.go`
 
 **Steps:**
 
-1. Write failing tests for compare nodes, n-ary groups, negation, evidence nodes, source spans, requirement roots, and CSR child ranges.
+1. Write failing tests for typed literals, scalar and `In` compares, n-ary groups, negation, evidence nodes and catalogues, policy provenance, source spans, requirements, clauses, satisfied/false/unresolved outcomes, bounded remediations, and every CSR range.
 2. Assert that relationships use integer IDs and that no AST node contains a pointer or child slice.
 3. Run `go test -timeout 60s ./internal/ast`; expect failure.
-4. Implement `Document` as top-level node-kind and node-ref columns plus typed SoA payload tables.
-5. Implement capacity hints and reset without per-node allocation.
-6. Run `go test -timeout 60s ./internal/ast`; expect success.
-7. Add a benchmark constructing policies of 16, 128, 1,024, and 8,192 nodes.
-8. Run `go test -timeout 120s -bench=AST -benchmem ./internal/ast`.
-9. Commit when requested: `feat: add pointerless policy ast`.
+4. Implement `Document` as top-level node-kind and node-ref columns plus typed SoA expression, value, requirement, clause, outcome, and remediation tables.
+5. Retain source bytes once, store decoded symbol literals in one byte slab, and use CSR for group children, `In` values, requirement clauses, clause evidence, and remediation alternatives.
+6. Implement capacity hints and reset without per-node, per-value, or per-edge allocation.
+7. Run `go test -timeout 60s ./internal/ast`; expect success.
+8. Add warm-reuse and cold benchmarks constructing policies of 16, 128, 1,024, and 8,192 nodes.
+9. Run `go test -timeout 120s -bench=AST -benchmem ./internal/ast`.
+10. Commit when requested: `feat: add pointerless policy ast`.
 
 ### Task 6: Decode Policy JSON Directly Into The AST
 
