@@ -103,6 +103,17 @@ type Lowerer struct {
 	scheduleOrder      []uint32
 	scheduleOldToNew   []schema.InstructionID
 
+	// Scratch-slot liveness, release buckets, free-slot bits, relevance, and
+	// final per-instruction assignments. All slices survive Lower calls so a
+	// warmed Lowerer plans without per-instruction allocation.
+	slotLastUses    []uint32
+	slotReleaseHead []schema.InstructionID
+	slotReleaseNext []schema.InstructionID
+	slotFreeWords   []uint64
+	slotReasonLive  []uint8
+	slotTruth       []schema.SlotID
+	slotReasons     []schema.SlotID
+
 	// output owns reusable stage output. It follows every scratch slice so its
 	// scalar tail and the fixed scheduler arrays remain outside GC pointer scan.
 	// Public Lower freezes exact copies before publication.
