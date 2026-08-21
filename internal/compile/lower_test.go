@@ -1182,7 +1182,10 @@ func instructionColumnsEqual(a, b program.Program) bool {
 		reflect.DeepEqual(a.InstructionSourceStarts, b.InstructionSourceStarts) &&
 		reflect.DeepEqual(a.InstructionSourceEnds, b.InstructionSourceEnds) &&
 		reflect.DeepEqual(a.ListValues, b.ListValues) &&
-		reflect.DeepEqual(a.Operands, b.Operands)
+		reflect.DeepEqual(a.Operands, b.Operands) &&
+		reflect.DeepEqual(a.NodeInstructionStarts, b.NodeInstructionStarts) &&
+		reflect.DeepEqual(a.NodeInstructionCounts, b.NodeInstructionCounts) &&
+		reflect.DeepEqual(a.NodeInstructionIDs, b.NodeInstructionIDs)
 }
 
 func TestLowerInstructionsFixture(t *testing.T) {
@@ -1196,11 +1199,11 @@ func TestLowerInstructionsFixture(t *testing.T) {
 		t.Fatalf("lowerInstructions: %v", err)
 	}
 
-	// One instruction per source node in deterministic topological order:
-	// every node appears exactly once in the canonical node column.
+	// The second Exists source node is structurally equal to node 4 and shares
+	// its canonical instruction; every other source node owns one row.
 	nodes := doc.Len()
-	if got.InstructionCount() != nodes {
-		t.Fatalf("instruction count = %d, want %d", got.InstructionCount(), nodes)
+	if got.InstructionCount() != nodes-1 {
+		t.Fatalf("instruction count = %d, want %d", got.InstructionCount(), nodes-1)
 	}
 	tempOf := map[schema.NodeID]int{}
 	for i, n := range got.InstructionNodes {
@@ -1212,8 +1215,15 @@ func TestLowerInstructionsFixture(t *testing.T) {
 		}
 		tempOf[n] = i
 	}
-	if len(tempOf) != nodes {
-		t.Fatalf("distinct emitted nodes = %d, want %d", len(tempOf), nodes)
+	if len(tempOf) != nodes-1 {
+		t.Fatalf("distinct emitted owners = %d, want %d", len(tempOf), nodes-1)
+	}
+	if _, ok := tempOf[13]; ok {
+		t.Fatal("duplicate Exists node 13 must not own an instruction")
+	}
+	sharedExists := nodeInstructionIDs(t, &got, 13)
+	if len(sharedExists) != 1 || sharedExists[0] != schema.InstructionID(tempOf[4]+1) {
+		t.Fatalf("duplicate Exists source map = %v, want [%d]", sharedExists, tempOf[4]+1)
 	}
 
 	// Canonical source spans match the owning node's exact span.
@@ -1234,7 +1244,7 @@ func TestLowerInstructionsFixture(t *testing.T) {
 		4: program.OpcodeExists, 5: program.OpcodeLess, 6: program.OpcodeLessEqual,
 		7: program.OpcodeGreater, 8: program.OpcodeGreaterEqual,
 		9: program.OpcodeAll, 10: program.OpcodeAny, 11: program.OpcodeNot,
-		12: program.OpcodeEvidence, 13: program.OpcodeExists,
+		12: program.OpcodeEvidence,
 	}
 	for n, row := range tempOf {
 		if want, ok := wantOps[n]; ok && got.Opcodes[row] != want {
@@ -1243,8 +1253,9 @@ func TestLowerInstructionsFixture(t *testing.T) {
 	}
 
 	// The 8,192-node Not chain lowers without recursion or stack overflow:
-	// every chain node is present, and node k's operand is the temporary ID
-	// of node k-1 (which equals row k-1 in the 1:1 chain mapping).
+	// every chain node is present, and node k's operand is the canonical
+	// instruction of node k-1. Node 14 points to node 4 because its duplicate
+	// Exists child (node 13) was CSE-merged.
 	for n := schema.NodeID(14); n <= schema.NodeID(nodes); n++ {
 		row, ok := tempOf[n]
 		if !ok {
@@ -1257,8 +1268,12 @@ func TestLowerInstructionsFixture(t *testing.T) {
 			t.Fatalf("chain node %d operand count = %d, want 1", n, got.OperandCounts[row])
 		}
 		start := got.OperandStarts[row]
-		if operand := got.Operands[int(start)]; uint64(operand) != uint64(row) {
-			t.Fatalf("chain node %d operand = %d, want %d", n, operand, row)
+		want := schema.InstructionID(tempOf[4] + 1)
+		if n > 14 {
+			want = schema.InstructionID(tempOf[n-1] + 1)
+		}
+		if operand := got.Operands[int(start)]; operand != want {
+			t.Fatalf("chain node %d operand = %d, want %d", n, operand, want)
 		}
 	}
 

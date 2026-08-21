@@ -64,18 +64,37 @@ type Lowerer struct {
 	valRefs   []uint32
 	valIDs    []schema.ValueID
 
-	// Instruction-stage scratch (Task 10 slice 3). nodeTemp is the
-	// node-to-temporary-InstructionID remap indexed by NodeID-1, kept for
-	// later slices that renumber the temporary space. nodeState is the
-	// white/gray/black traversal state byte per source node; nodeRoots is the
-	// ORed semantic root-role flags per source node; rootNodes is the
-	// collected root ID list sorted ascending and deduplicated; stack holds
-	// the explicit lowerFrame stack. All are reused across calls.
-	nodeTemp  []schema.InstructionID
-	nodeState []uint8
-	nodeRoots []uint8
-	rootNodes []schema.NodeID
-	stack     []lowerFrame
+	// Instruction traversal and source-node remaps.
+	nodeCanon     []schema.InstructionID
+	nodeState     []uint8
+	nodeRoots     []uint8
+	nodeFlatStart []uint32
+	nodeFlatCount []uint16
+	rootNodes     []schema.NodeID
+	stack         []lowerFrame
+
+	// Canonical instruction rows before liveness compaction.
+	candidateOpcodes       []program.Opcode
+	candidateFields        []schema.FieldID
+	candidateValues        []schema.ValueID
+	candidateListStarts    []uint32
+	candidateListCounts    []uint16
+	candidateOperandStarts []uint32
+	candidateOperandCounts []uint16
+	candidateEvidenceKinds []schema.EvidenceKindID
+	candidateEvidenceState []schema.EvidenceStateID
+	candidateRootFlags     []program.RootFlags
+	candidateNodes         []schema.NodeID
+	candidateSourceStarts  []uint32
+	candidateSourceEnds    []uint32
+	candidateListValues    []schema.ValueID
+	candidateOperands      []schema.InstructionID
+
+	// Open-address CSE, liveness, and stable compaction state.
+	candidateHashes  []uint64
+	candidateIDs     []schema.InstructionID
+	candidateLive    []uint8
+	candidateToFinal []schema.InstructionID
 }
 
 // lowerFrame is one iterative lowering frame: the source node whose
@@ -356,6 +375,9 @@ func resetInstructionColumns(dst *program.Program) {
 	dst.InstructionSourceEnds = dst.InstructionSourceEnds[:0]
 	dst.ListValues = dst.ListValues[:0]
 	dst.Operands = dst.Operands[:0]
+	dst.NodeInstructionStarts = dst.NodeInstructionStarts[:0]
+	dst.NodeInstructionCounts = dst.NodeInstructionCounts[:0]
+	dst.NodeInstructionIDs = dst.NodeInstructionIDs[:0]
 }
 
 // resetInstructionScratch clears the instruction-stage Lowerer scratch so
@@ -363,27 +385,43 @@ func resetInstructionColumns(dst *program.Program) {
 // lowering. Capacity is retained and re-established by the sizing calls that
 // follow.
 func (l *Lowerer) resetInstructionScratch() {
-	l.nodeTemp = l.nodeTemp[:0]
+	l.nodeCanon = l.nodeCanon[:0]
 	l.nodeState = l.nodeState[:0]
 	l.nodeRoots = l.nodeRoots[:0]
+	l.nodeFlatStart = l.nodeFlatStart[:0]
+	l.nodeFlatCount = l.nodeFlatCount[:0]
 	l.rootNodes = l.rootNodes[:0]
 	l.stack = l.stack[:0]
+	l.candidateOpcodes = l.candidateOpcodes[:0]
+	l.candidateFields = l.candidateFields[:0]
+	l.candidateValues = l.candidateValues[:0]
+	l.candidateListStarts = l.candidateListStarts[:0]
+	l.candidateListCounts = l.candidateListCounts[:0]
+	l.candidateOperandStarts = l.candidateOperandStarts[:0]
+	l.candidateOperandCounts = l.candidateOperandCounts[:0]
+	l.candidateEvidenceKinds = l.candidateEvidenceKinds[:0]
+	l.candidateEvidenceState = l.candidateEvidenceState[:0]
+	l.candidateRootFlags = l.candidateRootFlags[:0]
+	l.candidateNodes = l.candidateNodes[:0]
+	l.candidateSourceStarts = l.candidateSourceStarts[:0]
+	l.candidateSourceEnds = l.candidateSourceEnds[:0]
+	l.candidateListValues = l.candidateListValues[:0]
+	l.candidateOperands = l.candidateOperands[:0]
+	l.candidateHashes = l.candidateHashes[:0]
+	l.candidateIDs = l.candidateIDs[:0]
+	l.candidateLive = l.candidateLive[:0]
+	l.candidateToFinal = l.candidateToFinal[:0]
 }
 
-// lowerInstructions emits the iterative topological instruction DAG into dst:
-// one temporary instruction per reachable source node, seeded in ascending
-// source NodeID order, with every operand already translated to a temporary
-// InstructionID strictly lower than its consumer's. It owns exactly the
-// instruction-stage destination columns reset by resetInstructionColumns plus
-// the ListValues and Operands CSR backings; constant columns stay intact.
+// lowerInstructions emits the normalized topological instruction DAG into dst.
+// It flattens nested same-kind groups, structurally interns pure candidates,
+// removes dead flattened group results, compacts live rows without changing
+// topological order, and builds the source-node-to-instruction CSR map.
 //
 // The stage assumes validator-clean input, but every accessor failure and
 // widened start, count, or address conversion still returns a bounded error
-// instead of panicking. It performs no same-kind flattening, no
-// common-subexpression reuse, no dead-result removal, and no opcode-run or
-// semantic scheduling; later slices own those rewrites and renumber the
-// temporary IDs. The node-to-temp remap column is retained in the Lowerer
-// for those slices.
+// instead of panicking. Opcode-run scheduling and semantic-table lowering
+// remain later stages.
 func (l *Lowerer) lowerInstructions(dst *program.Program, doc *ast.Document) error {
 	if doc == nil {
 		return ErrInvalidDocument
@@ -402,31 +440,16 @@ func (l *Lowerer) lowerInstructions(dst *program.Program, doc *ast.Document) err
 
 	l.nodeState = resizeSlots(l.nodeState, nodeCount)
 	l.nodeRoots = resizeSlots(l.nodeRoots, nodeCount)
-	l.nodeTemp = resizeSlots(l.nodeTemp, nodeCount)
-
-	dst.Opcodes = resizeSlots(dst.Opcodes, nodeCount)
-	dst.Fields = resizeSlots(dst.Fields, nodeCount)
-	dst.Values = resizeSlots(dst.Values, nodeCount)
-	dst.ListStarts = resizeSlots(dst.ListStarts, nodeCount)
-	dst.ListCounts = resizeSlots(dst.ListCounts, nodeCount)
-	dst.OperandStarts = resizeSlots(dst.OperandStarts, nodeCount)
-	dst.OperandCounts = resizeSlots(dst.OperandCounts, nodeCount)
-	dst.EvidenceKinds = resizeSlots(dst.EvidenceKinds, nodeCount)
-	dst.EvidenceStates = resizeSlots(dst.EvidenceStates, nodeCount)
-	dst.RootFlags = resizeSlots(dst.RootFlags, nodeCount)
-	dst.InstructionNodes = resizeSlots(dst.InstructionNodes, nodeCount)
-	dst.InstructionSourceStarts = resizeSlots(dst.InstructionSourceStarts, nodeCount)
-	dst.InstructionSourceEnds = resizeSlots(dst.InstructionSourceEnds, nodeCount)
-	dst.ListValues = resizeSlots(dst.ListValues, len(doc.ListValueIDs))
-	dst.Operands = resizeSlots(dst.Operands, len(doc.ChildNodeIDs)+len(doc.NotChildren))
+	l.nodeCanon = resizeSlots(l.nodeCanon, nodeCount)
+	l.nodeFlatStart = resizeSlots(l.nodeFlatStart, nodeCount)
+	l.nodeFlatCount = resizeSlots(l.nodeFlatCount, nodeCount)
+	l.prepareCandidateScratch(nodeCount, len(doc.ListValueIDs), len(doc.ChildNodeIDs)+len(doc.NotChildren))
 
 	if err := l.markRootFlags(doc, nodeCount); err != nil {
 		return err
 	}
 	l.collectRoots(doc)
 
-	emitCount := 0
-	var listPos, operandPos uint32
 	for _, root := range l.rootNodes {
 		if l.nodeState[root-1]&nodeBlack != 0 {
 			continue
@@ -459,33 +482,14 @@ func (l *Lowerer) lowerInstructions(dst *program.Program, doc *ast.Document) err
 				}
 				continue
 			}
-			var emitErr error
-			listPos, operandPos, emitErr = l.emitInstruction(dst, doc, node, emitCount, listPos, operandPos)
-			if emitErr != nil {
-				return emitErr
+			if err := l.internInstructionCandidate(dst, doc, node); err != nil {
+				return err
 			}
-			emitCount++
 			l.nodeState[node-1] = nodeBlack
 			l.stack = l.stack[:top]
 		}
 	}
-
-	dst.Opcodes = dst.Opcodes[:emitCount]
-	dst.Fields = dst.Fields[:emitCount]
-	dst.Values = dst.Values[:emitCount]
-	dst.ListStarts = dst.ListStarts[:emitCount]
-	dst.ListCounts = dst.ListCounts[:emitCount]
-	dst.OperandStarts = dst.OperandStarts[:emitCount]
-	dst.OperandCounts = dst.OperandCounts[:emitCount]
-	dst.EvidenceKinds = dst.EvidenceKinds[:emitCount]
-	dst.EvidenceStates = dst.EvidenceStates[:emitCount]
-	dst.RootFlags = dst.RootFlags[:emitCount]
-	dst.InstructionNodes = dst.InstructionNodes[:emitCount]
-	dst.InstructionSourceStarts = dst.InstructionSourceStarts[:emitCount]
-	dst.InstructionSourceEnds = dst.InstructionSourceEnds[:emitCount]
-	dst.ListValues = dst.ListValues[:listPos]
-	dst.Operands = dst.Operands[:operandPos]
-	return nil
+	return l.compactInstructions(dst, doc)
 }
 
 // markRootFlags ORs the semantic root-role flags into one byte per source
@@ -593,120 +597,4 @@ func (l *Lowerer) childAt(doc *ast.Document, node schema.NodeID, j uint32) (sche
 		return children[j], nil
 	}
 	return 0, ErrInvalidDocument
-}
-
-// emitInstruction appends the temporary instruction for one source node at
-// row (0-based) and returns the updated CSR append positions. The temporary
-// ID space is ascending emission order, so the remap column entry equals
-// row+1 and every operand emitted here is lower than its consumer's ID by
-// construction: a frame completes only after every child is black, and black
-// children were already emitted. Fill-by-index keeps every untouched column
-// slot zero per the row shape; unused scalar columns stay zero because the
-// pre-sized destination columns were cleared on entry.
-func (l *Lowerer) emitInstruction(dst *program.Program, doc *ast.Document, node schema.NodeID, row int, listPos, operandPos uint32) (uint32, uint32, error) {
-	kind, ok := doc.Kind(node)
-	if !ok {
-		return listPos, operandPos, ErrInvalidDocument
-	}
-	span, ok := doc.Span(node)
-	if !ok {
-		return listPos, operandPos, ErrInvalidDocument
-	}
-	l.nodeTemp[node-1] = schema.InstructionID(row + 1)
-	dst.RootFlags[row] = program.RootFlags(l.nodeRoots[node-1])
-	dst.InstructionNodes[row] = node
-	dst.InstructionSourceStarts[row] = span.Start
-	dst.InstructionSourceEnds[row] = span.End
-	switch kind {
-	case ast.NodeKindCompare:
-		field, op, valueID, ok := doc.Compare(node)
-		if !ok {
-			return listPos, operandPos, ErrInvalidDocument
-		}
-		opcode, ok := compareOpcode(op)
-		if !ok {
-			return listPos, operandPos, ErrInvalidDocument
-		}
-		dst.Opcodes[row] = opcode
-		dst.Fields[row] = field
-		if op == ast.CompareOpIn {
-			values, ok := doc.InValues(node)
-			if !ok {
-				return listPos, operandPos, ErrInvalidDocument
-			}
-			count := uint32(len(values))
-			if uint64(listPos)+uint64(count) > uint64(len(dst.ListValues)) {
-				return listPos, operandPos, ErrInvalidDocument
-			}
-			dst.ListStarts[row] = listPos
-			dst.ListCounts[row] = uint16(count)
-			for j, value := range values {
-				canonical, err := l.canonicalValue(value)
-				if err != nil {
-					return listPos, operandPos, err
-				}
-				dst.ListValues[int(listPos)+j] = canonical
-			}
-			return listPos + count, operandPos, nil
-		}
-		if valueID != 0 {
-			canonical, err := l.canonicalValue(valueID)
-			if err != nil {
-				return listPos, operandPos, err
-			}
-			dst.Values[row] = canonical
-		}
-		return listPos, operandPos, nil
-	case ast.NodeKindAll, ast.NodeKindAny:
-		children, ok := doc.GroupChildren(node)
-		if !ok {
-			return listPos, operandPos, ErrInvalidDocument
-		}
-		count := uint32(len(children))
-		if uint64(operandPos)+uint64(count) > uint64(len(dst.Operands)) {
-			return listPos, operandPos, ErrInvalidDocument
-		}
-		if kind == ast.NodeKindAll {
-			dst.Opcodes[row] = program.OpcodeAll
-		} else {
-			dst.Opcodes[row] = program.OpcodeAny
-		}
-		dst.OperandStarts[row] = operandPos
-		dst.OperandCounts[row] = uint16(count)
-		for j, child := range children {
-			operand := l.nodeTemp[child-1]
-			if operand == 0 {
-				return listPos, operandPos, ErrInvalidDocument
-			}
-			dst.Operands[int(operandPos)+j] = operand
-		}
-		return listPos, operandPos + count, nil
-	case ast.NodeKindNot:
-		child, ok := doc.NotChild(node)
-		if !ok {
-			return listPos, operandPos, ErrInvalidDocument
-		}
-		if uint64(operandPos)+1 > uint64(len(dst.Operands)) {
-			return listPos, operandPos, ErrInvalidDocument
-		}
-		operand := l.nodeTemp[child-1]
-		if operand == 0 {
-			return listPos, operandPos, ErrInvalidDocument
-		}
-		dst.Opcodes[row] = program.OpcodeNot
-		dst.OperandStarts[row] = operandPos
-		dst.OperandCounts[row] = 1
-		dst.Operands[int(operandPos)] = operand
-		return listPos, operandPos + 1, nil
-	case ast.NodeKindEvidence:
-		kindID, stateID, ok := doc.Evidence(node)
-		if !ok {
-			return listPos, operandPos, ErrInvalidDocument
-		}
-		dst.Opcodes[row] = program.OpcodeEvidence
-		dst.EvidenceKinds[row] = kindID
-		dst.EvidenceStates[row] = stateID
-		return listPos, operandPos, nil
-	}
-	return listPos, operandPos, ErrInvalidDocument
 }
