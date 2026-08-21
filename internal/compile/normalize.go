@@ -119,7 +119,6 @@ func (l *Lowerer) internSymbol(dst *program.Program, b []byte) (schema.SymbolID,
 	dst.SymbolBytes = append(dst.SymbolBytes, b...)
 	dst.SymbolStarts = append(dst.SymbolStarts, start)
 	dst.SymbolLengths = append(dst.SymbolLengths, uint32(len(b)))
-	l.symHashes[slot] = h
 	l.symIDs[slot] = id
 	return id, nil
 }

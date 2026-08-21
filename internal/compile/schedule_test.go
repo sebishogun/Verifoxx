@@ -2,6 +2,7 @@ package compile
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 
@@ -116,5 +117,39 @@ func TestGroupedScheduleDeterministicRunsAndRemaps(t *testing.T) {
 		!reflect.DeepEqual(got.OpcodeRunStarts, want.OpcodeRunStarts) ||
 		!reflect.DeepEqual(got.OpcodeRunCounts, want.OpcodeRunCounts) {
 		t.Fatal("repeated scheduling changed deterministic output")
+	}
+}
+
+func TestScheduleWordCountDoesNotOverflow(t *testing.T) {
+	want := math.MaxInt / 64
+	if math.MaxInt%64 != 0 {
+		want++
+	}
+	if got := scheduleWordCount(math.MaxInt); got != want {
+		t.Fatalf("scheduleWordCount(MaxInt) = %d, want %d", got, want)
+	}
+}
+
+func TestLowerInstructionsErrorClearsOpcodeRuns(t *testing.T) {
+	doc, fields, syms := lowerFixture(t)
+	var lowerer Lowerer
+	var got program.Program
+	if err := lowerer.lowerConstants(&got, doc, fields, syms); err != nil {
+		t.Fatal(err)
+	}
+	if err := lowerer.lowerInstructions(&got, doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.OpcodeRunOpcodes) == 0 {
+		t.Fatal("fixture produced no opcode runs")
+	}
+	bad := *doc
+	bad.NodeRefs = nil
+	if err := lowerer.lowerInstructions(&got, &bad); !errors.Is(err, ErrInvalidDocument) {
+		t.Fatalf("lowerInstructions error = %v, want %v", err, ErrInvalidDocument)
+	}
+	if len(got.OpcodeRunOpcodes) != 0 || len(got.OpcodeRunStarts) != 0 || len(got.OpcodeRunCounts) != 0 {
+		t.Fatalf("failed lowering retained opcode runs %v/%v/%v",
+			got.OpcodeRunOpcodes, got.OpcodeRunStarts, got.OpcodeRunCounts)
 	}
 }

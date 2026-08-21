@@ -103,9 +103,17 @@ func (l *Lowerer) buildScheduleUsers(p *program.Program) (int, error) {
 	return int(edges), nil
 }
 
+func scheduleWordCount(n int) int {
+	words := n / 64
+	if n%64 != 0 {
+		words++
+	}
+	return words
+}
+
 func (l *Lowerer) buildScheduleOrder(p *program.Program) error {
 	n := len(p.Opcodes)
-	words := (n + 63) / 64
+	words := scheduleWordCount(n)
 	l.scheduleReadyBits = resizeSlots(l.scheduleReadyBits, scheduleOpcodeCount*words)
 	l.scheduleOrder = resizeSlots(l.scheduleOrder, n)[:0]
 	l.scheduleOldToNew = resizeSlots(l.scheduleOldToNew, n)

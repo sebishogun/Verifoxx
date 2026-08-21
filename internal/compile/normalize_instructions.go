@@ -144,8 +144,11 @@ func (l *Lowerer) appendCandidate(node schema.NodeID, span ast.SourceSpan, candi
 
 func (l *Lowerer) appendCanonicalList(doc *ast.Document, node schema.NodeID) (uint32, uint16, error) {
 	values, ok := doc.InValues(node)
-	if !ok || len(values) > math.MaxUint16 {
+	if !ok {
 		return 0, 0, ErrInvalidDocument
+	}
+	if len(values) > math.MaxUint16 {
+		return 0, 0, ErrProgramTooLarge
 	}
 	if uint64(len(l.candidateListValues))+uint64(len(values)) > uint64(math.MaxUint32) {
 		return 0, 0, ErrProgramTooLarge

@@ -51,13 +51,11 @@ type Lowerer struct {
 	valueRemap  []schema.ValueID
 	symbolRemap []schema.SymbolID
 
-	// symHashes and symIDs are the open-address symbol intern table over AST
-	// symbol bytes; exact comparison reads the bytes back from the
-	// destination Program slab through Program.Symbol. valHashes, valKinds,
-	// valRefs, and valIDs are the open-address canonical-value intern table
-	// keyed by kind and payload. Slot zero marks an empty entry everywhere.
-	symHashes []uint64
-	symIDs    []schema.SymbolID
+	// symIDs is the open-address symbol intern table over AST symbol bytes;
+	// exact comparison reads bytes back from the destination Program slab.
+	// valHashes, valKinds, valRefs, and valIDs are the open-address canonical-
+	// value intern table keyed by kind and payload. ID zero marks an empty slot.
+	symIDs []schema.SymbolID
 
 	valHashes []uint64
 	valKinds  []schema.ValueKind
@@ -212,7 +210,6 @@ func (l *Lowerer) lowerConstants(dst *program.Program, doc *ast.Document, fields
 	if symSlots == 0 || valSlots == 0 {
 		return ErrProgramTooLarge
 	}
-	l.symHashes = resizeSlots(l.symHashes, symSlots)
 	l.symIDs = resizeSlots(l.symIDs, symSlots)
 	l.valHashes = resizeSlots(l.valHashes, valSlots)
 	l.valKinds = resizeSlots(l.valKinds, valSlots)
@@ -271,7 +268,6 @@ func resetConstantColumns(dst *program.Program) {
 // previous document never leak into the next lowering. Capacity is retained
 // and re-established by the sizing calls that follow.
 func (l *Lowerer) resetScratch() {
-	l.symHashes = l.symHashes[:0]
 	l.symIDs = l.symIDs[:0]
 	l.valHashes = l.valHashes[:0]
 	l.valKinds = l.valKinds[:0]
@@ -435,6 +431,9 @@ func resetInstructionColumns(dst *program.Program) {
 	dst.InstructionSourceEnds = dst.InstructionSourceEnds[:0]
 	dst.ListValues = dst.ListValues[:0]
 	dst.Operands = dst.Operands[:0]
+	dst.OpcodeRunOpcodes = dst.OpcodeRunOpcodes[:0]
+	dst.OpcodeRunStarts = dst.OpcodeRunStarts[:0]
+	dst.OpcodeRunCounts = dst.OpcodeRunCounts[:0]
 	dst.NodeInstructionStarts = dst.NodeInstructionStarts[:0]
 	dst.NodeInstructionCounts = dst.NodeInstructionCounts[:0]
 	dst.NodeInstructionIDs = dst.NodeInstructionIDs[:0]
