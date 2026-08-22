@@ -12,7 +12,23 @@ var (
 	literalTrue  = []byte("true")
 	literalFalse = []byte("false")
 	literalNull  = []byte("null")
+	keyVersion   = []byte("schema_version")
+	keyPack      = []byte("pack")
+	keyRequests  = []byte("requests")
+	keyEvidence  = []byte("evidence")
+	keyRefs      = []byte("evidence_refs")
 )
+
+// Decoder is a reusable request/evidence decode worker.
+type Decoder struct {
+	scan scanner
+}
+
+type shape struct {
+	requests uint32
+	evidence uint32
+	refs     uint32
+}
 
 type scanner struct {
 	src          []byte
@@ -376,6 +392,240 @@ func (s *scanner) skipArray(depth int) error {
 			}
 		default:
 			return s.fail(CodeMalformed, "expected array delimiter")
+		}
+	}
+}
+
+func (d *Decoder) count(input Input, source []byte, limits Limits) (shape, error) {
+	maxBytes := limits.MaxRequestBytes
+	if input == InputEvidence {
+		maxBytes = limits.MaxEvidenceBytes
+	}
+	if maxBytes > 0 && len(source) > maxBytes {
+		return shape{}, &Error{Input: input, Code: CodeLimit, Offset: maxBytes, Message: "source exceeds byte limit"}
+	}
+	s := &d.scan
+	s.reset(input, source, limits)
+	s.skipWS()
+	if err := s.expect('{'); err != nil {
+		return shape{}, err
+	}
+	var result shape
+	var saw uint8
+	for {
+		s.skipWS()
+		if s.eof() {
+			return shape{}, s.fail(CodeTruncated, "unterminated root object")
+		}
+		if s.peek() == '}' {
+			s.pos++
+			if saw != 0b111 {
+				return shape{}, s.fail(CodeMissingKey, "root object is missing required keys")
+			}
+			if err := s.finish(); err != nil {
+				return shape{}, err
+			}
+			return result, nil
+		}
+		if s.peek() != '"' {
+			return shape{}, s.fail(CodeMalformed, "root key must be a string")
+		}
+		keyOffset := s.pos
+		key, err := s.parseString(&s.keyScratch)
+		if err != nil {
+			return shape{}, err
+		}
+		s.skipWS()
+		if err := s.expect(':'); err != nil {
+			return shape{}, err
+		}
+		s.skipWS()
+		var bit uint8
+		switch {
+		case bytes.Equal(key, keyVersion):
+			bit = 1
+			version, err := s.parseInteger()
+			if err != nil {
+				return shape{}, err
+			}
+			if version != 1 {
+				return shape{}, s.failAt(CodeInvalidVersion, keyOffset, "schema_version must be 1")
+			}
+		case bytes.Equal(key, keyPack):
+			bit = 2
+			if s.peek() != '"' {
+				return shape{}, s.fail(CodeInvalidType, "pack must be a string")
+			}
+			if _, err := s.parseString(&s.valueScratch); err != nil {
+				return shape{}, err
+			}
+		case input == InputRequests && bytes.Equal(key, keyRequests):
+			bit = 4
+			if err := d.countRows(s, input, &result); err != nil {
+				return shape{}, err
+			}
+		case input == InputEvidence && bytes.Equal(key, keyEvidence):
+			bit = 4
+			if err := d.countRows(s, input, &result); err != nil {
+				return shape{}, err
+			}
+		default:
+			return shape{}, s.failAt(CodeUnknownKey, keyOffset, "unknown root key")
+		}
+		if saw&bit != 0 {
+			return shape{}, s.failAt(CodeDuplicateKey, keyOffset, "duplicate root key")
+		}
+		saw |= bit
+		s.skipWS()
+		switch s.peek() {
+		case ',':
+			s.pos++
+			s.skipWS()
+			if s.peek() == '}' {
+				return shape{}, s.fail(CodeMalformed, "trailing root comma")
+			}
+		case '}':
+		default:
+			return shape{}, s.fail(CodeMalformed, "expected root delimiter")
+		}
+	}
+}
+
+func (d *Decoder) countRows(s *scanner, input Input, result *shape) error {
+	if s.peek() != '[' {
+		return s.fail(CodeInvalidType, "payload must be an array")
+	}
+	s.pos++
+	s.skipWS()
+	if s.peek() == ']' {
+		s.pos++
+		return nil
+	}
+	for {
+		if s.peek() != '{' {
+			return s.fail(CodeInvalidType, "payload row must be an object")
+		}
+		if input == InputRequests {
+			if result.requests == math.MaxUint32 ||
+				(s.limits.MaxRequests > 0 && result.requests >= s.limits.MaxRequests) {
+				return s.fail(CodeLimit, "requests exceed MaxRequests")
+			}
+			result.requests++
+			if err := d.countRequestRefs(s, result); err != nil {
+				return err
+			}
+		} else {
+			if result.evidence == math.MaxUint32 ||
+				(s.limits.MaxEvidence > 0 && result.evidence >= s.limits.MaxEvidence) {
+				return s.fail(CodeLimit, "evidence exceeds MaxEvidence")
+			}
+			result.evidence++
+			if err := s.skipValue(2); err != nil {
+				return err
+			}
+		}
+		s.skipWS()
+		switch s.peek() {
+		case ']':
+			s.pos++
+			return nil
+		case ',':
+			s.pos++
+			s.skipWS()
+			if s.peek() == ']' {
+				return s.fail(CodeMalformed, "trailing payload comma")
+			}
+		default:
+			return s.fail(CodeMalformed, "expected payload delimiter")
+		}
+	}
+}
+
+func (d *Decoder) countRequestRefs(s *scanner, result *shape) error {
+	s.pos++
+	s.skipWS()
+	if s.peek() == '}' {
+		s.pos++
+		return nil
+	}
+	sawRefs := false
+	for {
+		if s.peek() != '"' {
+			return s.fail(CodeMalformed, "request key must be a string")
+		}
+		keyOffset := s.pos
+		key, err := s.parseString(&s.keyScratch)
+		if err != nil {
+			return err
+		}
+		s.skipWS()
+		if err := s.expect(':'); err != nil {
+			return err
+		}
+		s.skipWS()
+		if bytes.Equal(key, keyRefs) {
+			if sawRefs {
+				return s.failAt(CodeDuplicateKey, keyOffset, "duplicate evidence_refs")
+			}
+			sawRefs = true
+			if err := d.countRefs(s, result); err != nil {
+				return err
+			}
+		} else if err := s.skipValue(3); err != nil {
+			return err
+		}
+		s.skipWS()
+		switch s.peek() {
+		case '}':
+			s.pos++
+			return nil
+		case ',':
+			s.pos++
+			s.skipWS()
+			if s.peek() == '}' {
+				return s.fail(CodeMalformed, "trailing request comma")
+			}
+		default:
+			return s.fail(CodeMalformed, "expected request delimiter")
+		}
+	}
+}
+
+func (d *Decoder) countRefs(s *scanner, result *shape) error {
+	if s.peek() != '[' {
+		return s.fail(CodeInvalidType, "evidence_refs must be an array")
+	}
+	s.pos++
+	s.skipWS()
+	if s.peek() == ']' {
+		s.pos++
+		return nil
+	}
+	for {
+		if s.peek() != '"' {
+			return s.fail(CodeInvalidType, "evidence reference must be a string")
+		}
+		if _, err := s.parseString(&s.valueScratch); err != nil {
+			return err
+		}
+		if result.refs == math.MaxUint32 ||
+			(s.limits.MaxEvidenceRefs > 0 && result.refs >= s.limits.MaxEvidenceRefs) {
+			return s.fail(CodeLimit, "references exceed MaxEvidenceRefs")
+		}
+		result.refs++
+		s.skipWS()
+		switch s.peek() {
+		case ']':
+			s.pos++
+			return nil
+		case ',':
+			s.pos++
+			s.skipWS()
+			if s.peek() == ']' {
+				return s.fail(CodeMalformed, "trailing reference comma")
+			}
+		default:
+			return s.fail(CodeMalformed, "expected reference delimiter")
 		}
 	}
 }

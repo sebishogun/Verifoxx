@@ -104,3 +104,51 @@ func TestInputAndErrorCodeNamesAreStable(t *testing.T) {
 		t.Fatalf("code names = (%q, %q)", CodeMalformed, CodeLimit)
 	}
 }
+
+func TestCountBatchShapesInArbitraryRootOrder(t *testing.T) {
+	requests := []byte(`{"requests":[{"evidence_refs":["E1","E2"],"id":"R1","facts":{}},{"id":"R2"}],"pack":"p","schema_version":1}`)
+	evidence := []byte(`{"evidence":[{"id":"E1"},{"id":"E2"},{"id":"E3"}],"schema_version":1,"pack":"p"}`)
+	var d Decoder
+	requestShape, err := d.count(InputRequests, requests, Limits{})
+	if err != nil {
+		t.Fatalf("count requests: %v", err)
+	}
+	if requestShape.requests != 2 || requestShape.refs != 2 || requestShape.evidence != 0 {
+		t.Fatalf("request shape = %+v, want 2 requests and 2 refs", requestShape)
+	}
+	evidenceShape, err := d.count(InputEvidence, evidence, Limits{})
+	if err != nil {
+		t.Fatalf("count evidence: %v", err)
+	}
+	if evidenceShape.evidence != 3 || evidenceShape.requests != 0 || evidenceShape.refs != 0 {
+		t.Fatalf("evidence shape = %+v, want 3 evidence rows", evidenceShape)
+	}
+}
+
+func TestCountRejectsInvalidRootsAndLimits(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  Input
+		source string
+		limits Limits
+		code   ErrorCode
+	}{
+		{"unknown key", InputRequests, `{"schema_version":1,"pack":"p","requests":[],"extra":0}`, Limits{}, CodeUnknownKey},
+		{"duplicate key", InputEvidence, `{"schema_version":1,"schema_version":1,"pack":"p","evidence":[]}`, Limits{}, CodeDuplicateKey},
+		{"missing key", InputRequests, `{"schema_version":1,"requests":[]}`, Limits{}, CodeMissingKey},
+		{"version", InputEvidence, `{"schema_version":2,"pack":"p","evidence":[]}`, Limits{}, CodeInvalidVersion},
+		{"payload type", InputRequests, `{"schema_version":1,"pack":"p","requests":{}}`, Limits{}, CodeInvalidType},
+		{"row type", InputEvidence, `{"schema_version":1,"pack":"p","evidence":[null]}`, Limits{}, CodeInvalidType},
+		{"request limit", InputRequests, `{"schema_version":1,"pack":"p","requests":[{},{}]}`, Limits{MaxRequests: 1}, CodeLimit},
+		{"evidence limit", InputEvidence, `{"schema_version":1,"pack":"p","evidence":[{},{}]}`, Limits{MaxEvidence: 1}, CodeLimit},
+		{"reference limit", InputRequests, `{"schema_version":1,"pack":"p","requests":[{"evidence_refs":["E1","E2"]}]}`, Limits{MaxEvidenceRefs: 1}, CodeLimit},
+		{"source limit", InputRequests, `{"schema_version":1,"pack":"p","requests":[]}`, Limits{MaxRequestBytes: 4}, CodeLimit},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var d Decoder
+			_, err := d.count(tc.input, []byte(tc.source), tc.limits)
+			requireDecodeError(t, err, tc.input, tc.code)
+		})
+	}
+}
