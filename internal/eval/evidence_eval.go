@@ -25,8 +25,8 @@ var (
 // EvidenceStateIndex classifies one immutable Program's evidence states. It is
 // reusable across Program publications and read-only during evaluation.
 type EvidenceStateIndex struct {
-	reasons []schema.ReasonID
 	program *program.Program
+	reasons []schema.ReasonID
 }
 
 // EvidencePredicate is one fixed-width evidence query. Zero optional symbols
