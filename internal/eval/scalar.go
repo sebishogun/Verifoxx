@@ -19,6 +19,10 @@ func (p ReasonPlanes) Plane(reason schema.ReasonID, rows uint32) []uint64 {
 		uint64(len(p.Words)) != uint64(truth.ReasonCount)*uint64(words) {
 		panic("eval: invalid reason plane")
 	}
+	return p.plane(reason, words)
+}
+
+func (p ReasonPlanes) plane(reason schema.ReasonID, words int) []uint64 {
 	start := int(uint64(reason-1) * uint64(words))
 	end := start + words
 	return p.Words[start:end:end]

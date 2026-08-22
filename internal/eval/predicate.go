@@ -10,7 +10,6 @@ type predicateValue struct {
 	integer   int64
 	timestamp int64
 	symbol    schema.SymbolID
-	kind      schema.ValueKind
 	boolean   bool
 }
 
@@ -26,7 +25,7 @@ func programPredicateValue(p *program.Program, id schema.ValueID, want schema.Va
 	if ref == 0 {
 		panic("eval: invalid predicate value")
 	}
-	value := predicateValue{kind: want}
+	var value predicateValue
 	switch want {
 	case schema.ValueKindSymbol:
 		value.symbol = schema.SymbolID(ref)
@@ -198,7 +197,7 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 
 	resetLeafOutputs(dst, reasons, batch.Rows)
 	presence := batch.PresenceMasks[int(presenceStart):int(presenceEnd):int(presenceEnd)]
-	missing := reasons.Plane(truth.ReasonMissing, batch.Rows)
+	missing := reasons.plane(truth.ReasonMissing, words)
 	if opcode == program.OpcodeIn {
 		fillInMatches(dst.Positive, batch, p, kind, column, listStart, listCount)
 	}
