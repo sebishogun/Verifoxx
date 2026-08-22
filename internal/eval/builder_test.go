@@ -589,6 +589,30 @@ func TestBuilderFinishAcceptsEmptyBatch(t *testing.T) {
 	}
 }
 
+func TestBuilderAbortSealsPartialBuildAndRetainsCapacity(t *testing.T) {
+	p := batchTestProgram(t, schema.ValueKindSymbol)
+	var b Builder
+	if err := b.Begin(p, 2, 0, 0); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	if err := b.SetRequestID(0, 1); err != nil {
+		t.Fatalf("SetRequestID: %v", err)
+	}
+	wantCap := cap(b.batch.RequestIDs)
+	b.Abort()
+	if _, err := b.Finish(); !errors.Is(err, ErrInvalidBuilder) {
+		t.Fatalf("Finish after Abort error = %v, want %v", err, ErrInvalidBuilder)
+	}
+	if err := b.Begin(p, 1, 0, 0); err != nil {
+		t.Fatalf("Begin after Abort: %v", err)
+	}
+	if cap(b.batch.RequestIDs) != wantCap || b.batch.RequestIDs[0] != 0 {
+		t.Fatalf("recovered requests = %v cap %d, want zero cap %d", b.batch.RequestIDs, cap(b.batch.RequestIDs), wantCap)
+	}
+	var nilBuilder *Builder
+	nilBuilder.Abort()
+}
+
 func TestBuilderFinishAllowsUnreferencedEvidenceCatalogRows(t *testing.T) {
 	p := batchTestProgram(t)
 	var b Builder

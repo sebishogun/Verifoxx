@@ -476,3 +476,11 @@ func (b *Builder) Finish() (Batch, error) {
 	b.active = false
 	return b.batch, nil
 }
+
+// Abort seals a partial build after an adapter failure. The next Begin reuses
+// and clears its capacities.
+func (b *Builder) Abort() {
+	if b != nil {
+		b.active = false
+	}
+}
