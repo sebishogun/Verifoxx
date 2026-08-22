@@ -17,6 +17,9 @@ func decoderTestProgram(t testing.TB) *program.Program {
 		"p",
 		"requester.team",
 		"context.count",
+		"context.enabled",
+		"context.at",
+		"context.present",
 		"approval_record",
 		"valid",
 		"stale",
@@ -24,11 +27,11 @@ func decoderTestProgram(t testing.TB) *program.Program {
 	p := &program.Program{
 		PolicyName:         1,
 		ProgramSymbolCount: uint32(len(values)),
-		FieldNames:         []schema.SymbolID{2, 3},
-		FieldKinds:         []schema.ValueKind{schema.ValueKindSymbol, schema.ValueKindInteger},
-		FieldGroups:        []schema.FieldGroup{schema.FieldGroupSubject, schema.FieldGroupContext},
-		EvidenceKindNames:  []schema.SymbolID{4},
-		EvidenceStateNames: []schema.SymbolID{5, 6},
+		FieldNames:         []schema.SymbolID{2, 3, 4, 5, 6},
+		FieldKinds:         []schema.ValueKind{schema.ValueKindSymbol, schema.ValueKindInteger, schema.ValueKindBoolean, schema.ValueKindTimestamp, schema.ValueKindPresence},
+		FieldGroups:        []schema.FieldGroup{schema.FieldGroupSubject, schema.FieldGroupContext, schema.FieldGroupContext, schema.FieldGroupContext, schema.FieldGroupContext},
+		EvidenceKindNames:  []schema.SymbolID{7},
+		EvidenceStateNames: []schema.SymbolID{8, 9},
 	}
 	for _, value := range values {
 		p.SymbolStarts = append(p.SymbolStarts, uint32(len(p.SymbolBytes)))
@@ -359,5 +362,94 @@ func TestCanonicalExternalID(t *testing.T) {
 		if got != tc.want || ok != tc.ok {
 			t.Errorf("canonicalID(%q, %q) = (%d, %v), want (%d, %v)", tc.value, tc.prefix, got, ok, tc.want, tc.ok)
 		}
+	}
+}
+
+func TestDecodeRequestFactsAndEvidenceCSR(t *testing.T) {
+	p := decoderTestProgram(t)
+	var d Decoder
+	if err := d.bind(p); err != nil {
+		t.Fatalf("bind: %v", err)
+	}
+	var b eval.Builder
+	if err := b.Begin(p, 2, 2, 2); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	evidence := []byte(`{"schema_version":1,"pack":"p","evidence":[` +
+		`{"id":"E1","type":"approval_record","attributes":{"status":"valid"}},` +
+		`{"id":"E2","type":"approval_record","attributes":{"status":"valid"}}]}`)
+	if err := d.decodeEvidence(&b, evidence, Limits{}, 2); err != nil {
+		t.Fatalf("decodeEvidence: %v", err)
+	}
+	requests := []byte(`{"pack":"p","requests":[` +
+		`{"context":{"present":true,"at":-1,"enabled":false,"count":0},"evidence_refs":["E2","E1"],"requester":{"team":"alpha"},"id":"R2"},` +
+		`{"id":"R1","requester":{"team":null}}` +
+		`],"schema_version":1}`)
+	if err := d.decodeRequests(&b, requests, Limits{}, 2, 2); err != nil {
+		t.Fatalf("decodeRequests: %v", err)
+	}
+	batch, err := b.Finish()
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	if got := batch.RequestIDs; len(got) != 2 || got[0] != 2 || got[1] != 1 {
+		t.Fatalf("RequestIDs = %v, want [2 1]", got)
+	}
+	if batch.SymbolValues[0] == 0 || batch.SymbolValues[1] != 0 {
+		t.Fatalf("SymbolValues = %v, want present alpha then missing", batch.SymbolValues)
+	}
+	if batch.IntegerValues[0] != 0 || batch.TimestampValues[0] != -1 || batch.Boolean(0, 0) {
+		t.Fatalf("typed values = integers %v timestamps %v booleans %#x", batch.IntegerValues, batch.TimestampValues, batch.BooleanValues)
+	}
+	for field := schema.FieldID(1); field <= 5; field++ {
+		if !batch.Present(field, 0) {
+			t.Errorf("field %d row 0 is missing", field)
+		}
+		if batch.Present(field, 1) {
+			t.Errorf("field %d row 1 unexpectedly present", field)
+		}
+	}
+	if got := batch.EvidenceOffsets; len(got) != 3 || got[0] != 0 || got[1] != 2 || got[2] != 2 {
+		t.Fatalf("EvidenceOffsets = %v, want [0 2 2]", got)
+	}
+	if got := batch.EvidenceRefs; len(got) != 2 || got[0] != 1 || got[1] != 0 {
+		t.Fatalf("EvidenceRefs = %v, want [1 0]", got)
+	}
+}
+
+func TestDecodeRequestsRejectsInvalidRows(t *testing.T) {
+	tests := []struct {
+		name string
+		rows uint32
+		refs uint32
+		body string
+		code ErrorCode
+	}{
+		{"duplicate ID", 2, 0, `{"id":"R1"},{"id":"R1"}`, CodeDuplicateID},
+		{"missing ID", 1, 0, `{"requester":{"team":"x"}}`, CodeMissingKey},
+		{"unknown field", 1, 0, `{"id":"R1","requester":{"unknown":"x"}}`, CodeInvalidReference},
+		{"wrong type", 1, 0, `{"id":"R1","context":{"count":"x"}}`, CodeInvalidType},
+		{"missing reference", 1, 1, `{"id":"R1","evidence_refs":["E2"]}`, CodeInvalidReference},
+		{"duplicate reference", 1, 2, `{"id":"R1","evidence_refs":["E1","E1"]}`, CodeDuplicateField},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := decoderTestProgram(t)
+			var d Decoder
+			if err := d.bind(p); err != nil {
+				t.Fatalf("bind: %v", err)
+			}
+			var b eval.Builder
+			if err := b.Begin(p, tc.rows, 1, tc.refs); err != nil {
+				t.Fatalf("Begin: %v", err)
+			}
+			evidence := []byte(`{"schema_version":1,"pack":"p","evidence":[{"id":"E1","type":"approval_record","attributes":{"status":"valid"}}]}`)
+			if err := d.decodeEvidence(&b, evidence, Limits{}, 1); err != nil {
+				t.Fatalf("decodeEvidence: %v", err)
+			}
+			source := []byte(`{"schema_version":1,"pack":"p","requests":[` + tc.body + `]}`)
+			err := d.decodeRequests(&b, source, Limits{}, tc.rows, tc.refs)
+			requireDecodeError(t, err, InputRequests, tc.code)
+		})
 	}
 }

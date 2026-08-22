@@ -30,6 +30,12 @@ type Decoder struct {
 	stateTable     symbolTable
 	evidenceIDKeys []schema.EvidenceID
 	evidenceIDRows []uint32
+	requestIDKeys  []schema.RequestID
+	requestOffsets []uint32
+	requestRefs    []uint32
+	seenFields     []uint64
+	seenRefs       []uint64
+	pathScratch    []byte
 	scan           scanner
 }
 
