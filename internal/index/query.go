@@ -14,7 +14,13 @@ type Query struct {
 
 // Bind validates p before replacing a previous usable binding.
 func (q *Query) Bind(p *Policy) error {
-	if q == nil || !validBoundPolicy(p) {
+	if q == nil || p == nil {
+		return ErrInvalidPolicy
+	}
+	if q.policy == p {
+		return nil
+	}
+	if !validBoundPolicy(p) {
 		return ErrInvalidPolicy
 	}
 	q.policy = p

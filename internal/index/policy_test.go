@@ -478,3 +478,15 @@ func TestQueryCandidatesWarmAllocations(t *testing.T) {
 		t.Fatalf("bound Candidates allocations = %g, want 0", allocs)
 	}
 }
+
+func TestQuerySamePolicyBindIsNoOp(t *testing.T) {
+	policy := buildTestPolicy(t)
+	var query Query
+	if err := query.Bind(&policy); err != nil {
+		t.Fatal(err)
+	}
+	policy.AllMask[0] = math.MaxUint64
+	if err := query.Bind(&policy); err != nil {
+		t.Fatalf("same immutable Policy Bind rescanned columns: %v", err)
+	}
+}
