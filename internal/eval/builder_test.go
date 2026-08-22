@@ -2,6 +2,7 @@ package eval
 
 import (
 	"errors"
+	"math"
 	"slices"
 	"testing"
 
@@ -17,6 +18,23 @@ func batchTestProgram(t *testing.T, kinds ...schema.ValueKind) *program.Program 
 		t.Fatalf("BuildSchema: %v", err)
 	}
 	return &program.Program{FieldIndex: fields}
+}
+
+func batchTestProgramWithSymbol(t *testing.T, value string) *program.Program {
+	t.Helper()
+	p := batchTestProgram(t, schema.ValueKindSymbol)
+	b := []byte(value)
+	h := schema.HashSymbol(b)
+	p.SymbolBytes = slices.Clone(b)
+	p.SymbolStarts = []uint32{0}
+	p.SymbolLengths = []uint32{uint32(len(b))}
+	p.SymbolHashes = make([]uint64, 4)
+	p.SymbolIDs = make([]schema.SymbolID, 4)
+	slot := int(h & 3)
+	p.SymbolHashes[slot] = h
+	p.SymbolIDs[slot] = 1
+	p.ProgramSymbolCount = 1
+	return p
 }
 
 func TestBuilderSetTypedColumnsAndPresence(t *testing.T) {
@@ -351,5 +369,86 @@ func TestBuilderEvidenceRejectsMalformedInputAtomically(t *testing.T) {
 				t.Fatal("rejected CSR mutated the prior relation")
 			}
 		})
+	}
+}
+
+func TestBuilderInternsProgramAndExtensionSymbols(t *testing.T) {
+	p := batchTestProgramWithSymbol(t, "known")
+	var b Builder
+	if err := b.Begin(p, 1, 0, 0); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+
+	tests := []struct {
+		value string
+		want  schema.SymbolID
+	}{
+		{"known", 1},
+		{"alpha", 2},
+		{"alpha", 2},
+		{"beta", 3},
+	}
+	for _, tc := range tests {
+		got, err := b.InternSymbol([]byte(tc.value))
+		if err != nil || got != tc.want {
+			t.Errorf("InternSymbol(%q) = (%d, %v), want (%d, nil)", tc.value, got, err, tc.want)
+		}
+	}
+
+	if err := b.Begin(p, 1, 0, 0); err != nil {
+		t.Fatalf("second Begin: %v", err)
+	}
+	if got, err := b.InternSymbol([]byte("alpha")); err != nil || got != 2 {
+		t.Fatalf("InternSymbol(alpha) after reset = (%d, %v), want (2, nil)", got, err)
+	}
+}
+
+func TestBuilderInternRejectsInactiveAndIDOverflow(t *testing.T) {
+	p := batchTestProgram(t)
+	var b Builder
+	if err := b.Begin(p, 0, 0, 0); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	p.ProgramSymbolCount = math.MaxUint32
+	if id, err := b.InternSymbol([]byte("overflow")); id != 0 || !errors.Is(err, ErrBatchTooLarge) {
+		t.Fatalf("overflow InternSymbol = (%d, %v), want (0, %v)", id, err, ErrBatchTooLarge)
+	}
+	if b.extension.Len() != 0 {
+		t.Fatalf("overflow committed %d extension symbols, want 0", b.extension.Len())
+	}
+
+	b.active = false
+	if _, err := b.InternSymbol([]byte("inactive")); !errors.Is(err, ErrInvalidBuilder) {
+		t.Fatalf("inactive InternSymbol error = %v, want %v", err, ErrInvalidBuilder)
+	}
+	var nilBuilder *Builder
+	if _, err := nilBuilder.InternSymbol(nil); !errors.Is(err, ErrInvalidBuilder) {
+		t.Fatalf("nil InternSymbol error = %v, want %v", err, ErrInvalidBuilder)
+	}
+}
+
+func TestBuilderBeginFailurePreservesBatchAndExtensionSymbols(t *testing.T) {
+	p := batchTestProgramWithSymbol(t, "known")
+	var b Builder
+	if err := b.Begin(p, 1, 0, 0); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	if err := b.SetRequestID(0, 17); err != nil {
+		t.Fatalf("SetRequestID: %v", err)
+	}
+	if got, err := b.InternSymbol([]byte("alpha")); err != nil || got != 2 {
+		t.Fatalf("InternSymbol(alpha) = (%d, %v), want (2, nil)", got, err)
+	}
+
+	malformed := *p
+	malformed.FieldIndex.Columns = []uint32{1}
+	if err := b.Begin(&malformed, 2, 0, 0); !errors.Is(err, ErrInvalidProgram) {
+		t.Fatalf("malformed Begin error = %v, want %v", err, ErrInvalidProgram)
+	}
+	if b.batch.Rows != 1 || !slices.Equal(b.batch.RequestIDs, []schema.RequestID{17}) {
+		t.Fatalf("failed Begin changed batch to %+v", b.batch)
+	}
+	if got, err := b.InternSymbol([]byte("alpha")); err != nil || got != 2 {
+		t.Fatalf("InternSymbol(alpha) after failed Begin = (%d, %v), want (2, nil)", got, err)
 	}
 }

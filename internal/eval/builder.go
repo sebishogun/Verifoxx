@@ -30,10 +30,11 @@ var (
 
 // Builder owns one reusable mutable Batch. It is not safe for concurrent use.
 type Builder struct {
-	batch   Batch
-	fields  policyindex.Schema
-	program *program.Program
-	active  bool
+	batch     Batch
+	fields    policyindex.Schema
+	extension schema.Interner
+	program   *program.Program
+	active    bool
 }
 
 type batchShape struct {
@@ -143,11 +144,40 @@ func (b *Builder) Begin(p *program.Program, rows, evidenceRows, evidenceRefs uin
 	b.batch.EvidenceOffsets = resizeClear(b.batch.EvidenceOffsets, shape.offsets)
 	b.batch.EvidenceRefs = resizeClear(b.batch.EvidenceRefs, shape.refs)
 	b.batch.Evidence.resize(shape.evidence)
+	b.extension.Reset()
 	b.batch.Rows = rows
 	b.fields = p.FieldIndex
 	b.program = p
 	b.active = true
 	return nil
+}
+
+// InternSymbol resolves value in the immutable Program first, then in the
+// reusable batch-local extension namespace above ProgramSymbolCount.
+func (b *Builder) InternSymbol(value []byte) (schema.SymbolID, error) {
+	if b == nil || !b.active || b.program == nil {
+		return 0, ErrInvalidBuilder
+	}
+	if id, ok := b.program.LookupSymbol(value); ok {
+		return id, nil
+	}
+	base := uint64(b.program.ProgramSymbolCount)
+	if local, ok := b.extension.Lookup(value); ok {
+		id := base + uint64(local)
+		if id > math.MaxUint32 {
+			return 0, ErrBatchTooLarge
+		}
+		return schema.SymbolID(id), nil
+	}
+	next := uint64(b.extension.Len()) + 1
+	if base+next > math.MaxUint32 {
+		return 0, ErrBatchTooLarge
+	}
+	local, err := b.extension.Intern(value)
+	if err != nil {
+		return 0, ErrBatchTooLarge
+	}
+	return schema.SymbolID(base + uint64(local)), nil
 }
 
 // SetRequestID sets the required nonzero request ID for row.
