@@ -406,13 +406,88 @@ func TestBuilderInternsProgramAndExtensionSymbols(t *testing.T) {
 	}
 }
 
+func TestBuilderResolvesProgramAndExtensionSymbolsAfterFinish(t *testing.T) {
+	p := batchTestProgramWithSymbol(t, "known")
+	var b Builder
+	if err := b.Begin(p, 0, 0, 0); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	id, err := b.InternSymbol([]byte("unknown"))
+	if err != nil {
+		t.Fatalf("InternSymbol: %v", err)
+	}
+	if _, err := b.Finish(); err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+
+	for _, tc := range []struct {
+		id   schema.SymbolID
+		want string
+	}{
+		{1, "known"},
+		{id, "unknown"},
+	} {
+		got, ok := b.Symbol(tc.id)
+		if !ok || string(got) != tc.want {
+			t.Errorf("Symbol(%d) = (%q, %v), want (%q, true)", tc.id, got, ok, tc.want)
+		}
+	}
+	if _, ok := b.Symbol(0); ok {
+		t.Fatal("Symbol accepted zero")
+	}
+	if _, ok := b.Symbol(id + 1); ok {
+		t.Fatal("Symbol accepted an extension ID outside this batch")
+	}
+
+	if err := b.Begin(p, 0, 0, 0); err != nil {
+		t.Fatalf("second Begin: %v", err)
+	}
+	if _, ok := b.Symbol(id); ok {
+		t.Fatal("next Begin retained a prior batch's extension symbol")
+	}
+}
+
+func TestBuilderBeginRejectsMalformedProgramSymbolMetadata(t *testing.T) {
+	valid := batchTestProgramWithSymbol(t, "known")
+	tests := []struct {
+		name   string
+		mutate func(*program.Program)
+	}{
+		{"count below symbols", func(p *program.Program) { p.ProgramSymbolCount = 0 }},
+		{"count above symbols", func(p *program.Program) { p.ProgramSymbolCount = 2 }},
+		{"mismatched hash slots", func(p *program.Program) { p.SymbolHashes = p.SymbolHashes[:2] }},
+		{"out of range slot ID", func(p *program.Program) {
+			for i, id := range p.SymbolIDs {
+				if id != 0 {
+					p.SymbolIDs[i] = 2
+				}
+			}
+		}},
+		{"malformed symbol range", func(p *program.Program) { p.SymbolLengths[0] = math.MaxUint32 }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := *valid
+			p.SymbolStarts = slices.Clone(valid.SymbolStarts)
+			p.SymbolLengths = slices.Clone(valid.SymbolLengths)
+			p.SymbolHashes = slices.Clone(valid.SymbolHashes)
+			p.SymbolIDs = slices.Clone(valid.SymbolIDs)
+			tc.mutate(&p)
+			var b Builder
+			if err := b.Begin(&p, 0, 0, 0); !errors.Is(err, ErrInvalidProgram) {
+				t.Fatalf("Begin error = %v, want %v", err, ErrInvalidProgram)
+			}
+		})
+	}
+}
+
 func TestBuilderInternRejectsInactiveAndIDOverflow(t *testing.T) {
 	p := batchTestProgram(t)
 	var b Builder
 	if err := b.Begin(p, 0, 0, 0); err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
-	p.ProgramSymbolCount = math.MaxUint32
+	b.symbolBase = math.MaxUint32
 	if id, err := b.InternSymbol([]byte("overflow")); id != 0 || !errors.Is(err, ErrBatchTooLarge) {
 		t.Fatalf("overflow InternSymbol = (%d, %v), want (0, %v)", id, err, ErrBatchTooLarge)
 	}
@@ -514,6 +589,28 @@ func TestBuilderFinishAcceptsEmptyBatch(t *testing.T) {
 	}
 }
 
+func TestBuilderFinishAllowsUnreferencedEvidenceCatalogRows(t *testing.T) {
+	p := batchTestProgram(t)
+	var b Builder
+	if err := b.Begin(p, 1, 1, 0); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	if err := b.SetRequestID(0, 1); err != nil {
+		t.Fatalf("SetRequestID: %v", err)
+	}
+	if err := b.SetEvidence(0, EvidenceRecord{ID: 1, Kind: 1, State: 1}); err != nil {
+		t.Fatalf("SetEvidence: %v", err)
+	}
+	batch, err := b.Finish()
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	start, end, ok := batch.EvidenceRange(0)
+	if !ok || start != 0 || end != 0 || batch.Evidence.Len() != 1 {
+		t.Fatalf("unreferenced evidence shape = (%d, %d, %v, %d rows)", start, end, ok, batch.Evidence.Len())
+	}
+}
+
 func TestBuilderReuseClearsActiveSlabsAndTailBits(t *testing.T) {
 	p := batchTestProgram(t,
 		schema.ValueKindSymbol,
@@ -566,7 +663,7 @@ func TestBuilderReuseClearsActiveSlabsAndTailBits(t *testing.T) {
 		cap(b.batch.BooleanValues), cap(b.batch.PresenceMasks), cap(b.batch.RequestIDs),
 		cap(b.batch.EvidenceOffsets), cap(b.batch.EvidenceRefs), cap(b.batch.Evidence.IDs),
 	}
-	if err := b.Begin(p, 65, 1, 0); err != nil {
+	if err := b.Begin(p, 65, 1, 1); err != nil {
 		t.Fatalf("small Begin: %v", err)
 	}
 	gotCaps := []int{
@@ -580,7 +677,8 @@ func TestBuilderReuseClearsActiveSlabsAndTailBits(t *testing.T) {
 	if !allZero(b.batch.SymbolValues) || !allZero(b.batch.IntegerValues) ||
 		!allZero(b.batch.TimestampValues) || !allZero(b.batch.BooleanValues) ||
 		!allZero(b.batch.PresenceMasks) || !allZero(b.batch.RequestIDs) ||
-		!allZero(b.batch.EvidenceOffsets) || !allZero(b.batch.Evidence.IDs) ||
+		!allZero(b.batch.EvidenceOffsets) || !allZero(b.batch.EvidenceRefs) ||
+		!allZero(b.batch.Evidence.IDs) ||
 		!allZero(b.batch.Evidence.Kinds) || !allZero(b.batch.Evidence.States) ||
 		!allZero(b.batch.Evidence.Subjects) || !allZero(b.batch.Evidence.Scopes) ||
 		!allZero(b.batch.Evidence.Reviewers) || !allZero(b.batch.Evidence.Timings) ||

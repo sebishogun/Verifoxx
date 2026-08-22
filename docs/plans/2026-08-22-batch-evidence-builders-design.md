@@ -85,6 +85,17 @@ unknown bytes therefore compare equal, different unknown bytes remain
 distinct, and the Program is never mutated. Addition is checked before
 publishing an ID so zero and uint32 wraparound are impossible.
 
+`Builder.Symbol` resolves both Program and extension IDs through the same
+service-context lifetime. Extension bytes and IDs are local to that builder's
+current batch and must not be mixed with a batch from another builder. The
+next successful `Begin` invalidates extension bytes from the prior batch.
+
+When a builder binds a different Program, it validates that
+`ProgramSymbolCount`, symbol rows, and frozen probe slots describe the same
+complete ID range before reserving extension IDs above it. The immutable
+Program contract lets repeated `Begin` calls on the same Program skip that
+cold validation.
+
 ## Errors And Bounds
 
 The package exposes stable sentinel errors for invalid builder state, invalid

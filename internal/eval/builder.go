@@ -32,11 +32,13 @@ var (
 
 // Builder owns one reusable mutable Batch. It is not safe for concurrent use.
 type Builder struct {
-	program   *program.Program
-	batch     Batch
-	extension schema.Interner
-	fields    policyindex.Schema
-	active    bool
+	program    *program.Program
+	batch      Batch
+	extension  schema.Interner
+	fields     policyindex.Schema
+	symbolBase uint32
+	csrReady   bool
+	active     bool
 }
 
 type batchShape struct {
@@ -71,6 +73,45 @@ func validateFieldIndex(fields policyindex.Schema) bool {
 		next[kind]++
 	}
 	return next == fields.Counts
+}
+
+func validateProgramSymbols(p *program.Program) bool {
+	count := uint64(p.ProgramSymbolCount)
+	if count != uint64(len(p.SymbolStarts)) || count != uint64(len(p.SymbolLengths)) ||
+		len(p.SymbolHashes) != len(p.SymbolIDs) {
+		return false
+	}
+	slots := len(p.SymbolIDs)
+	if slots == 0 {
+		return count == 0 && len(p.SymbolBytes) == 0
+	}
+	if slots&(slots-1) != 0 || uint64(slots) < 2*count {
+		return false
+	}
+	nonzero := uint64(0)
+	for _, id := range p.SymbolIDs {
+		if id == 0 {
+			continue
+		}
+		if uint64(id) > count {
+			return false
+		}
+		nonzero++
+	}
+	if nonzero != count {
+		return false
+	}
+	for id := uint64(1); id <= count; id++ {
+		value, ok := p.Symbol(schema.SymbolID(id))
+		if !ok {
+			return false
+		}
+		found, ok := p.LookupSymbol(value)
+		if !ok || uint64(found) != id {
+			return false
+		}
+	}
+	return true
 }
 
 func makeBatchShape(fields policyindex.Schema, rows, evidenceRows, evidenceRefs uint32) (batchShape, bool) {
@@ -129,6 +170,9 @@ func (b *Builder) Begin(p *program.Program, rows, evidenceRows, evidenceRefs uin
 	if p == nil {
 		return ErrInvalidProgram
 	}
+	if (p != b.program || p.ProgramSymbolCount != b.symbolBase) && !validateProgramSymbols(p) {
+		return ErrInvalidProgram
+	}
 	shape, ok := makeBatchShape(p.FieldIndex, rows, evidenceRows, evidenceRefs)
 	if !ok {
 		if validateFieldIndex(p.FieldIndex) {
@@ -150,6 +194,8 @@ func (b *Builder) Begin(p *program.Program, rows, evidenceRows, evidenceRefs uin
 	b.batch.Rows = rows
 	b.fields = p.FieldIndex
 	b.program = p
+	b.symbolBase = p.ProgramSymbolCount
+	b.csrReady = evidenceRefs == 0
 	b.active = true
 	return nil
 }
@@ -161,9 +207,12 @@ func (b *Builder) InternSymbol(value []byte) (schema.SymbolID, error) {
 		return 0, ErrInvalidBuilder
 	}
 	if id, ok := b.program.LookupSymbol(value); ok {
+		if uint32(id) > b.symbolBase {
+			return 0, ErrInvalidProgram
+		}
 		return id, nil
 	}
-	base := uint64(b.program.ProgramSymbolCount)
+	base := uint64(b.symbolBase)
 	if local, ok := b.extension.Lookup(value); ok {
 		id := base + uint64(local)
 		if id > math.MaxUint32 {
@@ -180,6 +229,18 @@ func (b *Builder) InternSymbol(value []byte) (schema.SymbolID, error) {
 		return 0, ErrBatchTooLarge
 	}
 	return schema.SymbolID(base + uint64(local)), nil
+}
+
+// Symbol resolves a Program or batch-extension SymbolID. Extension bytes are
+// invalidated by the next successful Begin or later extension InternSymbol.
+func (b *Builder) Symbol(id schema.SymbolID) ([]byte, bool) {
+	if b == nil || b.program == nil || id == 0 {
+		return nil, false
+	}
+	if uint32(id) <= b.symbolBase {
+		return b.program.Symbol(id)
+	}
+	return b.extension.Bytes(schema.SymbolID(uint32(id) - b.symbolBase))
 }
 
 // SetRequestID sets the required nonzero request ID for row.
@@ -334,6 +395,7 @@ func (b *Builder) SetEvidenceCSR(offsets, refs []uint32) error {
 	}
 	copy(b.batch.EvidenceOffsets, offsets)
 	copy(b.batch.EvidenceRefs, refs)
+	b.csrReady = true
 	return nil
 }
 
@@ -360,22 +422,8 @@ func (b *Builder) Finish() (Batch, error) {
 			return Batch{}, ErrIncompleteBatch
 		}
 	}
-	if uint64(len(b.batch.EvidenceOffsets)) != uint64(b.batch.Rows)+1 || len(b.batch.EvidenceOffsets) == 0 ||
-		b.batch.EvidenceOffsets[0] != 0 ||
-		uint64(b.batch.EvidenceOffsets[len(b.batch.EvidenceOffsets)-1]) != uint64(len(b.batch.EvidenceRefs)) {
+	if !b.csrReady {
 		return Batch{}, ErrIncompleteBatch
-	}
-	previous := uint32(0)
-	for _, offset := range b.batch.EvidenceOffsets[1:] {
-		if offset < previous || uint64(offset) > uint64(len(b.batch.EvidenceRefs)) {
-			return Batch{}, ErrIncompleteBatch
-		}
-		previous = offset
-	}
-	for _, ref := range b.batch.EvidenceRefs {
-		if uint64(ref) >= uint64(n) {
-			return Batch{}, ErrIncompleteBatch
-		}
 	}
 	b.active = false
 	return b.batch, nil

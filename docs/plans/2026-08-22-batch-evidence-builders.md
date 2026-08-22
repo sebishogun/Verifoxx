@@ -189,6 +189,8 @@ returns the same deterministic extension IDs after the next `Begin`.
 
 Test nil/malformed Programs, inactive builder calls, and extension-ID overflow.
 Assert failed `Begin` retains the previous batch and extension identities.
+Resolve Program and extension IDs through the builder after `Finish`, and
+prove the next successful `Begin` invalidates prior extension bytes.
 
 **Step 2: Run focused tests to verify RED**
 
@@ -201,7 +203,9 @@ Expected: FAIL because `InternSymbol` does not exist.
 Store a zero-value-compatible `schema.Interner` in the Builder. Reset it only
 after all `Begin` validation succeeds. Probe `Program.LookupSymbol` first;
 otherwise check `ProgramSymbolCount + localID` in `uint64` and publish the
-combined `schema.SymbolID`.
+combined `schema.SymbolID`. Validate a newly bound Program's frozen symbol
+range before reserving extension IDs, and expose `Builder.Symbol` for the
+owning context to resolve either namespace.
 
 **Step 4: Run focused and package tests**
 
