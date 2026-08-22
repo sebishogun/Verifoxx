@@ -70,6 +70,60 @@ func TestApplicabilityIndexExtractPositiveAll(t *testing.T) {
 	}
 }
 
+func TestApplicabilityIndexExtractPreservesReorderedFieldValues(t *testing.T) {
+	p := slotTestProgram(
+		[]program.Opcode{program.OpcodeEqual, program.OpcodeEqual, program.OpcodeAll},
+		[][]schema.InstructionID{nil, nil, {1, 2}},
+		[]program.RootFlags{0, 0, program.RootApplicability},
+	)
+	p.Fields = []schema.FieldID{5, 3, 0}
+	p.Values = []schema.ValueID{1, 2, 0}
+	p.FieldKinds = []schema.ValueKind{
+		schema.ValueKindSymbol,
+		schema.ValueKindSymbol,
+		schema.ValueKindSymbol,
+		schema.ValueKindSymbol,
+		schema.ValueKindSymbol,
+	}
+	p.ValueKinds = []schema.ValueKind{schema.ValueKindSymbol, schema.ValueKindSymbol}
+	p.ValueRefs = []uint32{50, 30}
+	p.ProgramSymbolCount = 50
+	p.RequirementIDs = []schema.RequirementID{1}
+	p.RequirementRoots = []schema.InstructionID{3}
+
+	var lowerer Lowerer
+	constraints, err := lowerer.extractApplicabilityConstraints(&p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := policyindex.Constraints{
+		Rows:        []uint32{0, 0},
+		Fields:      []schema.FieldID{3, 5},
+		ValueStarts: []uint32{0, 1},
+		ValueCounts: []uint32{1, 1},
+		Values:      []schema.SymbolID{30, 50},
+	}
+	if !constraintsEqual(constraints, want) {
+		t.Fatalf("constraints = %+v, want %+v", constraints, want)
+	}
+	var applicability policyindex.Policy
+	if err := lowerer.indexBuilder.Build(&applicability, 1, constraints); err != nil {
+		t.Fatal(err)
+	}
+	candidates := []uint64{0}
+	if err := applicability.Candidates(
+		candidates,
+		[]schema.FieldID{5},
+		[]schema.SymbolID{50},
+		[]uint8{1},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if candidates[0] != 1 {
+		t.Fatalf("field 5 value 50 candidates = %#x, want 1", candidates[0])
+	}
+}
+
 func TestApplicabilityIndexExtractConservative(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -85,13 +85,13 @@ func (l *Lowerer) appendSelectorValues(p *program.Program, row int, field schema
 	}
 	appendValues := state == indexFieldUnseen
 	if appendValues {
-		if uint64(len(l.indexConstraintValue)) > math.MaxUint32 {
+		if uint64(len(l.indexCandidateValue)) > math.MaxUint32 {
 			return ErrProgramTooLarge
 		}
 		l.indexFieldState[field-1] = indexFieldSingle
-		l.indexFieldValueStart[field-1] = uint32(len(l.indexConstraintValue))
+		l.indexFieldValueStart[field-1] = uint32(len(l.indexCandidateValue))
 	}
-	startCount := len(l.indexConstraintValue)
+	startCount := len(l.indexCandidateValue)
 	switch p.Opcodes[row] {
 	case program.OpcodeEqual:
 		symbol, err := selectorSymbol(p, p.Values[row])
@@ -99,7 +99,7 @@ func (l *Lowerer) appendSelectorValues(p *program.Program, row int, field schema
 			return err
 		}
 		if appendValues {
-			l.indexConstraintValue = append(l.indexConstraintValue, symbol)
+			l.indexCandidateValue = append(l.indexCandidateValue, symbol)
 		}
 	case program.OpcodeIn:
 		start := int(p.ListStarts[row])
@@ -110,16 +110,16 @@ func (l *Lowerer) appendSelectorValues(p *program.Program, row int, field schema
 				return err
 			}
 			if appendValues {
-				l.indexConstraintValue = append(l.indexConstraintValue, symbol)
+				l.indexCandidateValue = append(l.indexCandidateValue, symbol)
 			}
 		}
 	}
 	if appendValues {
-		count := len(l.indexConstraintValue) - startCount
+		count := len(l.indexCandidateValue) - startCount
 		if count == 0 {
 			return ErrInvalidGeneratedProgram
 		}
-		if uint64(count) > math.MaxUint32 || uint64(len(l.indexConstraintValue)) > math.MaxUint32 {
+		if uint64(count) > math.MaxUint32 || uint64(len(l.indexCandidateValue)) > math.MaxUint32 {
 			return ErrProgramTooLarge
 		}
 		l.indexFieldValueCount[field-1] = uint32(count)
@@ -162,8 +162,8 @@ func (l *Lowerer) extractApplicabilityConstraints(p *program.Program) (policyind
 		clear(l.indexFieldValueStart)
 		clear(l.indexFieldValueCount)
 		l.indexStack = l.indexStack[:0]
+		l.indexCandidateValue = l.indexCandidateValue[:0]
 		l.indexStack = append(l.indexStack, root)
-		valueBase := len(l.indexConstraintValue)
 
 		for len(l.indexStack) != 0 {
 			last := len(l.indexStack) - 1
@@ -197,7 +197,6 @@ func (l *Lowerer) extractApplicabilityConstraints(p *program.Program) (policyind
 			}
 		}
 
-		valueOut := valueBase
 		for fieldRow, state := range l.indexFieldState {
 			if state != indexFieldSingle {
 				continue
@@ -207,14 +206,16 @@ func (l *Lowerer) extractApplicabilityConstraints(p *program.Program) (policyind
 			if uint64(len(l.indexConstraintRows)) >= math.MaxUint32 {
 				return policyindex.Constraints{}, ErrProgramTooLarge
 			}
-			copy(l.indexConstraintValue[valueOut:], l.indexConstraintValue[start:start+count])
+			valueStart := len(l.indexConstraintValue)
+			if uint64(valueStart)+uint64(count) > math.MaxUint32 {
+				return policyindex.Constraints{}, ErrProgramTooLarge
+			}
+			l.indexConstraintValue = append(l.indexConstraintValue, l.indexCandidateValue[start:start+count]...)
 			l.indexConstraintRows = append(l.indexConstraintRows, uint32(requirementRow))
 			l.indexConstraintField = append(l.indexConstraintField, schema.FieldID(fieldRow+1))
-			l.indexConstraintStart = append(l.indexConstraintStart, uint32(valueOut))
+			l.indexConstraintStart = append(l.indexConstraintStart, uint32(valueStart))
 			l.indexConstraintCount = append(l.indexConstraintCount, uint32(count))
-			valueOut += count
 		}
-		l.indexConstraintValue = l.indexConstraintValue[:valueOut]
 	}
 	return policyindex.Constraints{
 		Rows:        l.indexConstraintRows,

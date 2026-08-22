@@ -127,6 +127,7 @@ type Lowerer struct {
 	indexConstraintField []schema.FieldID
 	indexConstraintStart []uint32
 	indexConstraintCount []uint32
+	indexCandidateValue  []schema.SymbolID
 	indexConstraintValue []schema.SymbolID
 
 	// output owns reusable stage output. It follows every scratch slice so its

@@ -84,10 +84,6 @@ type Program struct {
 	FieldNames  []schema.SymbolID
 	FieldKinds  []schema.ValueKind
 	FieldGroups []schema.FieldGroup
-	// FieldIndex maps fields to kind-local batch columns. ApplicabilityIndex
-	// conservatively prunes requirement rows from known symbolic selectors.
-	FieldIndex         policyindex.Schema
-	ApplicabilityIndex policyindex.Policy
 
 	// Translated evidence-kind and evidence-state catalog names in
 	// EvidenceKindID/EvidenceStateID order.
@@ -138,6 +134,11 @@ type Program struct {
 
 	// Retained source bytes of the policy document.
 	InputBytes []byte
+	// FieldIndex maps fields to kind-local batch columns. ApplicabilityIndex
+	// conservatively prunes requirement rows from known symbolic selectors.
+	// Their scalar tails end the GC-scanned region before Program's fixed tail.
+	ApplicabilityIndex policyindex.Policy
+	FieldIndex         policyindex.Schema
 
 	// Fixed scalar tail. ContentHash is the SHA-256 of the retained source;
 	// PolicyName/PolicyVersion are canonical symbol IDs; ProgramSymbolCount is
