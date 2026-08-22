@@ -53,6 +53,8 @@ func Freeze(src *Program) (Program, error) {
 		FieldNames:                cloneExact(src.FieldNames),
 		FieldKinds:                cloneExact(src.FieldKinds),
 		FieldGroups:               cloneExact(src.FieldGroups),
+		FieldIndex:                src.FieldIndex.Clone(),
+		ApplicabilityIndex:        src.ApplicabilityIndex.Clone(),
 		EvidenceKindNames:         cloneExact(src.EvidenceKindNames),
 		EvidenceStateNames:        cloneExact(src.EvidenceStateNames),
 		EvidenceKindSourceStarts:  cloneExact(src.EvidenceKindSourceStarts),

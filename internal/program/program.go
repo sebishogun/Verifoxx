@@ -3,6 +3,7 @@ package program
 import (
 	"bytes"
 
+	policyindex "github.com/sebishogun/verifoxx/internal/index"
 	"github.com/sebishogun/verifoxx/internal/result"
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
@@ -83,6 +84,10 @@ type Program struct {
 	FieldNames  []schema.SymbolID
 	FieldKinds  []schema.ValueKind
 	FieldGroups []schema.FieldGroup
+	// FieldIndex maps fields to kind-local batch columns. ApplicabilityIndex
+	// conservatively prunes requirement rows from known symbolic selectors.
+	FieldIndex         policyindex.Schema
+	ApplicabilityIndex policyindex.Policy
 
 	// Translated evidence-kind and evidence-state catalog names in
 	// EvidenceKindID/EvidenceStateID order.
