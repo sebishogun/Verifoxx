@@ -46,13 +46,14 @@ const (
 	CodeDuplicateID
 	CodeDuplicateField
 	CodeInvalidID
+	CodeDuplicateReference
 )
 
 var errorCodeNames = [...]string{
 	"malformed", "truncated", "trailing_data", "invalid_utf8",
 	"limit_exceeded", "unknown_key", "duplicate_key", "missing_key",
 	"invalid_version", "invalid_type", "invalid_reference", "duplicate_id",
-	"duplicate_field", "invalid_id",
+	"duplicate_field", "invalid_id", "duplicate_reference",
 }
 
 func (c ErrorCode) String() string {
@@ -75,7 +76,8 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("jsonbatch: %s: %s at offset %d: %s", e.Input, e.Code, e.Offset, e.Message)
 }
 
-// Limits bounds one Decode call. Zero disables a bound.
+// Limits bounds one Decode call. Zero disables a configurable bound; the
+// decoder always enforces its internal recursion-safety ceiling.
 type Limits struct {
 	MaxRequestBytes       int
 	MaxEvidenceBytes      int

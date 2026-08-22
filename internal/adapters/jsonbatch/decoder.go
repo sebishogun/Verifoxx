@@ -231,6 +231,9 @@ type scanner struct {
 	input        Input
 }
 
+// Structural skipping is recursive, so caller limits cannot disable this cap.
+const internalMaxDepth = 128
+
 func (s *scanner) reset(input Input, src []byte, limits Limits) {
 	s.src = src
 	s.pos = 0
@@ -454,6 +457,9 @@ func (s *scanner) parseInteger() (int64, error) {
 		return 0, s.fail(CodeMalformed, "expected integer")
 	}
 	if !s.eof() && !isDelimiter(s.peek()) {
+		if s.peek() == '.' || s.peek() == 'e' || s.peek() == 'E' {
+			return 0, s.failAt(CodeInvalidType, start, "number is not an integer")
+		}
 		return 0, s.fail(CodeMalformed, "invalid integer suffix")
 	}
 	if negative {
@@ -463,6 +469,58 @@ func (s *scanner) parseInteger() (int64, error) {
 		return -int64(value), nil
 	}
 	return int64(value), nil
+}
+
+func (s *scanner) skipNumber() error {
+	if s.peek() == '-' {
+		s.pos++
+	}
+	if s.eof() {
+		return s.fail(CodeTruncated, "incomplete number")
+	}
+	if s.peek() == '0' {
+		s.pos++
+		if !s.eof() && isDigit(s.peek()) {
+			return s.fail(CodeMalformed, "leading zero")
+		}
+	} else if s.peek() >= '1' && s.peek() <= '9' {
+		for !s.eof() && isDigit(s.peek()) {
+			s.pos++
+		}
+	} else {
+		return s.fail(CodeMalformed, "expected number")
+	}
+	if !s.eof() && s.peek() == '.' {
+		s.pos++
+		if s.eof() {
+			return s.fail(CodeTruncated, "incomplete fraction")
+		}
+		if !isDigit(s.peek()) {
+			return s.fail(CodeMalformed, "fraction requires a digit")
+		}
+		for !s.eof() && isDigit(s.peek()) {
+			s.pos++
+		}
+	}
+	if !s.eof() && (s.peek() == 'e' || s.peek() == 'E') {
+		s.pos++
+		if !s.eof() && (s.peek() == '+' || s.peek() == '-') {
+			s.pos++
+		}
+		if s.eof() {
+			return s.fail(CodeTruncated, "incomplete exponent")
+		}
+		if !isDigit(s.peek()) {
+			return s.fail(CodeMalformed, "exponent requires a digit")
+		}
+		for !s.eof() && isDigit(s.peek()) {
+			s.pos++
+		}
+	}
+	if !s.eof() && !isDelimiter(s.peek()) {
+		return s.fail(CodeMalformed, "invalid number suffix")
+	}
+	return nil
 }
 
 func boolUint64(v bool) uint64 {
@@ -498,10 +556,17 @@ func (s *scanner) parseLiteral() error {
 }
 
 func (s *scanner) skipValue(depth int) error {
-	if s.limits.MaxDepth > 0 && depth > s.limits.MaxDepth {
+	maxDepth := s.limits.MaxDepth
+	if maxDepth <= 0 || maxDepth > internalMaxDepth {
+		maxDepth = internalMaxDepth
+	}
+	if depth > maxDepth {
 		return s.fail(CodeLimit, "JSON depth exceeds MaxDepth")
 	}
 	s.skipWS()
+	if s.eof() {
+		return s.fail(CodeTruncated, "missing JSON value")
+	}
 	switch s.peek() {
 	case '"':
 		_, err := s.parseString(&s.valueScratch)
@@ -513,10 +578,7 @@ func (s *scanner) skipValue(depth int) error {
 	case 't', 'f', 'n':
 		return s.parseLiteral()
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		_, err := s.parseInteger()
-		return err
-	case 0:
-		return s.fail(CodeTruncated, "missing JSON value")
+		return s.skipNumber()
 	default:
 		return s.fail(CodeMalformed, "invalid JSON value")
 	}

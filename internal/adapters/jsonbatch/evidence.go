@@ -24,9 +24,21 @@ var (
 	keyAttestationState = []byte("attestation_state")
 	valueCurrent        = []byte("current")
 	valueValid          = []byte("valid")
+	valueStale          = []byte("stale")
+	valueUnclear        = []byte("unclear")
+	valueUnverifiable   = []byte("unverifiable")
+	valueInvalid        = []byte("invalid")
 	valueConflict       = []byte("conflict")
 	valueConflicting    = []byte("conflicting")
 	valueReviewerSplit  = []byte("one_valid_one_revoked")
+)
+
+const (
+	qualifierStale uint8 = iota + 1
+	qualifierUnclear
+	qualifierUnverifiable
+	qualifierInvalid
+	qualifierConflicting
 )
 
 func canonicalID(value []byte, prefix byte) (uint32, bool) {
@@ -329,6 +341,7 @@ func (d *Decoder) decodeEvidenceAttributes(dst *eval.Builder, s *scanner, record
 	s.skipWS()
 	var saw uint16
 	var override schema.EvidenceStateID
+	var overrideRank uint8
 	var count uint32
 	for {
 		if s.peek() == '}' {
@@ -358,7 +371,7 @@ func (d *Decoder) decodeEvidenceAttributes(dst *eval.Builder, s *scanner, record
 			return err
 		}
 		s.skipWS()
-		bit, err := d.decodeEvidenceAttribute(dst, s, key, keyOffset, record, &override)
+		bit, err := d.decodeEvidenceAttribute(dst, s, key, keyOffset, record, &override, &overrideRank)
 		if err != nil {
 			return err
 		}
@@ -372,8 +385,11 @@ func (d *Decoder) decodeEvidenceAttributes(dst *eval.Builder, s *scanner, record
 	}
 }
 
-func (d *Decoder) decodeEvidenceAttribute(dst *eval.Builder, s *scanner, key []byte, keyOffset int, record *eval.EvidenceRecord, override *schema.EvidenceStateID) (uint16, error) {
+func (d *Decoder) decodeEvidenceAttribute(dst *eval.Builder, s *scanner, key []byte, keyOffset int, record *eval.EvidenceRecord, override *schema.EvidenceStateID, overrideRank *uint8) (uint16, error) {
 	if bytes.Equal(key, keyTimestamp) {
+		if s.peek() != '-' && !isDigit(s.peek()) {
+			return 0, s.fail(CodeInvalidType, "timestamp must be a JSON integer")
+		}
 		value, err := s.parseInteger()
 		if err != nil {
 			return 0, err
@@ -418,7 +434,10 @@ func (d *Decoder) decodeEvidenceAttribute(dst *eval.Builder, s *scanner, key []b
 			if !ok {
 				return 0, s.failAt(CodeInvalidReference, keyOffset, "conflicting state is absent from Program")
 			}
-			*override = state
+			if *overrideRank < qualifierConflicting {
+				*override = state
+				*overrideRank = qualifierConflicting
+			}
 		}
 		return 1 << 3, nil
 	case bytes.Equal(key, keyTiming):
@@ -429,12 +448,13 @@ func (d *Decoder) decodeEvidenceAttribute(dst *eval.Builder, s *scanner, key []b
 		record.Timing = id
 		return 1 << 4, nil
 	case bytes.Equal(key, keyTimestampState), bytes.Equal(key, keyAttestationState):
-		state, ok := d.qualifierState(value)
+		state, rank, ok := d.qualifierState(value)
 		if !ok {
 			return 0, s.failAt(CodeInvalidReference, keyOffset, "unknown evidence qualifier")
 		}
-		if state != 0 {
+		if rank > *overrideRank {
 			*override = state
+			*overrideRank = rank
 		}
 		if bytes.Equal(key, keyTimestampState) {
 			return 1 << 6, nil
@@ -445,14 +465,27 @@ func (d *Decoder) decodeEvidenceAttribute(dst *eval.Builder, s *scanner, key []b
 	}
 }
 
-func (d *Decoder) qualifierState(value []byte) (schema.EvidenceStateID, bool) {
+func (d *Decoder) qualifierState(value []byte) (schema.EvidenceStateID, uint8, bool) {
 	if bytes.Equal(value, valueCurrent) || bytes.Equal(value, valueValid) {
-		return 0, true
+		return 0, 0, true
 	}
 	lookup := value
-	if bytes.Equal(value, valueConflict) {
+	var rank uint8
+	switch {
+	case bytes.Equal(value, valueStale):
+		rank = qualifierStale
+	case bytes.Equal(value, valueUnclear):
+		rank = qualifierUnclear
+	case bytes.Equal(value, valueUnverifiable):
+		rank = qualifierUnverifiable
+	case bytes.Equal(value, valueInvalid):
+		rank = qualifierInvalid
+	case bytes.Equal(value, valueConflict), bytes.Equal(value, valueConflicting):
+		rank = qualifierConflicting
 		lookup = valueConflicting
+	default:
+		return 0, 0, false
 	}
 	state, ok := d.lookupEvidenceState(lookup)
-	return state, ok
+	return state, rank, ok
 }

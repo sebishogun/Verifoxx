@@ -92,7 +92,9 @@ qualifier (`stale`, `unclear`, `unverifiable`, `invalid`, `conflicting`, or
 `reviewer_state=one_valid_one_revoked` similarly becomes `conflicting`. This
 preserves the assignment's uncertainty information without adding per-record
 attribute maps. A required override absent from the Program state catalog is an
-invalid reference rather than silently discarded evidence.
+invalid reference rather than silently discarded evidence. Multiple unresolved
+qualifiers resolve independently of JSON key order using the conservative
+precedence `conflicting > invalid > unverifiable > unclear > stale`.
 
 Unknown attributes and duplicate semantic columns are rejected. Optional
 attributes remain zero when absent.
@@ -127,11 +129,12 @@ trailing data, unknown or duplicate keys, missing structural keys, unsupported
 version, wrong JSON type, invalid UTF-8, limit overflow, invalid Program
 references, duplicate IDs/fields/references, and invalid canonical IDs.
 
-Zero-valued limits disable that bound. Supported bounds cover source bytes,
+Zero-valued limits disable that configurable bound. Supported bounds cover source bytes,
 decoded string bytes, requests, evidence rows, evidence references, facts per
 request, attributes per evidence record, and structural depth. Count limits are
 checked before `Builder.Begin`, preventing untrusted JSON from requesting huge
-slabs.
+slabs. Because structural skipping is recursive, a fixed internal depth ceiling
+still applies when `MaxDepth` is zero or greater than that ceiling.
 
 ## Verification
 

@@ -379,7 +379,7 @@ func (d *Decoder) decodeRequestRefs(s *scanner, next *uint32) error {
 		}
 		word, bit := row>>6, uint64(1)<<(row&63)
 		if d.seenRefs[word]&bit != 0 {
-			return s.fail(CodeDuplicateField, "duplicate evidence reference")
+			return s.fail(CodeDuplicateReference, "duplicate evidence reference")
 		}
 		d.seenRefs[word] |= bit
 		if uint64(*next) >= uint64(len(d.requestRefs)) {
