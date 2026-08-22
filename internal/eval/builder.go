@@ -33,6 +33,7 @@ var (
 // Builder owns one reusable mutable Batch. It is not safe for concurrent use.
 type Builder struct {
 	program    *program.Program
+	symbolSeen []uint64
 	batch      Batch
 	extension  schema.Interner
 	fields     policyindex.Schema
@@ -75,43 +76,90 @@ func validateFieldIndex(fields policyindex.Schema) bool {
 	return next == fields.Counts
 }
 
-func validateProgramSymbols(p *program.Program) bool {
+func (b *Builder) validateProgramSymbols(p *program.Program) bool {
 	count := uint64(p.ProgramSymbolCount)
 	if count != uint64(len(p.SymbolStarts)) || count != uint64(len(p.SymbolLengths)) ||
-		len(p.SymbolHashes) != len(p.SymbolIDs) {
+		len(p.SymbolHashes) != len(p.SymbolIDs) || uint64(len(p.SymbolBytes)) > math.MaxUint32 {
+		return false
+	}
+	end := uint64(0)
+	for row := range p.SymbolStarts {
+		if uint64(p.SymbolStarts[row]) != end {
+			return false
+		}
+		end += uint64(p.SymbolLengths[row])
+		if end > uint64(len(p.SymbolBytes)) {
+			return false
+		}
+	}
+	if end != uint64(len(p.SymbolBytes)) {
 		return false
 	}
 	slots := len(p.SymbolIDs)
 	if slots == 0 {
-		return count == 0 && len(p.SymbolBytes) == 0
+		return count == 0
 	}
 	if slots&(slots-1) != 0 || uint64(slots) < 2*count {
 		return false
 	}
-	nonzero := uint64(0)
-	for _, id := range p.SymbolIDs {
+	seenWords := int((count + 63) >> 6)
+	b.symbolSeen = resizeClear(b.symbolSeen, seenWords)
+	if count == 0 {
+		for slot, id := range p.SymbolIDs {
+			if id != 0 || p.SymbolHashes[slot] != 0 {
+				return false
+			}
+		}
+		return true
+	}
+	empty := -1
+	for slot, id := range p.SymbolIDs {
 		if id == 0 {
+			empty = slot
+			break
+		}
+	}
+	if empty < 0 {
+		return false
+	}
+	mask := uint64(slots - 1)
+	start := uint64(empty+1) & mask
+	clusterStart := uint64(0)
+	nonzero := uint64(0)
+	for logical := uint64(0); logical < uint64(slots); logical++ {
+		slot := (start + logical) & mask
+		id := p.SymbolIDs[slot]
+		if id == 0 {
+			if p.SymbolHashes[slot] != 0 {
+				return false
+			}
+			clusterStart = logical + 1
 			continue
 		}
-		if uint64(id) > count {
+		id0 := uint64(id - 1)
+		if id0 >= count {
+			return false
+		}
+		word := id0 >> 6
+		bit := uint64(1) << (id0 & 63)
+		if b.symbolSeen[word]&bit != 0 {
+			return false
+		}
+		b.symbolSeen[word] |= bit
+		valueStart := uint64(p.SymbolStarts[id0])
+		valueEnd := valueStart + uint64(p.SymbolLengths[id0])
+		hash := schema.HashSymbol(p.SymbolBytes[int(valueStart):int(valueEnd)])
+		if p.SymbolHashes[slot] != hash {
+			return false
+		}
+		home := hash & mask
+		homeLogical := (home - start) & mask
+		if homeLogical < clusterStart || homeLogical > logical {
 			return false
 		}
 		nonzero++
 	}
-	if nonzero != count {
-		return false
-	}
-	for id := uint64(1); id <= count; id++ {
-		value, ok := p.Symbol(schema.SymbolID(id))
-		if !ok {
-			return false
-		}
-		found, ok := p.LookupSymbol(value)
-		if !ok || uint64(found) != id {
-			return false
-		}
-	}
-	return true
+	return nonzero == count
 }
 
 func makeBatchShape(fields policyindex.Schema, rows, evidenceRows, evidenceRefs uint32) (batchShape, bool) {
@@ -170,7 +218,7 @@ func (b *Builder) Begin(p *program.Program, rows, evidenceRows, evidenceRefs uin
 	if p == nil {
 		return ErrInvalidProgram
 	}
-	if (p != b.program || p.ProgramSymbolCount != b.symbolBase) && !validateProgramSymbols(p) {
+	if (p != b.program || p.ProgramSymbolCount != b.symbolBase) && !b.validateProgramSymbols(p) {
 		return ErrInvalidProgram
 	}
 	shape, ok := makeBatchShape(p.FieldIndex, rows, evidenceRows, evidenceRefs)
