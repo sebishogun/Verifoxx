@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "name": "verifoxx",
+  "version": "1.0.0",
+  "evidence_kinds": [
+    {"name": "approval_record"},
+    {"name": "execution_environment_attestation"},
+    {"name": "usage_limit_adjustment"}
+  ],
+  "evidence_states": [
+    {"name": "valid"},
+    {"name": "verified"},
+    {"name": "approved"},
+    {"name": "stale"},
+    {"name": "unclear"},
+    {"name": "unverifiable"},
+    {"name": "invalid"},
+    {"name": "conflicting"}
+  ],
+  "outcomes": [
+    {"name": "Approve", "precedence": 1, "terminal": true},
+    {"name": "Reject", "precedence": 4, "terminal": true},
+    {"name": "Revise", "precedence": 2, "terminal": false},
+    {"name": "Escalate", "precedence": 3, "terminal": true}
+  ],
+  "requirements": [
+    {
+      "id": "R1",
+      "source": "External partners may request aggregate analytical outputs from the protected dataset only if no individual-level information is disclosed and a valid approval record exists before execution.",
+      "applies": {
+        "op": "all",
+        "args": [
+          {"op": "equal", "field": "requester.trust", "value": "external"},
+          {"op": "equal", "field": "action.dataset", "value": "protected_dataset"}
+        ]
+      },
+      "clauses": [
+        {
+          "assert": {
+            "op": "all",
+            "args": [
+              {"op": "equal", "field": "action.type", "value": "aggregate_analysis"},
+              {"op": "equal", "field": "action.output", "value": "aggregate_counts"}
+            ]
+          },
+          "evidence": [
+            {"op": "evidence_matches", "kind": "approval_record", "state": "valid", "timing": "before_execution"}
+          ],
+          "resolution": {
+            "satisfied": "Approve",
+            "false": "Reject",
+            "missing": "Escalate",
+            "stale": "Escalate",
+            "unclear": "Escalate",
+            "unverifiable": "Escalate",
+            "conflict": "Escalate"
+          },
+          "remediations": []
+        }
+      ]
+    },
+    {
+      "id": "R2",
+      "source": "Any processing involving protected data must run in the approved local execution environment. If the execution environment cannot be verified, the request must not be automatically approved.",
+      "applies": {"op": "equal", "field": "action.dataset", "value": "protected_dataset"},
+      "clauses": [
+        {
+          "assert": {"op": "exists", "field": "environment.execution_env"},
+          "evidence": [
+            {"op": "evidence_matches", "kind": "execution_environment_attestation", "state": "verified", "subject": "local_approved_env"}
+          ],
+          "resolution": {
+            "satisfied": "Approve",
+            "false": "Escalate",
+            "missing": "Escalate",
+            "stale": "Escalate",
+            "unclear": "Escalate",
+            "unverifiable": "Escalate",
+            "conflict": "Escalate"
+          },
+          "remediations": []
+        },
+        {
+          "assert": {"op": "equal", "field": "environment.execution_env", "value": "local_approved_env"},
+          "evidence": [],
+          "resolution": {
+            "satisfied": "Approve",
+            "false": "Escalate",
+            "missing": "Escalate",
+            "stale": "Escalate",
+            "unclear": "Escalate",
+            "unverifiable": "Escalate",
+            "conflict": "Escalate"
+          },
+          "remediations": []
+        }
+      ]
+    },
+    {
+      "id": "R3",
+      "source": "Trusted internal teams may request a temporary increase above the standard usage limit, but only where a specific usage-adjustment approval exists. Disclosure restrictions and pre-execution approval conditions cannot be relaxed. If approval evidence is unclear, stale or conflicting, the case should be escalated rather than assumed safe.",
+      "applies": {
+        "op": "all",
+        "args": [
+          {"op": "equal", "field": "requester.trust", "value": "trusted_internal"},
+          {"op": "equal", "field": "environment.usage", "value": "above_standard_limit"},
+          {"op": "equal", "field": "action.dataset", "value": "protected_dataset"}
+        ]
+      },
+      "clauses": [
+        {
+          "assert": {
+            "op": "all",
+            "args": [
+              {"op": "equal", "field": "action.type", "value": "aggregate_analysis"},
+              {"op": "equal", "field": "action.output", "value": "aggregate_counts"}
+            ]
+          },
+          "evidence": [
+            {"op": "evidence_matches", "kind": "approval_record", "state": "valid", "timing": "before_execution"}
+          ],
+          "resolution": {
+            "satisfied": "Approve",
+            "false": "Reject",
+            "missing": "Escalate",
+            "stale": "Escalate",
+            "unclear": "Escalate",
+            "unverifiable": "Escalate",
+            "conflict": "Escalate"
+          },
+          "remediations": []
+        },
+        {
+          "assert": {"op": "equal", "field": "environment.usage", "value": "above_standard_limit"},
+          "evidence": [
+            {"op": "evidence_matches", "kind": "usage_limit_adjustment", "state": "approved", "subject": "above_standard_limit", "scope": "trusted_internal_only"}
+          ],
+          "resolution": {
+            "satisfied": "Approve",
+            "false": "Revise",
+            "missing": "Revise",
+            "stale": "Escalate",
+            "unclear": "Escalate",
+            "unverifiable": "Escalate",
+            "conflict": "Escalate"
+          },
+          "remediations": [
+            {"kind": "add_evidence", "evidence_kind": "usage_limit_adjustment"}
+          ]
+        }
+      ]
+    }
+  ]
+}

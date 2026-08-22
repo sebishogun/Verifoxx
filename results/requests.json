@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "name": "verifoxx",
+    "version": "1.0.0",
+    "sha256": "93dba691b30d7b6920617b6b7b2036f4d4a5ce1da97bc44575b046fe207d474b"
+  },
+  "engine_version": "devel",
+  "results": [
+    {
+      "request_id": "R1",
+      "decision": "Approve",
+      "rationale": "The external aggregate request has valid pre-execution approval and verified approved-local-environment evidence.",
+      "driver": {
+        "requirement_id": "R1",
+        "clause_id": "C1",
+        "reason": "satisfied"
+      },
+      "requirements_applied": [
+        "R1",
+        "R2"
+      ],
+      "evidence_used": [
+        "E1",
+        "E2"
+      ],
+      "missing_or_conflicting_evidence": [],
+      "assumptions": [
+        "The supplied structured fields faithfully represent the underlying request and evidence records."
+      ],
+      "unresolved_uncertainty": [],
+      "remediation": []
+    },
+    {
+      "request_id": "R2",
+      "decision": "Reject",
+      "rationale": "The requested individual-record export violates R1's non-negotiable disclosure restriction.",
+      "driver": {
+        "requirement_id": "R1",
+        "clause_id": "C1",
+        "reason": "condition_false"
+      },
+      "requirements_applied": [
+        "R1",
+        "R2"
+      ],
+      "evidence_used": [
+        "E1",
+        "E2"
+      ],
+      "missing_or_conflicting_evidence": [],
+      "assumptions": [
+        "The supplied structured fields faithfully represent the underlying request and evidence records."
+      ],
+      "unresolved_uncertainty": [],
+      "remediation": []
+    },
+    {
+      "request_id": "R3",
+      "decision": "Revise",
+      "rationale": "The above-standard usage request can be corrected by providing the required scoped usage-adjustment approval.",
+      "driver": {
+        "requirement_id": "R3",
+        "clause_id": "C5",
+        "reason": "missing"
+      },
+      "requirements_applied": [
+        "R2",
+        "R3"
+      ],
+      "evidence_used": [
+        "E1",
+        "E2"
+      ],
+      "missing_or_conflicting_evidence": [
+        "E3 usage_limit_adjustment is missing from the request."
+      ],
+      "assumptions": [
+        "The supplied structured fields faithfully represent the underlying request and evidence records."
+      ],
+      "unresolved_uncertainty": [
+        "Whether a qualifying usage adjustment will be approved remains unresolved."
+      ],
+      "remediation": [
+        {
+          "action": "add_evidence",
+          "evidence_kind": "usage_limit_adjustment"
+        }
+      ]
+    },
+    {
+      "request_id": "R4",
+      "decision": "Escalate",
+      "rationale": "The approved local execution environment cannot be verified because the required attestation is missing.",
+      "driver": {
+        "requirement_id": "R2",
+        "clause_id": "C2",
+        "reason": "missing"
+      },
+      "requirements_applied": [
+        "R1",
+        "R2"
+      ],
+      "evidence_used": [
+        "E1"
+      ],
+      "missing_or_conflicting_evidence": [
+        "E2 execution_environment_attestation is missing from the request."
+      ],
+      "assumptions": [
+        "The supplied structured fields faithfully represent the underlying request and evidence records."
+      ],
+      "unresolved_uncertainty": [
+        "The request's execution environment lacks a verified approved-local attestation."
+      ],
+      "remediation": []
+    },
+    {
+      "request_id": "R5",
+      "decision": "Escalate",
+      "rationale": "The pre-execution approval record is conflicting, so the request cannot be decided automatically.",
+      "driver": {
+        "requirement_id": "R3",
+        "clause_id": "C4",
+        "reason": "conflict"
+      },
+      "requirements_applied": [
+        "R2",
+        "R3"
+      ],
+      "evidence_used": [
+        "E2",
+        "E3",
+        "E4"
+      ],
+      "missing_or_conflicting_evidence": [
+        "E4 approval_record has conflicting approval state."
+      ],
+      "assumptions": [
+        "The supplied structured fields faithfully represent the underlying request and evidence records."
+      ],
+      "unresolved_uncertainty": [
+        "The valid pre-execution approval state cannot be established from conflicting evidence."
+      ],
+      "remediation": []
+    }
+  ]
+}
