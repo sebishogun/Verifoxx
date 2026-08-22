@@ -1,6 +1,12 @@
 package jsonbatch
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrInvalidProgram reports incompatible immutable Program metadata.
+var ErrInvalidProgram = errors.New("jsonbatch: invalid program metadata")
 
 // Input identifies which JSON document contains an error.
 type Input uint8

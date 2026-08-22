@@ -6,6 +6,9 @@ import (
 	"bytes"
 	"math"
 	"unicode/utf8"
+
+	"github.com/sebishogun/verifoxx/internal/program"
+	"github.com/sebishogun/verifoxx/internal/schema"
 )
 
 var (
@@ -21,13 +24,150 @@ var (
 
 // Decoder is a reusable request/evidence decode worker.
 type Decoder struct {
-	scan scanner
+	program    *program.Program
+	fieldTable symbolTable
+	kindTable  symbolTable
+	stateTable symbolTable
+	scan       scanner
+}
+
+type symbolTable struct {
+	keys []schema.SymbolID
+	rows []uint32
 }
 
 type shape struct {
 	requests uint32
 	evidence uint32
 	refs     uint32
+}
+
+func resizeZero[T any](dst []T, n int) []T {
+	if cap(dst) < n {
+		return make([]T, n)
+	}
+	dst = dst[:n]
+	clear(dst)
+	return dst
+}
+
+func symbolSlot(id schema.SymbolID, mask uint64) int {
+	return int((uint64(id) * 11400714819323198485) & mask)
+}
+
+func (t *symbolTable) build(p *program.Program, names []schema.SymbolID) bool {
+	size := 4
+	for size < 2*len(names) {
+		if size > math.MaxInt/2 {
+			return false
+		}
+		size <<= 1
+	}
+	t.keys = resizeZero(t.keys, size)
+	t.rows = resizeZero(t.rows, size)
+	mask := uint64(size - 1)
+	for row, name := range names {
+		value, ok := p.Symbol(name)
+		if !ok {
+			return false
+		}
+		found, ok := p.LookupSymbol(value)
+		if !ok || found != name {
+			return false
+		}
+		slot := symbolSlot(name, mask)
+		for probes := 0; probes < size; probes++ {
+			if t.keys[slot] == 0 {
+				t.keys[slot] = name
+				t.rows[slot] = uint32(row + 1)
+				break
+			}
+			if t.keys[slot] == name {
+				return false
+			}
+			slot = (slot + 1) & int(mask)
+			if probes == size-1 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (t *symbolTable) lookup(id schema.SymbolID) (uint32, bool) {
+	if id == 0 || len(t.keys) == 0 || len(t.keys) != len(t.rows) {
+		return 0, false
+	}
+	mask := uint64(len(t.keys) - 1)
+	slot := symbolSlot(id, mask)
+	for probes := 0; probes < len(t.keys); probes++ {
+		key := t.keys[slot]
+		if key == 0 {
+			return 0, false
+		}
+		if key == id {
+			return t.rows[slot], true
+		}
+		slot = (slot + 1) & int(mask)
+	}
+	return 0, false
+}
+
+func (d *Decoder) bind(p *program.Program) error {
+	if p == nil {
+		return ErrInvalidProgram
+	}
+	if d.program == p {
+		return nil
+	}
+	if p.PolicyName == 0 {
+		return ErrInvalidProgram
+	}
+	if _, ok := p.Symbol(p.PolicyName); !ok {
+		return ErrInvalidProgram
+	}
+	n := len(p.FieldNames)
+	if n != len(p.FieldKinds) || n != len(p.FieldGroups) || n != len(p.FieldIndex.Kinds) || n != len(p.FieldIndex.Columns) {
+		return ErrInvalidProgram
+	}
+	for row, kind := range p.FieldKinds {
+		if !kind.Valid() || !p.FieldGroups[row].Valid() || p.FieldIndex.Kinds[row] != kind {
+			return ErrInvalidProgram
+		}
+	}
+	if !d.fieldTable.build(p, p.FieldNames) ||
+		!d.kindTable.build(p, p.EvidenceKindNames) ||
+		!d.stateTable.build(p, p.EvidenceStateNames) {
+		return ErrInvalidProgram
+	}
+	d.program = p
+	return nil
+}
+
+func (d *Decoder) lookup(table *symbolTable, value []byte) (uint32, bool) {
+	if d.program == nil {
+		return 0, false
+	}
+	id, ok := d.program.LookupSymbol(value)
+	if !ok {
+		return 0, false
+	}
+	return table.lookup(id)
+}
+
+func (d *Decoder) lookupField(value []byte) (schema.FieldID, bool) {
+	row, ok := d.lookup(&d.fieldTable, value)
+	return schema.FieldID(row), ok
+}
+
+func (d *Decoder) lookupEvidenceKind(value []byte) (schema.EvidenceKindID, bool) {
+	row, ok := d.lookup(&d.kindTable, value)
+	return schema.EvidenceKindID(row), ok
+}
+
+func (d *Decoder) lookupEvidenceState(value []byte) (schema.EvidenceStateID, bool) {
+	row, ok := d.lookup(&d.stateTable, value)
+	return schema.EvidenceStateID(row), ok
 }
 
 type scanner struct {

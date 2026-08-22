@@ -4,7 +4,57 @@ import (
 	"errors"
 	"math"
 	"testing"
+
+	policyindex "github.com/sebishogun/verifoxx/internal/index"
+	"github.com/sebishogun/verifoxx/internal/program"
+	"github.com/sebishogun/verifoxx/internal/schema"
 )
+
+func decoderTestProgram(t testing.TB) *program.Program {
+	t.Helper()
+	values := []string{
+		"p",
+		"requester.team",
+		"context.count",
+		"approval_record",
+		"valid",
+		"stale",
+	}
+	p := &program.Program{
+		PolicyName:         1,
+		ProgramSymbolCount: uint32(len(values)),
+		FieldNames:         []schema.SymbolID{2, 3},
+		FieldKinds:         []schema.ValueKind{schema.ValueKindSymbol, schema.ValueKindInteger},
+		FieldGroups:        []schema.FieldGroup{schema.FieldGroupSubject, schema.FieldGroupContext},
+		EvidenceKindNames:  []schema.SymbolID{4},
+		EvidenceStateNames: []schema.SymbolID{5, 6},
+	}
+	for _, value := range values {
+		p.SymbolStarts = append(p.SymbolStarts, uint32(len(p.SymbolBytes)))
+		p.SymbolLengths = append(p.SymbolLengths, uint32(len(value)))
+		p.SymbolBytes = append(p.SymbolBytes, value...)
+	}
+	slots := 4
+	for slots < 2*len(values) {
+		slots <<= 1
+	}
+	p.SymbolHashes = make([]uint64, slots)
+	p.SymbolIDs = make([]schema.SymbolID, slots)
+	mask := uint64(slots - 1)
+	for i, value := range values {
+		hash := schema.HashSymbol([]byte(value))
+		slot := int(hash & mask)
+		for p.SymbolIDs[slot] != 0 {
+			slot = (slot + 1) & int(mask)
+		}
+		p.SymbolHashes[slot] = hash
+		p.SymbolIDs[slot] = schema.SymbolID(i + 1)
+	}
+	if err := policyindex.BuildSchema(&p.FieldIndex, p.FieldKinds); err != nil {
+		t.Fatalf("BuildSchema: %v", err)
+	}
+	return p
+}
 
 func requireDecodeError(t *testing.T, err error, input Input, code ErrorCode) *Error {
 	t.Helper()
@@ -149,6 +199,69 @@ func TestCountRejectsInvalidRootsAndLimits(t *testing.T) {
 			var d Decoder
 			_, err := d.count(tc.input, []byte(tc.source), tc.limits)
 			requireDecodeError(t, err, tc.input, tc.code)
+		})
+	}
+}
+
+func TestBindBuildsProgramCatalogLookups(t *testing.T) {
+	p := decoderTestProgram(t)
+	var d Decoder
+	if err := d.bind(p); err != nil {
+		t.Fatalf("bind: %v", err)
+	}
+	if got, ok := d.lookupField([]byte("requester.team")); !ok || got != 1 {
+		t.Fatalf("lookupField = (%d, %v), want (1, true)", got, ok)
+	}
+	if got, ok := d.lookupField([]byte("unknown")); ok || got != 0 {
+		t.Fatalf("unknown lookupField = (%d, %v), want (0, false)", got, ok)
+	}
+	if got, ok := d.lookupEvidenceKind([]byte("approval_record")); !ok || got != 1 {
+		t.Fatalf("lookupEvidenceKind = (%d, %v), want (1, true)", got, ok)
+	}
+	if got, ok := d.lookupEvidenceState([]byte("stale")); !ok || got != 2 {
+		t.Fatalf("lookupEvidenceState = (%d, %v), want (2, true)", got, ok)
+	}
+
+	fieldCap := cap(d.fieldTable.keys)
+	if err := d.bind(p); err != nil {
+		t.Fatalf("repeat bind: %v", err)
+	}
+	if cap(d.fieldTable.keys) != fieldCap {
+		t.Fatalf("repeat bind field capacity = %d, want %d", cap(d.fieldTable.keys), fieldCap)
+	}
+}
+
+func TestBindRejectsMalformedProgramCatalogs(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*program.Program)
+	}{
+		{"nil", nil},
+		{"zero policy name", func(p *program.Program) { p.PolicyName = 0 }},
+		{"field length", func(p *program.Program) { p.FieldNames = p.FieldNames[:1] }},
+		{"field kind mismatch", func(p *program.Program) { p.FieldKinds[0] = schema.ValueKindInteger }},
+		{"duplicate field", func(p *program.Program) { p.FieldNames[1] = p.FieldNames[0] }},
+		{"zero evidence kind", func(p *program.Program) { p.EvidenceKindNames[0] = 0 }},
+		{"duplicate evidence state", func(p *program.Program) { p.EvidenceStateNames[1] = p.EvidenceStateNames[0] }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var p *program.Program
+			if tc.mutate != nil {
+				base := decoderTestProgram(t)
+				clone := *base
+				clone.FieldNames = append([]schema.SymbolID(nil), base.FieldNames...)
+				clone.FieldKinds = append([]schema.ValueKind(nil), base.FieldKinds...)
+				clone.FieldGroups = append([]schema.FieldGroup(nil), base.FieldGroups...)
+				clone.EvidenceKindNames = append([]schema.SymbolID(nil), base.EvidenceKindNames...)
+				clone.EvidenceStateNames = append([]schema.SymbolID(nil), base.EvidenceStateNames...)
+				tc.mutate(&clone)
+				p = &clone
+			}
+			var d Decoder
+			if err := d.bind(p); !errors.Is(err, ErrInvalidProgram) {
+				t.Fatalf("bind error = %v, want %v", err, ErrInvalidProgram)
+			}
 		})
 	}
 }
