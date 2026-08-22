@@ -14,6 +14,19 @@ type EvidenceBatch struct {
 	Timestamps []int64
 }
 
+// EvidenceRecord is one adapter-facing row written into EvidenceBatch. ID,
+// Kind, and State are required; zero optional symbols and timestamp are absent.
+type EvidenceRecord struct {
+	Timestamp int64
+	ID        schema.EvidenceID
+	Kind      schema.EvidenceKindID
+	State     schema.EvidenceStateID
+	Subject   schema.SymbolID
+	Scope     schema.SymbolID
+	Reviewer  schema.SymbolID
+	Timing    schema.SymbolID
+}
+
 // Len returns the number of evidence rows.
 func (e EvidenceBatch) Len() int { return len(e.IDs) }
 

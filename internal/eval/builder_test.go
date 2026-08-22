@@ -242,3 +242,114 @@ func TestBatchReadHelpersRejectMalformedRanges(t *testing.T) {
 		t.Fatal("EvidenceRange accepted an end beyond EvidenceRefs")
 	}
 }
+
+func TestBuilderEvidenceColumnsAndCSRRanges(t *testing.T) {
+	p := batchTestProgram(t)
+	var b Builder
+	if err := b.Begin(p, 3, 3, 3); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	records := []EvidenceRecord{
+		{ID: 1, Kind: 4, State: 7, Subject: 10, Scope: 11, Reviewer: 12, Timing: 13, Timestamp: 100},
+		{ID: 2, Kind: 5, State: 8, Subject: 20, Scope: 21, Reviewer: 22, Timing: 23, Timestamp: 200},
+		{ID: 3, Kind: 6, State: 9, Subject: 30, Scope: 31, Reviewer: 32, Timing: 33, Timestamp: 300},
+	}
+	for row, record := range records {
+		if err := b.SetEvidence(uint32(row), record); err != nil {
+			t.Fatalf("SetEvidence(%d): %v", row, err)
+		}
+	}
+	if err := b.SetEvidenceCSR([]uint32{0, 0, 2, 3}, []uint32{1, 2, 0}); err != nil {
+		t.Fatalf("SetEvidenceCSR: %v", err)
+	}
+
+	evidence := b.batch.Evidence
+	if !slices.Equal(evidence.IDs, []schema.EvidenceID{1, 2, 3}) ||
+		!slices.Equal(evidence.Kinds, []schema.EvidenceKindID{4, 5, 6}) ||
+		!slices.Equal(evidence.States, []schema.EvidenceStateID{7, 8, 9}) ||
+		!slices.Equal(evidence.Subjects, []schema.SymbolID{10, 20, 30}) ||
+		!slices.Equal(evidence.Scopes, []schema.SymbolID{11, 21, 31}) ||
+		!slices.Equal(evidence.Reviewers, []schema.SymbolID{12, 22, 32}) ||
+		!slices.Equal(evidence.Timings, []schema.SymbolID{13, 23, 33}) ||
+		!slices.Equal(evidence.Timestamps, []int64{100, 200, 300}) {
+		t.Fatalf("evidence columns = %+v, want records %+v", evidence, records)
+	}
+	wantRanges := [][2]uint32{{0, 0}, {0, 2}, {2, 3}}
+	for row, want := range wantRanges {
+		start, end, ok := b.batch.EvidenceRange(uint32(row))
+		if !ok || start != want[0] || end != want[1] {
+			t.Errorf("EvidenceRange(%d) = (%d, %d, %v), want (%d, %d, true)", row, start, end, ok, want[0], want[1])
+		}
+	}
+	if got := b.batch.EvidenceRefs[2:3]; !slices.Equal(got, []uint32{0}) {
+		t.Errorf("row 2 evidence refs = %v, want [0]", got)
+	}
+}
+
+func TestBuilderEvidenceRejectsMalformedInputAtomically(t *testing.T) {
+	p := batchTestProgram(t)
+	var b Builder
+	if err := b.Begin(p, 2, 2, 2); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	if err := b.SetEvidence(0, EvidenceRecord{ID: 1, Kind: 1, State: 1, Subject: 9}); err != nil {
+		t.Fatalf("prime evidence: %v", err)
+	}
+	wantRecord := b.batch.Evidence
+	wantIDs := slices.Clone(wantRecord.IDs)
+	wantKinds := slices.Clone(wantRecord.Kinds)
+	wantStates := slices.Clone(wantRecord.States)
+	wantSubjects := slices.Clone(wantRecord.Subjects)
+	recordTests := []struct {
+		name   string
+		row    uint32
+		record EvidenceRecord
+		want   error
+	}{
+		{"row", 2, EvidenceRecord{ID: 2, Kind: 2, State: 2}, ErrInvalidRow},
+		{"zero ID", 1, EvidenceRecord{Kind: 2, State: 2}, ErrInvalidEvidence},
+		{"zero kind", 1, EvidenceRecord{ID: 2, State: 2}, ErrInvalidEvidence},
+		{"zero state", 1, EvidenceRecord{ID: 2, Kind: 2}, ErrInvalidEvidence},
+	}
+	for _, tc := range recordTests {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := b.SetEvidence(tc.row, tc.record); !errors.Is(err, tc.want) {
+				t.Fatalf("SetEvidence error = %v, want %v", err, tc.want)
+			}
+			if !slices.Equal(b.batch.Evidence.IDs, wantIDs) ||
+				!slices.Equal(b.batch.Evidence.Kinds, wantKinds) ||
+				!slices.Equal(b.batch.Evidence.States, wantStates) ||
+				!slices.Equal(b.batch.Evidence.Subjects, wantSubjects) {
+				t.Fatal("rejected evidence record mutated columns")
+			}
+		})
+	}
+
+	if err := b.SetEvidenceCSR([]uint32{0, 1, 2}, []uint32{0, 1}); err != nil {
+		t.Fatalf("prime CSR: %v", err)
+	}
+	wantOffsets := slices.Clone(b.batch.EvidenceOffsets)
+	wantRefs := slices.Clone(b.batch.EvidenceRefs)
+	csrTests := []struct {
+		name    string
+		offsets []uint32
+		refs    []uint32
+	}{
+		{"offset length", []uint32{0, 2}, []uint32{0, 1}},
+		{"ref length", []uint32{0, 1, 2}, []uint32{0}},
+		{"nonzero start", []uint32{1, 1, 2}, []uint32{0, 1}},
+		{"decreasing", []uint32{0, 2, 1}, []uint32{0, 1}},
+		{"wrong final", []uint32{0, 1, 1}, []uint32{0, 1}},
+		{"bad reference", []uint32{0, 1, 2}, []uint32{0, 2}},
+	}
+	for _, tc := range csrTests {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := b.SetEvidenceCSR(tc.offsets, tc.refs); !errors.Is(err, ErrInvalidEvidence) {
+				t.Fatalf("SetEvidenceCSR error = %v, want %v", err, ErrInvalidEvidence)
+			}
+			if !slices.Equal(b.batch.EvidenceOffsets, wantOffsets) || !slices.Equal(b.batch.EvidenceRefs, wantRefs) {
+				t.Fatal("rejected CSR mutated the prior relation")
+			}
+		})
+	}
+}

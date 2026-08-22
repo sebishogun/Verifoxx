@@ -24,6 +24,8 @@ var (
 	ErrValueKind = errors.New("eval: field has incompatible value kind")
 	// ErrInvalidValue reports a zero ID where the schema requires a valid ID.
 	ErrInvalidValue = errors.New("eval: invalid zero value")
+	// ErrInvalidEvidence reports an invalid evidence row or CSR relationship.
+	ErrInvalidEvidence = errors.New("eval: invalid evidence")
 )
 
 // Builder owns one reusable mutable Batch. It is not safe for concurrent use.
@@ -249,5 +251,56 @@ func (b *Builder) SetPresent(row uint32, field schema.FieldID) error {
 		return err
 	}
 	b.setPresence(row, field)
+	return nil
+}
+
+// SetEvidence writes one evidence record into a zero-based evidence row.
+func (b *Builder) SetEvidence(row uint32, record EvidenceRecord) error {
+	if b == nil || !b.active {
+		return ErrInvalidBuilder
+	}
+	if uint64(row) >= uint64(len(b.batch.Evidence.IDs)) {
+		return ErrInvalidRow
+	}
+	if record.ID == 0 || record.Kind == 0 || record.State == 0 {
+		return ErrInvalidEvidence
+	}
+	i := int(row)
+	b.batch.Evidence.IDs[i] = record.ID
+	b.batch.Evidence.Kinds[i] = record.Kind
+	b.batch.Evidence.States[i] = record.State
+	b.batch.Evidence.Subjects[i] = record.Subject
+	b.batch.Evidence.Scopes[i] = record.Scope
+	b.batch.Evidence.Reviewers[i] = record.Reviewer
+	b.batch.Evidence.Timings[i] = record.Timing
+	b.batch.Evidence.Timestamps[i] = record.Timestamp
+	return nil
+}
+
+// SetEvidenceCSR replaces the request-to-evidence relation after validating
+// the complete source. References are zero-based evidence-row indices.
+func (b *Builder) SetEvidenceCSR(offsets, refs []uint32) error {
+	if b == nil || !b.active {
+		return ErrInvalidBuilder
+	}
+	if len(offsets) != len(b.batch.EvidenceOffsets) || len(refs) != len(b.batch.EvidenceRefs) ||
+		len(offsets) == 0 || offsets[0] != 0 || uint64(offsets[len(offsets)-1]) != uint64(len(refs)) {
+		return ErrInvalidEvidence
+	}
+	previous := uint32(0)
+	for _, offset := range offsets[1:] {
+		if offset < previous || uint64(offset) > uint64(len(refs)) {
+			return ErrInvalidEvidence
+		}
+		previous = offset
+	}
+	evidenceRows := uint64(len(b.batch.Evidence.IDs))
+	for _, ref := range refs {
+		if uint64(ref) >= evidenceRows {
+			return ErrInvalidEvidence
+		}
+	}
+	copy(b.batch.EvidenceOffsets, offsets)
+	copy(b.batch.EvidenceRefs, refs)
 	return nil
 }
