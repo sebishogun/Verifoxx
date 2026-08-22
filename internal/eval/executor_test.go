@@ -1,6 +1,9 @@
 package eval
 
 import (
+	"errors"
+	"math"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -574,5 +577,293 @@ func TestExecuteDefiniteOutcomeDropsDominatedReasons(t *testing.T) {
 	if got.OutcomeIDs[0] != 1 || len(got.ReasonIDs) != 0 || got.ReasonOffsets[1] != 0 {
 		t.Fatalf("definite result = outcome %d reasons %v offsets %v, want outcome 1 without reasons",
 			got.OutcomeIDs[0], got.ReasonIDs, got.ReasonOffsets)
+	}
+}
+
+func executionRowsBatch(t testing.TB, p *program.Program, rows uint32) Batch {
+	t.Helper()
+	var builder Builder
+	if err := builder.Begin(p, rows, 0, 0); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	for row := uint32(0); row < rows; row++ {
+		if err := builder.SetRequestID(row, schema.RequestID(row+1)); err != nil {
+			t.Fatal(err)
+		}
+		if err := builder.SetSymbol(row, 1, executionSymbolActive); err != nil {
+			t.Fatal(err)
+		}
+		if err := builder.SetSymbol(row, 2, executionSymbolYes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	batch, err := builder.Finish()
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	return batch
+}
+
+func assertExecutionRows(t testing.TB, got *result.Batch, rows uint32) {
+	t.Helper()
+	if got.Rows != rows || len(got.OutcomeIDs) != int(rows) ||
+		len(got.RequirementOffsets) != int(rows)+1 || len(got.DriverOffsets) != int(rows)+1 ||
+		len(got.EvidenceOffsets) != int(rows)+1 || len(got.ReasonOffsets) != int(rows)+1 ||
+		len(got.RemediationOffsets) != int(rows)+1 {
+		t.Fatalf("result shape = rows %d fixed %d offsets %d/%d/%d/%d/%d, want %d",
+			got.Rows, len(got.OutcomeIDs), len(got.RequirementOffsets), len(got.DriverOffsets),
+			len(got.EvidenceOffsets), len(got.ReasonOffsets), len(got.RemediationOffsets), rows)
+	}
+	if len(got.RequirementIDs) != int(rows) || len(got.DriverNodes) != int(rows) ||
+		len(got.ReasonIDs) != int(rows) || len(got.RemediationIDs) != int(rows) || len(got.EvidenceIDs) != 0 {
+		t.Fatalf("edge lengths = requirements %d drivers %d reasons %d remediations %d evidence %d, want %d/%d/%d/%d/0",
+			len(got.RequirementIDs), len(got.DriverNodes), len(got.ReasonIDs),
+			len(got.RemediationIDs), len(got.EvidenceIDs), rows, rows, rows, rows)
+	}
+	for row := uint32(0); row < rows; row++ {
+		if got.OutcomeIDs[row] != 3 || got.RequirementOffsets[row+1] != row+1 ||
+			got.DriverOffsets[row+1] != row+1 || got.EvidenceOffsets[row+1] != 0 ||
+			got.ReasonOffsets[row+1] != row+1 || got.RemediationOffsets[row+1] != row+1 ||
+			got.RequirementIDs[row] != 1 || got.DriverRequirements[row] != 1 ||
+			got.DriverClauses[row] != 1 || got.DriverNodes[row] != 3 ||
+			got.DriverReasons[row] != truth.ReasonMissing || got.ReasonIDs[row] != truth.ReasonMissing ||
+			got.RemediationIDs[row] != 1 {
+			t.Fatalf("row %d = outcome %d offsets %d/%d/%d/%d/%d requirement %d driver %d/%d/%d/%d reason %d remediation %d",
+				row, got.OutcomeIDs[row], got.RequirementOffsets[row+1], got.DriverOffsets[row+1],
+				got.EvidenceOffsets[row+1], got.ReasonOffsets[row+1], got.RemediationOffsets[row+1],
+				got.RequirementIDs[row], got.DriverRequirements[row], got.DriverClauses[row],
+				got.DriverNodes[row], got.DriverReasons[row], got.ReasonIDs[row], got.RemediationIDs[row])
+		}
+	}
+}
+
+func assertExecutorTailClear(t testing.TB, e *Executor, p *program.Program, rows uint32) {
+	t.Helper()
+	if rows == 0 || rows&63 == 0 {
+		return
+	}
+	words := truth.WordCount(rows)
+	tail := ^(uint64(1)<<(rows&63) - 1)
+	for slot := uint32(0); slot < p.TruthSlotCount; slot++ {
+		for plane := range 2 {
+			word := (int(slot)*2+plane)*words + words - 1
+			if e.truthWords[word]&tail != 0 {
+				t.Fatalf("truth slot %d plane %d dirty tail = %#x", slot+1, plane, e.truthWords[word]&tail)
+			}
+		}
+	}
+	for slot := uint32(0); slot < p.ReasonSlotCount; slot++ {
+		for reason := range truth.ReasonCount {
+			word := (int(slot)*truth.ReasonCount+reason)*words + words - 1
+			if e.reasonWords[word]&tail != 0 {
+				t.Fatalf("reason slot %d plane %d dirty tail = %#x", slot+1, reason+1, e.reasonWords[word]&tail)
+			}
+		}
+	}
+}
+
+func TestExecutorBoundaries(t *testing.T) {
+	for _, rows := range []uint32{0, 1, 64, 65} {
+		t.Run(string(rune('A'+rows%26)), func(t *testing.T) {
+			p := executionTestProgram(t, 1)
+			batch := executionRowsBatch(t, p, rows)
+			var executor Executor
+			var got result.Batch
+			if err := executor.Execute(&got, p, batch); err != nil {
+				t.Fatalf("Execute(%d): %v", rows, err)
+			}
+			assertExecutionRows(t, &got, rows)
+			assertExecutorTailClear(t, &executor, p, rows)
+		})
+	}
+}
+
+func poisonCapacity[T any](dst []T, value T) {
+	dst = dst[:cap(dst)]
+	for i := range dst {
+		dst[i] = value
+	}
+}
+
+func poisonExecutor(e *Executor) {
+	poisonCapacity(e.truthWords, uint64(math.MaxUint64))
+	poisonCapacity(e.reasonWords, uint64(math.MaxUint64))
+	poisonCapacity(e.candidateWords, uint64(math.MaxUint64))
+	poisonCapacity(e.selectorValues, schema.SymbolID(math.MaxUint32))
+	poisonCapacity(e.selectorPresent, uint8(math.MaxUint8))
+}
+
+func poisonResult(dst *result.Batch) {
+	poisonCapacity(dst.OutcomeIDs, schema.OutcomeID(math.MaxUint32))
+	poisonCapacity(dst.RequirementOffsets, uint32(math.MaxUint32))
+	poisonCapacity(dst.RequirementIDs, schema.RequirementID(math.MaxUint32))
+	poisonCapacity(dst.DriverOffsets, uint32(math.MaxUint32))
+	poisonCapacity(dst.DriverRequirements, schema.RequirementID(math.MaxUint32))
+	poisonCapacity(dst.DriverClauses, schema.ClauseID(math.MaxUint32))
+	poisonCapacity(dst.DriverNodes, schema.NodeID(math.MaxUint32))
+	poisonCapacity(dst.DriverReasons, schema.ReasonID(math.MaxUint8))
+	poisonCapacity(dst.EvidenceOffsets, uint32(math.MaxUint32))
+	poisonCapacity(dst.EvidenceIDs, schema.EvidenceID(math.MaxUint32))
+	poisonCapacity(dst.ReasonOffsets, uint32(math.MaxUint32))
+	poisonCapacity(dst.ReasonIDs, schema.ReasonID(math.MaxUint8))
+	poisonCapacity(dst.RemediationOffsets, uint32(math.MaxUint32))
+	poisonCapacity(dst.RemediationIDs, schema.RemediationID(math.MaxUint32))
+}
+
+func cloneResultBatch(src result.Batch) result.Batch {
+	dst := src
+	dst.OutcomeIDs = slices.Clone(src.OutcomeIDs)
+	dst.RequirementOffsets = slices.Clone(src.RequirementOffsets)
+	dst.RequirementIDs = slices.Clone(src.RequirementIDs)
+	dst.DriverOffsets = slices.Clone(src.DriverOffsets)
+	dst.DriverRequirements = slices.Clone(src.DriverRequirements)
+	dst.DriverClauses = slices.Clone(src.DriverClauses)
+	dst.DriverNodes = slices.Clone(src.DriverNodes)
+	dst.DriverReasons = slices.Clone(src.DriverReasons)
+	dst.EvidenceOffsets = slices.Clone(src.EvidenceOffsets)
+	dst.EvidenceIDs = slices.Clone(src.EvidenceIDs)
+	dst.ReasonOffsets = slices.Clone(src.ReasonOffsets)
+	dst.ReasonIDs = slices.Clone(src.ReasonIDs)
+	dst.RemediationOffsets = slices.Clone(src.RemediationOffsets)
+	dst.RemediationIDs = slices.Clone(src.RemediationIDs)
+	return dst
+}
+
+func TestExecutorReuse(t *testing.T) {
+	programA := executionTestProgram(t, 1)
+	largeA := executionRowsBatch(t, programA, 65)
+	smallA := executionRowsBatch(t, programA, 1)
+	programB := executionTestProgram(t, 2)
+	batchB := executionRowsBatch(t, programB, 64)
+
+	var executor Executor
+	var got result.Batch
+	if err := executor.Execute(&got, programA, largeA); err != nil {
+		t.Fatal(err)
+	}
+	poisonExecutor(&executor)
+	poisonResult(&got)
+	if err := executor.Execute(&got, programA, smallA); err != nil {
+		t.Fatal(err)
+	}
+	assertExecutionRows(t, &got, 1)
+	assertExecutorTailClear(t, &executor, programA, 1)
+
+	poisonExecutor(&executor)
+	poisonResult(&got)
+	if err := executor.Execute(&got, programA, largeA); err != nil {
+		t.Fatal(err)
+	}
+	var freshExecutor Executor
+	var want result.Batch
+	if err := freshExecutor.Execute(&want, programA, largeA); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatal("large -> small -> large result differs from fresh execution")
+	}
+
+	if err := executor.Execute(&got, programB, batchB); err != nil {
+		t.Fatal(err)
+	}
+	if err := executor.Execute(&got, programA, largeA); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatal("Program A -> B -> A result differs from fresh execution")
+	}
+}
+
+func executeRecover(e *Executor, dst *result.Batch, p *program.Program, batch Batch) (err error, recovered any) {
+	defer func() {
+		recovered = recover()
+	}()
+	err = e.Execute(dst, p, batch)
+	return err, nil
+}
+
+func assertExecutorRejectedAtomically(
+	t *testing.T,
+	executor *Executor,
+	dst *result.Batch,
+	bound *program.Program,
+	p *program.Program,
+	batch Batch,
+) {
+	t.Helper()
+	want := cloneResultBatch(*dst)
+	err, recovered := executeRecover(executor, dst, p, batch)
+	if recovered != nil {
+		t.Errorf("Execute panicked on malformed input: %v", recovered)
+	} else if !errors.Is(err, ErrInvalidProgram) {
+		t.Errorf("Execute error = %v, want %v", err, ErrInvalidProgram)
+	}
+	if !reflect.DeepEqual(*dst, want) {
+		t.Error("rejected Execute changed destination")
+	}
+	if executor.program != bound || executor.states.program != bound {
+		t.Errorf("rejected Execute changed bindings to program %p/states %p, want %p", executor.program, executor.states.program, bound)
+	}
+}
+
+func TestExecutorRejectsAtomically(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate func(*program.Program, *Batch)
+	}{
+		{
+			name: "program",
+			mutate: func(p *program.Program, _ *Batch) {
+				p.Opcodes = nil
+			},
+		},
+		{
+			name: "selector columns",
+			mutate: func(_ *program.Program, batch *Batch) {
+				batch.SymbolValues = batch.SymbolValues[:len(batch.SymbolValues)-1]
+			},
+		},
+		{
+			name: "evidence CSR",
+			mutate: func(_ *program.Program, batch *Batch) {
+				batch.EvidenceOffsets = batch.EvidenceOffsets[:len(batch.EvidenceOffsets)-1]
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bound := executionTestProgram(t, 1)
+			boundBatch := executionRowsBatch(t, bound, 1)
+			candidateBase := executionTestProgram(t, 2)
+			candidate := *candidateBase
+			candidateBatch := executionRowsBatch(t, candidateBase, 1)
+			test.mutate(&candidate, &candidateBatch)
+
+			var executor Executor
+			var dst result.Batch
+			if err := executor.Execute(&dst, bound, boundBatch); err != nil {
+				t.Fatal(err)
+			}
+			assertExecutorRejectedAtomically(t, &executor, &dst, bound, &candidate, candidateBatch)
+		})
+	}
+}
+
+func TestExecutorAllocations(t *testing.T) {
+	p := executionTestProgram(t, 2)
+	batch := executionRowsBatch(t, p, 65)
+	var executor Executor
+	var dst result.Batch
+	if err := executor.Execute(&dst, p, batch); err != nil {
+		t.Fatal(err)
+	}
+	var runErr error
+	allocs := testing.AllocsPerRun(1000, func() {
+		runErr = executor.Execute(&dst, p, batch)
+	})
+	if runErr != nil {
+		t.Fatalf("warm Execute: %v", runErr)
+	}
+	if allocs != 0 {
+		t.Fatalf("warm Execute allocations = %g, want 0", allocs)
 	}
 }

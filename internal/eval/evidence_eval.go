@@ -86,38 +86,48 @@ func requireEvidenceBatch(batch Batch, p *program.Program, states *EvidenceState
 	if p == nil || states == nil || states.program != p || len(states.reasons) != len(p.EvidenceStateNames) {
 		panic("eval: invalid evidence program")
 	}
+	if !validEvidenceBatch(batch, p) {
+		panic("eval: invalid evidence batch")
+	}
+}
+
+func validEvidenceBatch(batch Batch, p *program.Program) bool {
+	if p == nil {
+		return false
+	}
 	if uint64(len(batch.RequestIDs)) != uint64(batch.Rows) ||
 		uint64(len(batch.EvidenceOffsets)) != uint64(batch.Rows)+1 ||
 		len(batch.EvidenceOffsets) == 0 || batch.EvidenceOffsets[0] != 0 ||
 		uint64(batch.EvidenceOffsets[len(batch.EvidenceOffsets)-1]) != uint64(len(batch.EvidenceRefs)) {
-		panic("eval: invalid evidence CSR")
+		return false
 	}
 	evidence := batch.Evidence
 	rows := len(evidence.IDs)
 	if len(evidence.Kinds) != rows || len(evidence.States) != rows || len(evidence.Subjects) != rows ||
 		len(evidence.Scopes) != rows || len(evidence.Reviewers) != rows || len(evidence.Timings) != rows ||
 		len(evidence.Timestamps) != rows {
-		panic("eval: invalid evidence columns")
+		return false
 	}
 	previous := uint32(0)
 	for _, offset := range batch.EvidenceOffsets[1:] {
 		if offset < previous || uint64(offset) > uint64(len(batch.EvidenceRefs)) {
-			panic("eval: invalid evidence CSR")
+			return false
 		}
 		previous = offset
 	}
 	for _, ref := range batch.EvidenceRefs {
 		if uint64(ref) >= uint64(rows) {
-			panic("eval: invalid evidence reference")
+			return false
 		}
 	}
 	for row := range rows {
 		if evidence.IDs[row] == 0 || evidence.Kinds[row] == 0 ||
 			uint64(evidence.Kinds[row]) > uint64(len(p.EvidenceKindNames)) || evidence.States[row] == 0 ||
-			uint64(evidence.States[row]) > uint64(len(states.reasons)) {
-			panic("eval: invalid evidence row")
+			uint64(evidence.States[row]) > uint64(len(p.EvidenceStateNames)) {
+			return false
 		}
 	}
+	return true
 }
 
 func requireEvidencePredicate(p *program.Program, states *EvidenceStateIndex, predicate EvidencePredicate) {

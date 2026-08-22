@@ -256,11 +256,22 @@ func (e *Executor) Execute(dst *result.Batch, p *program.Program, batch Batch) e
 	if e == nil || dst == nil || !validExecutionSemantics(p) {
 		return ErrInvalidProgram
 	}
-	if err := e.query.Bind(&p.ApplicabilityIndex); err != nil {
+	if uint64(len(batch.RequestIDs)) != uint64(batch.Rows) || !validExecutionSelectors(p, batch) {
 		return ErrInvalidProgram
 	}
-	if err := e.prepare(p, batch); err != nil {
-		return err
+	for _, opcode := range p.Opcodes {
+		if opcode == program.OpcodeEvidence {
+			if !validEvidenceBatch(batch, p) {
+				return ErrInvalidProgram
+			}
+			break
+		}
+	}
+	if _, ok := executorScratchLen(uint64(p.TruthSlotCount), 2, uint64(truth.WordCount(batch.Rows))); !ok {
+		return ErrBatchTooLarge
+	}
+	if _, ok := executorScratchLen(uint64(p.ReasonSlotCount), truth.ReasonCount, uint64(truth.WordCount(batch.Rows))); !ok {
+		return ErrBatchTooLarge
 	}
 	maxRequirements, ok := executorResultLen(uint64(batch.Rows), uint64(len(p.RequirementIDs)), 4)
 	if !ok {
@@ -278,8 +289,11 @@ func (e *Executor) Execute(dst *result.Batch, p *program.Program, batch Batch) e
 	if !ok {
 		return ErrBatchTooLarge
 	}
-	if !validExecutionSelectors(p, batch) {
+	if err := e.query.Bind(&p.ApplicabilityIndex); err != nil {
 		return ErrInvalidProgram
+	}
+	if err := e.prepare(p, batch); err != nil {
+		return err
 	}
 
 	e.candidateWords = resizeExecutorScratch(e.candidateWords, int(p.ApplicabilityIndex.WordCount))
@@ -388,6 +402,11 @@ func validExecutionSemantics(p *program.Program) bool {
 		len(p.ClauseOnFalse) != clauses || len(p.ClauseRemediationStarts) != clauses ||
 		len(p.ClauseRemediationCounts) != clauses {
 		return false
+	}
+	for _, name := range p.EvidenceStateNames {
+		if _, ok := p.Symbol(name); !ok {
+			return false
+		}
 	}
 	for row, requirementID := range p.RequirementIDs {
 		root := p.RequirementRoots[row]
