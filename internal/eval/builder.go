@@ -32,10 +32,10 @@ var (
 
 // Builder owns one reusable mutable Batch. It is not safe for concurrent use.
 type Builder struct {
-	batch     Batch
-	fields    policyindex.Schema
-	extension schema.Interner
 	program   *program.Program
+	batch     Batch
+	extension schema.Interner
+	fields    policyindex.Schema
 	active    bool
 }
 

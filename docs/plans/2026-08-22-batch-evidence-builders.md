@@ -302,7 +302,7 @@ Expected: PASS.
 
 **Step 4: Inspect layout and escapes**
 
-Run: `timeout 60s go run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@v0.42.0 ./internal/eval`
+Run: `timeout 180s go run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@v0.47.1-0.20260707181000-a299dadba899 -test=false ./internal/eval`
 
 Run: `timeout 120s go build -gcflags=-m ./internal/eval`
 
