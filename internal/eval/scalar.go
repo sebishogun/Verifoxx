@@ -35,3 +35,10 @@ func resetLeafOutputs(dst truth.Planes, reasons ReasonPlanes, rows uint32) int {
 	clear(reasons.Words)
 	return words
 }
+
+func leafWordMask(word, words int, rows uint32) uint64 {
+	if word+1 != words || rows&63 == 0 {
+		return ^uint64(0)
+	}
+	return uint64(1)<<(rows&63) - 1
+}
