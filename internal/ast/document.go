@@ -26,8 +26,11 @@ type Document struct {
 
 	NotChildren []schema.NodeID
 
-	EvidenceKinds  []schema.EvidenceKindID
-	EvidenceStates []schema.EvidenceStateID
+	EvidenceKinds    []schema.EvidenceKindID
+	EvidenceStates   []schema.EvidenceStateID
+	EvidenceSubjects []schema.ValueID
+	EvidenceScopes   []schema.ValueID
+	EvidenceTimings  []schema.ValueID
 
 	SourceStarts []uint32
 	SourceEnds   []uint32
@@ -215,15 +218,40 @@ func (d *Document) NotChild(id schema.NodeID) (schema.NodeID, bool) {
 
 // Evidence returns the evidence kind and required state stored by id.
 func (d *Document) Evidence(id schema.NodeID) (schema.EvidenceKindID, schema.EvidenceStateID, bool) {
+	kind, state, _, _, _, ok := d.EvidenceMatch(id)
+	return kind, state, ok
+}
+
+// EvidenceMatch returns the required kind/state and optional symbol qualifiers.
+func (d *Document) EvidenceMatch(id schema.NodeID) (schema.EvidenceKindID, schema.EvidenceStateID, schema.ValueID, schema.ValueID, schema.ValueID, bool) {
 	i, ok := d.nodeIndex(id)
 	if !ok || d.NodeKinds[i] != NodeKindEvidence {
-		return 0, 0, false
+		return 0, 0, 0, 0, 0, false
 	}
 	r := uint64(d.NodeRefs[i])
 	if r >= uint64(len(d.EvidenceKinds)) || r >= uint64(len(d.EvidenceStates)) {
-		return 0, 0, false
+		return 0, 0, 0, 0, 0, false
 	}
-	return d.EvidenceKinds[r], d.EvidenceStates[r], true
+	var subject, scope, timing schema.ValueID
+	if len(d.EvidenceSubjects) != 0 {
+		if r >= uint64(len(d.EvidenceSubjects)) {
+			return 0, 0, 0, 0, 0, false
+		}
+		subject = d.EvidenceSubjects[r]
+	}
+	if len(d.EvidenceScopes) != 0 {
+		if r >= uint64(len(d.EvidenceScopes)) {
+			return 0, 0, 0, 0, 0, false
+		}
+		scope = d.EvidenceScopes[r]
+	}
+	if len(d.EvidenceTimings) != 0 {
+		if r >= uint64(len(d.EvidenceTimings)) {
+			return 0, 0, 0, 0, 0, false
+		}
+		timing = d.EvidenceTimings[r]
+	}
+	return d.EvidenceKinds[r], d.EvidenceStates[r], subject, scope, timing, true
 }
 
 // Span returns id's source range.

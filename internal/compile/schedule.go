@@ -46,7 +46,9 @@ func validateScheduleColumns(p *program.Program) error {
 	n := len(p.Opcodes)
 	if len(p.Fields) != n || len(p.Values) != n || len(p.ListStarts) != n || len(p.ListCounts) != n ||
 		len(p.OperandStarts) != n || len(p.OperandCounts) != n || len(p.EvidenceKinds) != n ||
-		len(p.EvidenceStates) != n || len(p.RootFlags) != n || len(p.InstructionNodes) != n ||
+		len(p.EvidenceStates) != n || !optionalScheduleColumn(len(p.EvidenceSubjects), n) ||
+		!optionalScheduleColumn(len(p.EvidenceScopes), n) || !optionalScheduleColumn(len(p.EvidenceTimings), n) ||
+		len(p.RootFlags) != n || len(p.InstructionNodes) != n ||
 		len(p.InstructionSourceStarts) != n || len(p.InstructionSourceEnds) != n {
 		return ErrInvalidGeneratedProgram
 	}
@@ -62,6 +64,10 @@ func validateScheduleColumns(p *program.Program) error {
 		}
 	}
 	return nil
+}
+
+func optionalScheduleColumn(length, rows int) bool {
+	return length == 0 || length == rows
 }
 
 func (l *Lowerer) buildScheduleUsers(p *program.Program) (int, error) {
@@ -180,6 +186,15 @@ func (l *Lowerer) permuteScheduledInstructions(p *program.Program) error {
 	l.candidateOperandCounts = resizeSlots(l.candidateOperandCounts, n)
 	l.candidateEvidenceKinds = resizeSlots(l.candidateEvidenceKinds, n)
 	l.candidateEvidenceState = resizeSlots(l.candidateEvidenceState, n)
+	if len(p.EvidenceSubjects) != 0 {
+		l.candidateEvidenceSubjects = resizeSlots(l.candidateEvidenceSubjects, n)
+	}
+	if len(p.EvidenceScopes) != 0 {
+		l.candidateEvidenceScopes = resizeSlots(l.candidateEvidenceScopes, n)
+	}
+	if len(p.EvidenceTimings) != 0 {
+		l.candidateEvidenceTimings = resizeSlots(l.candidateEvidenceTimings, n)
+	}
 	l.candidateRootFlags = resizeSlots(l.candidateRootFlags, n)
 	l.candidateNodes = resizeSlots(l.candidateNodes, n)
 	l.candidateSourceStarts = resizeSlots(l.candidateSourceStarts, n)
@@ -194,6 +209,15 @@ func (l *Lowerer) permuteScheduledInstructions(p *program.Program) error {
 		l.candidateValues[newRow] = p.Values[oldRow]
 		l.candidateEvidenceKinds[newRow] = p.EvidenceKinds[oldRow]
 		l.candidateEvidenceState[newRow] = p.EvidenceStates[oldRow]
+		if len(p.EvidenceSubjects) != 0 {
+			l.candidateEvidenceSubjects[newRow] = p.EvidenceSubjects[oldRow]
+		}
+		if len(p.EvidenceScopes) != 0 {
+			l.candidateEvidenceScopes[newRow] = p.EvidenceScopes[oldRow]
+		}
+		if len(p.EvidenceTimings) != 0 {
+			l.candidateEvidenceTimings[newRow] = p.EvidenceTimings[oldRow]
+		}
 		l.candidateRootFlags[newRow] = p.RootFlags[oldRow]
 		l.candidateNodes[newRow] = p.InstructionNodes[oldRow]
 		l.candidateSourceStarts[newRow] = p.InstructionSourceStarts[oldRow]
@@ -231,6 +255,9 @@ func (l *Lowerer) permuteScheduledInstructions(p *program.Program) error {
 	copy(p.OperandCounts, l.candidateOperandCounts)
 	copy(p.EvidenceKinds, l.candidateEvidenceKinds)
 	copy(p.EvidenceStates, l.candidateEvidenceState)
+	copy(p.EvidenceSubjects, l.candidateEvidenceSubjects)
+	copy(p.EvidenceScopes, l.candidateEvidenceScopes)
+	copy(p.EvidenceTimings, l.candidateEvidenceTimings)
 	copy(p.RootFlags, l.candidateRootFlags)
 	copy(p.InstructionNodes, l.candidateNodes)
 	copy(p.InstructionSourceStarts, l.candidateSourceStarts)

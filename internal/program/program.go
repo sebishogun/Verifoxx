@@ -29,9 +29,12 @@ type Program struct {
 	OperandCounts []uint16
 	// EvidenceKinds/EvidenceStates are the typed operands of Evidence
 	// instructions.
-	EvidenceKinds  []schema.EvidenceKindID
-	EvidenceStates []schema.EvidenceStateID
-	RootFlags      []RootFlags
+	EvidenceKinds    []schema.EvidenceKindID
+	EvidenceStates   []schema.EvidenceStateID
+	EvidenceSubjects []schema.SymbolID
+	EvidenceScopes   []schema.SymbolID
+	EvidenceTimings  []schema.SymbolID
+	RootFlags        []RootFlags
 	// TruthSlots/ReasonSlots hold liveness-assigned evaluator scratch IDs.
 	// TruthSlots is nonzero for every instruction; a zero ReasonSlot means the
 	// row cannot contribute to a retained semantic reason.

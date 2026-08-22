@@ -9,15 +9,18 @@ import (
 )
 
 type instructionCandidate struct {
-	listStart     uint32
-	operandStart  uint32
-	field         schema.FieldID
-	value         schema.ValueID
-	evidenceKind  schema.EvidenceKindID
-	evidenceState schema.EvidenceStateID
-	listCount     uint16
-	operandCount  uint16
-	opcode        program.Opcode
+	listStart       uint32
+	operandStart    uint32
+	field           schema.FieldID
+	value           schema.ValueID
+	evidenceKind    schema.EvidenceKindID
+	evidenceState   schema.EvidenceStateID
+	evidenceSubject schema.SymbolID
+	evidenceScope   schema.SymbolID
+	evidenceTiming  schema.SymbolID
+	listCount       uint16
+	operandCount    uint16
+	opcode          program.Opcode
 }
 
 func (l *Lowerer) prepareCandidateScratch(nodeCount, listHint, operandHint int) {
@@ -30,6 +33,9 @@ func (l *Lowerer) prepareCandidateScratch(nodeCount, listHint, operandHint int) 
 	l.candidateOperandCounts = resizeSlots(l.candidateOperandCounts, nodeCount)[:0]
 	l.candidateEvidenceKinds = resizeSlots(l.candidateEvidenceKinds, nodeCount)[:0]
 	l.candidateEvidenceState = resizeSlots(l.candidateEvidenceState, nodeCount)[:0]
+	l.candidateEvidenceSubjects = resizeSlots(l.candidateEvidenceSubjects, nodeCount)[:0]
+	l.candidateEvidenceScopes = resizeSlots(l.candidateEvidenceScopes, nodeCount)[:0]
+	l.candidateEvidenceTimings = resizeSlots(l.candidateEvidenceTimings, nodeCount)[:0]
 	l.candidateRootFlags = resizeSlots(l.candidateRootFlags, nodeCount)[:0]
 	l.candidateNodes = resizeSlots(l.candidateNodes, nodeCount)[:0]
 	l.candidateSourceStarts = resizeSlots(l.candidateSourceStarts, nodeCount)[:0]
@@ -56,6 +62,9 @@ func (l *Lowerer) candidateHash(candidate instructionCandidate) uint64 {
 	hash = mixInstructionHash(hash, uint64(candidate.value))
 	hash = mixInstructionHash(hash, uint64(candidate.evidenceKind))
 	hash = mixInstructionHash(hash, uint64(candidate.evidenceState))
+	hash = mixInstructionHash(hash, uint64(candidate.evidenceSubject))
+	hash = mixInstructionHash(hash, uint64(candidate.evidenceScope))
+	hash = mixInstructionHash(hash, uint64(candidate.evidenceTiming))
 	hash = mixInstructionHash(hash, uint64(candidate.listCount))
 	for i := uint32(0); i < uint32(candidate.listCount); i++ {
 		hash = mixInstructionHash(hash, uint64(l.candidateListValues[candidate.listStart+i]))
@@ -99,6 +108,9 @@ func (l *Lowerer) candidateEqual(id schema.InstructionID, candidate instructionC
 		l.candidateValues[index] == candidate.value &&
 		l.candidateEvidenceKinds[index] == candidate.evidenceKind &&
 		l.candidateEvidenceState[index] == candidate.evidenceState &&
+		l.candidateEvidenceSubjects[index] == candidate.evidenceSubject &&
+		l.candidateEvidenceScopes[index] == candidate.evidenceScope &&
+		l.candidateEvidenceTimings[index] == candidate.evidenceTiming &&
 		equalValueRange(l.candidateListValues,
 			l.candidateListStarts[index], l.candidateListCounts[index], candidate.listStart, candidate.listCount) &&
 		equalInstructionRange(l.candidateOperands,
@@ -125,6 +137,9 @@ func (l *Lowerer) appendCandidate(node schema.NodeID, span ast.SourceSpan, candi
 			l.candidateOperandCounts = append(l.candidateOperandCounts, candidate.operandCount)
 			l.candidateEvidenceKinds = append(l.candidateEvidenceKinds, candidate.evidenceKind)
 			l.candidateEvidenceState = append(l.candidateEvidenceState, candidate.evidenceState)
+			l.candidateEvidenceSubjects = append(l.candidateEvidenceSubjects, candidate.evidenceSubject)
+			l.candidateEvidenceScopes = append(l.candidateEvidenceScopes, candidate.evidenceScope)
+			l.candidateEvidenceTimings = append(l.candidateEvidenceTimings, candidate.evidenceTiming)
 			l.candidateRootFlags = append(l.candidateRootFlags, program.RootFlags(l.nodeRoots[node-1]))
 			l.candidateNodes = append(l.candidateNodes, node)
 			l.candidateSourceStarts = append(l.candidateSourceStarts, span.Start)
@@ -271,13 +286,26 @@ func (l *Lowerer) internInstructionCandidate(dst *program.Program, doc *ast.Docu
 		candidate.operandCount = 1
 		l.candidateOperands = append(l.candidateOperands, operand)
 	case ast.NodeKindEvidence:
-		kindID, stateID, ok := doc.Evidence(node)
+		kindID, stateID, subject, scope, timing, ok := doc.EvidenceMatch(node)
 		if !ok {
 			return ErrInvalidDocument
 		}
 		candidate.opcode = program.OpcodeEvidence
 		candidate.evidenceKind = kindID
 		candidate.evidenceState = stateID
+		var err error
+		candidate.evidenceSubject, err = l.optionalSymbolForValue(dst, doc, subject)
+		if err != nil {
+			return err
+		}
+		candidate.evidenceScope, err = l.optionalSymbolForValue(dst, doc, scope)
+		if err != nil {
+			return err
+		}
+		candidate.evidenceTiming, err = l.optionalSymbolForValue(dst, doc, timing)
+		if err != nil {
+			return err
+		}
 	default:
 		return ErrInvalidDocument
 	}
@@ -347,6 +375,9 @@ func (l *Lowerer) compactInstructions(dst *program.Program, doc *ast.Document) e
 		dst.Values[row] = l.candidateValues[i]
 		dst.EvidenceKinds[row] = l.candidateEvidenceKinds[i]
 		dst.EvidenceStates[row] = l.candidateEvidenceState[i]
+		dst.EvidenceSubjects[row] = l.candidateEvidenceSubjects[i]
+		dst.EvidenceScopes[row] = l.candidateEvidenceScopes[i]
+		dst.EvidenceTimings[row] = l.candidateEvidenceTimings[i]
 		dst.RootFlags[row] = l.candidateRootFlags[i]
 		dst.InstructionNodes[row] = l.candidateNodes[i]
 		dst.InstructionSourceStarts[row] = l.candidateSourceStarts[i]
@@ -397,6 +428,9 @@ func (l *Lowerer) prepareFinalInstructionColumns(dst *program.Program, rows, lis
 	dst.OperandCounts = resizeSlots(dst.OperandCounts, rows)
 	dst.EvidenceKinds = resizeSlots(dst.EvidenceKinds, rows)
 	dst.EvidenceStates = resizeSlots(dst.EvidenceStates, rows)
+	dst.EvidenceSubjects = resizeSlots(dst.EvidenceSubjects, rows)
+	dst.EvidenceScopes = resizeSlots(dst.EvidenceScopes, rows)
+	dst.EvidenceTimings = resizeSlots(dst.EvidenceTimings, rows)
 	dst.RootFlags = resizeSlots(dst.RootFlags, rows)
 	dst.InstructionNodes = resizeSlots(dst.InstructionNodes, rows)
 	dst.InstructionSourceStarts = resizeSlots(dst.InstructionSourceStarts, rows)

@@ -432,6 +432,26 @@ func TestDecodeExpressionEvidenceMatches(t *testing.T) {
 	}
 }
 
+func TestDecodeEvidenceMatchQualifiers(t *testing.T) {
+	src := `{"op":"evidence_matches","kind":"approval_record","state":"current","subject":"local_approved_env","scope":"trusted_internal_only","timing":"before_execution"}`
+	b := catalogBuilder(t, src, []string{"approval_record"}, []string{"current"})
+	id := decodeExprInto(t, b, src, testInterner(t), Limits{})
+	kind, state, subject, scope, timing, ok := b.Document().EvidenceMatch(id)
+	if !ok || kind != 1 || state != 1 {
+		t.Fatalf("EvidenceMatch(%d) = (%d, %d, %d, %d, %d, %v)", id, kind, state, subject, scope, timing, ok)
+	}
+	for value, want := range map[schema.ValueID]string{
+		subject: "local_approved_env",
+		scope:   "trusted_internal_only",
+		timing:  "before_execution",
+	} {
+		got, ok := b.Document().SymbolValue(value)
+		if !ok || string(got) != want {
+			t.Fatalf("qualifier %d = %q, %v; want %q", value, got, ok, want)
+		}
+	}
+}
+
 func TestDecodeExpressionKeyPermutations(t *testing.T) {
 	canonical := `{"op":"equal","field":"context.count","value":7}`
 	b, id := decodeExpr(t, canonical, testInterner(t), Limits{})

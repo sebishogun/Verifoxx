@@ -85,7 +85,9 @@ func validExecutionSchedule(p *program.Program) bool {
 	n := len(p.Opcodes)
 	if len(p.Fields) != n || len(p.Values) != n || len(p.ListStarts) != n || len(p.ListCounts) != n ||
 		len(p.OperandStarts) != n || len(p.OperandCounts) != n || len(p.EvidenceKinds) != n ||
-		len(p.EvidenceStates) != n || len(p.RootFlags) != n || len(p.TruthSlots) != n ||
+		len(p.EvidenceStates) != n || !optionalExecutionColumn(len(p.EvidenceSubjects), n) ||
+		!optionalExecutionColumn(len(p.EvidenceScopes), n) || !optionalExecutionColumn(len(p.EvidenceTimings), n) ||
+		len(p.RootFlags) != n || len(p.TruthSlots) != n ||
 		len(p.ReasonSlots) != n || len(p.InstructionNodes) != n ||
 		len(p.InstructionSourceStarts) != n || len(p.InstructionSourceEnds) != n ||
 		p.TruthSlotCount == 0 || p.ReasonSlotCount == 0 {
@@ -125,6 +127,17 @@ func validExecutionSchedule(p *program.Program) bool {
 		}
 	}
 	return true
+}
+
+func optionalExecutionColumn(length, rows int) bool {
+	return length == 0 || length == rows
+}
+
+func evidenceQualifier(column []schema.SymbolID, row int) schema.SymbolID {
+	if len(column) == 0 {
+		return 0
+	}
+	return column[row]
 }
 
 func (e *Executor) truthSlot(slot schema.SlotID, rows uint32) truth.Planes {
@@ -169,6 +182,9 @@ func (e *Executor) executeSchedule(p *program.Program, batch Batch) {
 		case program.OpcodeEvidence:
 			evalEvidenceValidated(dstTruth, dstReasons, batch, p, &e.states, EvidencePredicate{
 				Kind: p.EvidenceKinds[row], State: p.EvidenceStates[row],
+				Subject: evidenceQualifier(p.EvidenceSubjects, row),
+				Scope:   evidenceQualifier(p.EvidenceScopes, row),
+				Timing:  evidenceQualifier(p.EvidenceTimings, row),
 			})
 		case program.OpcodeAll, program.OpcodeAny:
 			e.reduceTruthGroup(dstTruth, p, row, opcode, batch.Rows)

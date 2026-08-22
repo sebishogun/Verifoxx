@@ -103,6 +103,9 @@ func NewBuilder(hints Hints) *Builder {
 		NotChildren:                   make([]schema.NodeID, 0, nots),
 		EvidenceKinds:                 make([]schema.EvidenceKindID, 0, evidence),
 		EvidenceStates:                make([]schema.EvidenceStateID, 0, evidence),
+		EvidenceSubjects:              make([]schema.ValueID, 0, evidence),
+		EvidenceScopes:                make([]schema.ValueID, 0, evidence),
+		EvidenceTimings:               make([]schema.ValueID, 0, evidence),
 		SourceStarts:                  make([]uint32, 0, nodes),
 		SourceEnds:                    make([]uint32, 0, nodes),
 		InputBytes:                    make([]byte, 0, source),
@@ -304,6 +307,11 @@ func (b *Builder) AddNot(child schema.NodeID, span SourceSpan) (schema.NodeID, e
 
 // AddEvidence appends an evidence requirement node.
 func (b *Builder) AddEvidence(kind schema.EvidenceKindID, state schema.EvidenceStateID, span SourceSpan) (schema.NodeID, error) {
+	return b.AddEvidenceMatch(kind, state, 0, 0, 0, span)
+}
+
+// AddEvidenceMatch appends an evidence requirement with optional symbol values.
+func (b *Builder) AddEvidenceMatch(kind schema.EvidenceKindID, state schema.EvidenceStateID, subject, scope, timing schema.ValueID, span SourceSpan) (schema.NodeID, error) {
 	if kind == 0 || state == 0 {
 		return 0, ErrInvalidEvidence
 	}
@@ -313,6 +321,9 @@ func (b *Builder) AddEvidence(kind schema.EvidenceKindID, state schema.EvidenceS
 	ref := uint32(len(b.doc.EvidenceKinds))
 	b.doc.EvidenceKinds = append(b.doc.EvidenceKinds, kind)
 	b.doc.EvidenceStates = append(b.doc.EvidenceStates, state)
+	b.doc.EvidenceSubjects = append(b.doc.EvidenceSubjects, subject)
+	b.doc.EvidenceScopes = append(b.doc.EvidenceScopes, scope)
+	b.doc.EvidenceTimings = append(b.doc.EvidenceTimings, timing)
 	return b.addNode(NodeKindEvidence, ref, span), nil
 }
 
@@ -333,6 +344,9 @@ func (b *Builder) Reset() {
 	d.NotChildren = d.NotChildren[:0]
 	d.EvidenceKinds = d.EvidenceKinds[:0]
 	d.EvidenceStates = d.EvidenceStates[:0]
+	d.EvidenceSubjects = d.EvidenceSubjects[:0]
+	d.EvidenceScopes = d.EvidenceScopes[:0]
+	d.EvidenceTimings = d.EvidenceTimings[:0]
 	d.SourceStarts = d.SourceStarts[:0]
 	d.SourceEnds = d.SourceEnds[:0]
 	d.InputBytes = d.InputBytes[:0]

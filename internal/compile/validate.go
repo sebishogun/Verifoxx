@@ -685,7 +685,10 @@ func (v *Validator) checkColumnLengths(dst []Diagnostic, doc *ast.Document) []Di
 	if len(doc.GroupChildStarts) != len(doc.GroupChildCounts) {
 		dst = append(dst, Diagnostic{Code: CodeColumnLength, Table: TableGroup})
 	}
-	if len(doc.EvidenceKinds) != len(doc.EvidenceStates) {
+	if len(doc.EvidenceKinds) != len(doc.EvidenceStates) ||
+		(len(doc.EvidenceSubjects) != 0 && len(doc.EvidenceKinds) != len(doc.EvidenceSubjects)) ||
+		(len(doc.EvidenceScopes) != 0 && len(doc.EvidenceKinds) != len(doc.EvidenceScopes)) ||
+		(len(doc.EvidenceTimings) != 0 && len(doc.EvidenceKinds) != len(doc.EvidenceTimings)) {
 		dst = append(dst, Diagnostic{Code: CodeColumnLength, Table: TableEvidenceNode})
 	}
 	if len(doc.ValueKinds) != len(doc.ValueRefs) || len(doc.SymbolStarts) != len(doc.SymbolLengths) {
@@ -916,6 +919,24 @@ func (v *Validator) checkEvidenceRows(dst []Diagnostic, doc *ast.Document) []Dia
 		}
 		if state := uint64(doc.EvidenceStates[i]); state == 0 || state > stateMax {
 			dst = append(dst, Diagnostic{Code: CodeInvalidEvidence, Table: TableEvidenceNode, Member: MemberEvidenceState, Row: row, EvidenceState: doc.EvidenceStates[i]})
+		}
+		var qualifiers [3]schema.ValueID
+		if i < len(doc.EvidenceSubjects) {
+			qualifiers[0] = doc.EvidenceSubjects[i]
+		}
+		if i < len(doc.EvidenceScopes) {
+			qualifiers[1] = doc.EvidenceScopes[i]
+		}
+		if i < len(doc.EvidenceTimings) {
+			qualifiers[2] = doc.EvidenceTimings[i]
+		}
+		for _, value := range qualifiers {
+			if value != 0 {
+				kind, ok := structuralLiteralKind(doc, value)
+				if !ok || kind != schema.ValueKindSymbol {
+					dst = append(dst, Diagnostic{Code: CodeInvalidValue, Table: TableEvidenceNode, Row: row, Value: value})
+				}
+			}
 		}
 	}
 	return dst

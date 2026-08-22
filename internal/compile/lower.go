@@ -73,21 +73,24 @@ type Lowerer struct {
 	stack         []lowerFrame
 
 	// Canonical instruction rows before liveness compaction.
-	candidateOpcodes       []program.Opcode
-	candidateFields        []schema.FieldID
-	candidateValues        []schema.ValueID
-	candidateListStarts    []uint32
-	candidateListCounts    []uint16
-	candidateOperandStarts []uint32
-	candidateOperandCounts []uint16
-	candidateEvidenceKinds []schema.EvidenceKindID
-	candidateEvidenceState []schema.EvidenceStateID
-	candidateRootFlags     []program.RootFlags
-	candidateNodes         []schema.NodeID
-	candidateSourceStarts  []uint32
-	candidateSourceEnds    []uint32
-	candidateListValues    []schema.ValueID
-	candidateOperands      []schema.InstructionID
+	candidateOpcodes          []program.Opcode
+	candidateFields           []schema.FieldID
+	candidateValues           []schema.ValueID
+	candidateListStarts       []uint32
+	candidateListCounts       []uint16
+	candidateOperandStarts    []uint32
+	candidateOperandCounts    []uint16
+	candidateEvidenceKinds    []schema.EvidenceKindID
+	candidateEvidenceState    []schema.EvidenceStateID
+	candidateEvidenceSubjects []schema.SymbolID
+	candidateEvidenceScopes   []schema.SymbolID
+	candidateEvidenceTimings  []schema.SymbolID
+	candidateRootFlags        []program.RootFlags
+	candidateNodes            []schema.NodeID
+	candidateSourceStarts     []uint32
+	candidateSourceEnds       []uint32
+	candidateListValues       []schema.ValueID
+	candidateOperands         []schema.InstructionID
 
 	// Open-address CSE, liveness, and stable compaction state.
 	candidateHashes  []uint64
@@ -417,6 +420,13 @@ func (l *Lowerer) symbolForValue(dst *program.Program, doc *ast.Document, id sch
 	return sym, nil
 }
 
+func (l *Lowerer) optionalSymbolForValue(dst *program.Program, doc *ast.Document, id schema.ValueID) (schema.SymbolID, error) {
+	if id == 0 {
+		return 0, nil
+	}
+	return l.symbolForValue(dst, doc, id)
+}
+
 // lowerPolicyIdentity translates the policy name and version through the
 // canonical remap and copies the retained source content hash.
 func (l *Lowerer) lowerPolicyIdentity(dst *program.Program, doc *ast.Document) error {
@@ -458,6 +468,9 @@ func resetInstructionColumns(dst *program.Program) {
 	dst.OperandCounts = dst.OperandCounts[:0]
 	dst.EvidenceKinds = dst.EvidenceKinds[:0]
 	dst.EvidenceStates = dst.EvidenceStates[:0]
+	dst.EvidenceSubjects = dst.EvidenceSubjects[:0]
+	dst.EvidenceScopes = dst.EvidenceScopes[:0]
+	dst.EvidenceTimings = dst.EvidenceTimings[:0]
 	dst.RootFlags = dst.RootFlags[:0]
 	dst.TruthSlots = dst.TruthSlots[:0]
 	dst.ReasonSlots = dst.ReasonSlots[:0]
@@ -509,6 +522,9 @@ func (l *Lowerer) resetInstructionScratch() {
 	l.candidateOperandCounts = l.candidateOperandCounts[:0]
 	l.candidateEvidenceKinds = l.candidateEvidenceKinds[:0]
 	l.candidateEvidenceState = l.candidateEvidenceState[:0]
+	l.candidateEvidenceSubjects = l.candidateEvidenceSubjects[:0]
+	l.candidateEvidenceScopes = l.candidateEvidenceScopes[:0]
+	l.candidateEvidenceTimings = l.candidateEvidenceTimings[:0]
 	l.candidateRootFlags = l.candidateRootFlags[:0]
 	l.candidateNodes = l.candidateNodes[:0]
 	l.candidateSourceStarts = l.candidateSourceStarts[:0]

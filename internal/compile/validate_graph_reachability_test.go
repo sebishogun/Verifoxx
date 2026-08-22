@@ -55,6 +55,9 @@ func appendReachTestEvidence(doc *ast.Document, kind schema.EvidenceKindID, stat
 	ref := uint32(len(doc.EvidenceKinds))
 	doc.EvidenceKinds = append(doc.EvidenceKinds, kind)
 	doc.EvidenceStates = append(doc.EvidenceStates, state)
+	doc.EvidenceSubjects = append(doc.EvidenceSubjects, 0)
+	doc.EvidenceScopes = append(doc.EvidenceScopes, 0)
+	doc.EvidenceTimings = append(doc.EvidenceTimings, 0)
 	return appendReachTestNode(doc, ast.NodeKindEvidence, ref, span)
 }
 

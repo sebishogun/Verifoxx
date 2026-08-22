@@ -24,6 +24,9 @@ var (
 	keyValues          = []byte("values")
 	keyKind            = []byte("kind")
 	keyState           = []byte("state")
+	keySubject         = []byte("subject")
+	keyScope           = []byte("scope")
+	keyTiming          = []byte("timing")
 	keyAll             = []byte("all")
 	keyAny             = []byte("any")
 	keyNot             = []byte("not")
@@ -49,18 +52,24 @@ const (
 	exprKeyValues
 	exprKeyKind
 	exprKeyState
+	exprKeySubject
+	exprKeyScope
+	exprKeyTiming
 	exprKeyCount
 )
 
 const (
-	exprBitOp     = uint16(1) << exprKeyOp
-	exprBitArgs   = uint16(1) << exprKeyArgs
-	exprBitArg    = uint16(1) << exprKeyArg
-	exprBitField  = uint16(1) << exprKeyField
-	exprBitValue  = uint16(1) << exprKeyValue
-	exprBitValues = uint16(1) << exprKeyValues
-	exprBitKind   = uint16(1) << exprKeyKind
-	exprBitState  = uint16(1) << exprKeyState
+	exprBitOp      = uint16(1) << exprKeyOp
+	exprBitArgs    = uint16(1) << exprKeyArgs
+	exprBitArg     = uint16(1) << exprKeyArg
+	exprBitField   = uint16(1) << exprKeyField
+	exprBitValue   = uint16(1) << exprKeyValue
+	exprBitValues  = uint16(1) << exprKeyValues
+	exprBitKind    = uint16(1) << exprKeyKind
+	exprBitState   = uint16(1) << exprKeyState
+	exprBitSubject = uint16(1) << exprKeySubject
+	exprBitScope   = uint16(1) << exprKeyScope
+	exprBitTiming  = uint16(1) << exprKeyTiming
 )
 
 // exprKeyIndex maps a decoded expression-object key to its bit index, or -1
@@ -83,6 +92,12 @@ func exprKeyIndex(key []byte) int {
 		return exprKeyKind
 	case bytes.Equal(key, keyState):
 		return exprKeyState
+	case bytes.Equal(key, keySubject):
+		return exprKeySubject
+	case bytes.Equal(key, keyScope):
+		return exprKeyScope
+	case bytes.Equal(key, keyTiming):
+		return exprKeyTiming
 	}
 	return -1
 }
@@ -148,9 +163,16 @@ func exprKeyMask(op exprOp) uint16 {
 	case exprOpExists:
 		return exprBitOp | exprBitField
 	case exprOpEvidenceMatches:
-		return exprBitOp | exprBitKind | exprBitState
+		return exprBitOp | exprBitKind | exprBitState | exprBitSubject | exprBitScope | exprBitTiming
 	}
 	return exprBitOp | exprBitField | exprBitValue
+}
+
+func exprRequiredMask(op exprOp) uint16 {
+	if op == exprOpEvidenceMatches {
+		return exprBitOp | exprBitKind | exprBitState
+	}
+	return exprKeyMask(op)
 }
 
 // compareOpFor maps a comparison exprOp to its AST operation.
@@ -207,6 +229,9 @@ func (d *decoder) decodeExpression(dst *ast.Builder, depth int) (schema.NodeID, 
 	var valuesToken ast.SourceSpan
 	var kindToken ast.SourceSpan
 	var stateToken ast.SourceSpan
+	var subjectToken ast.SourceSpan
+	var scopeToken ast.SourceSpan
+	var timingToken ast.SourceSpan
 	var argsBase int
 	var notChild schema.NodeID
 
@@ -308,6 +333,20 @@ func (d *decoder) decodeExpression(dst *ast.Builder, depth int) (schema.NodeID, 
 				return 0, err
 			}
 			stateToken = ast.SourceSpan{Start: uint32(tokenStart), End: uint32(d.pos)}
+		case exprKeySubject, exprKeyScope, exprKeyTiming:
+			tokenStart := d.pos
+			if _, err := d.expectString(&d.valueScratch); err != nil {
+				return 0, err
+			}
+			token := ast.SourceSpan{Start: uint32(tokenStart), End: uint32(d.pos)}
+			switch index {
+			case exprKeySubject:
+				subjectToken = token
+			case exprKeyScope:
+				scopeToken = token
+			case exprKeyTiming:
+				timingToken = token
+			}
 		}
 		d.skipWS()
 		if d.atEOF() {
@@ -330,7 +369,7 @@ func (d *decoder) decodeExpression(dst *ast.Builder, depth int) (schema.NodeID, 
 	if seen&^mask != 0 {
 		return 0, d.failAt(CodeInvalidArity, objectStart, "key not allowed for op")
 	}
-	if mask&^seen != 0 {
+	if exprRequiredMask(op)&^seen != 0 {
 		return 0, d.failAt(CodeInvalidArity, objectStart, "missing required key for op")
 	}
 	span := ast.SourceSpan{Start: uint32(objectStart), End: uint32(d.pos)}
@@ -402,7 +441,19 @@ func (d *decoder) decodeExpression(dst *ast.Builder, depth int) (schema.NodeID, 
 		if err := d.checkNodeLimit(dst); err != nil {
 			return 0, err
 		}
-		node, err := dst.AddEvidence(kindID, stateID, span)
+		subject, err := d.decodeOptionalSymbolToken(dst, subjectToken)
+		if err != nil {
+			return 0, err
+		}
+		scope, err := d.decodeOptionalSymbolToken(dst, scopeToken)
+		if err != nil {
+			return 0, err
+		}
+		timing, err := d.decodeOptionalSymbolToken(dst, timingToken)
+		if err != nil {
+			return 0, err
+		}
+		node, err := dst.AddEvidenceMatch(kindID, stateID, subject, scope, timing, span)
 		if err != nil {
 			return 0, d.builderError(err)
 		}
@@ -425,6 +476,13 @@ func (d *decoder) decodeExpression(dst *ast.Builder, depth int) (schema.NodeID, 
 		}
 		return node, nil
 	}
+}
+
+func (d *decoder) decodeOptionalSymbolToken(dst *ast.Builder, token ast.SourceSpan) (schema.ValueID, error) {
+	if token.End == 0 {
+		return 0, nil
+	}
+	return d.decodeValueToken(dst, int(token.Start), int(token.End), schema.ValueKindSymbol)
 }
 
 // decodeArgsArray consumes the args array, appending each decoded child node
