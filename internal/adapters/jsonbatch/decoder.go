@@ -7,6 +7,7 @@ import (
 	"math"
 	"unicode/utf8"
 
+	"github.com/sebishogun/verifoxx/internal/eval"
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
@@ -176,6 +177,49 @@ func (d *Decoder) lookupEvidenceKind(value []byte) (schema.EvidenceKindID, bool)
 func (d *Decoder) lookupEvidenceState(value []byte) (schema.EvidenceStateID, bool) {
 	row, ok := d.lookup(&d.stateTable, value)
 	return schema.EvidenceStateID(row), ok
+}
+
+// Decode materializes evidence and requests into dst. The returned Batch is a
+// borrowed view valid until dst's next successful Begin call.
+func (d *Decoder) Decode(dst *eval.Builder, p *program.Program, requests, evidence []byte, limits Limits) (eval.Batch, error) {
+	if d == nil {
+		return eval.Batch{}, ErrInvalidProgram
+	}
+	defer func() { d.scan.src = nil }()
+	if err := d.bind(p); err != nil {
+		return eval.Batch{}, err
+	}
+	evidenceShape, err := d.count(InputEvidence, evidence, limits)
+	if err != nil {
+		return eval.Batch{}, err
+	}
+	requestShape, err := d.count(InputRequests, requests, limits)
+	if err != nil {
+		return eval.Batch{}, err
+	}
+	if err := dst.Begin(p, requestShape.requests, evidenceShape.evidence, requestShape.refs); err != nil {
+		return eval.Batch{}, err
+	}
+	if err := d.decodeEvidence(dst, evidence, limits, evidenceShape.evidence); err != nil {
+		dst.Abort()
+		return eval.Batch{}, err
+	}
+	if err := d.decodeRequests(dst, requests, limits, requestShape.requests, requestShape.refs); err != nil {
+		dst.Abort()
+		return eval.Batch{}, err
+	}
+	batch, err := dst.Finish()
+	if err != nil {
+		dst.Abort()
+		return eval.Batch{}, err
+	}
+	return batch, nil
+}
+
+// Decode is equivalent to one call on a fresh Decoder.
+func Decode(dst *eval.Builder, p *program.Program, requests, evidence []byte, limits Limits) (eval.Batch, error) {
+	var decoder Decoder
+	return decoder.Decode(dst, p, requests, evidence, limits)
 }
 
 type scanner struct {

@@ -3,9 +3,11 @@ package jsonbatch
 import (
 	"errors"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/sebishogun/verifoxx/internal/eval"
+	"github.com/sebishogun/verifoxx/internal/fixtures"
 	policyindex "github.com/sebishogun/verifoxx/internal/index"
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/schema"
@@ -37,6 +39,58 @@ func decoderTestProgram(t testing.TB) *program.Program {
 		p.SymbolStarts = append(p.SymbolStarts, uint32(len(p.SymbolBytes)))
 		p.SymbolLengths = append(p.SymbolLengths, uint32(len(value)))
 		p.SymbolBytes = append(p.SymbolBytes, value...)
+	}
+	slots := 4
+	for slots < 2*len(values) {
+		slots <<= 1
+	}
+	p.SymbolHashes = make([]uint64, slots)
+	p.SymbolIDs = make([]schema.SymbolID, slots)
+	mask := uint64(slots - 1)
+	for i, value := range values {
+		hash := schema.HashSymbol([]byte(value))
+		slot := int(hash & mask)
+		for p.SymbolIDs[slot] != 0 {
+			slot = (slot + 1) & int(mask)
+		}
+		p.SymbolHashes[slot] = hash
+		p.SymbolIDs[slot] = schema.SymbolID(i + 1)
+	}
+	if err := policyindex.BuildSchema(&p.FieldIndex, p.FieldKinds); err != nil {
+		t.Fatalf("BuildSchema: %v", err)
+	}
+	return p
+}
+
+func fixtureDecoderProgram(t testing.TB) *program.Program {
+	t.Helper()
+	fieldNames := []string{
+		"requester.team", "requester.trust", "action.type", "action.output",
+		"action.dataset", "environment.execution_env", "environment.usage",
+	}
+	kindNames := []string{"approval_record", "execution_environment_attestation", "usage_limit_adjustment"}
+	stateNames := []string{"valid", "verified", "approved", "conflicting", "stale", "unclear", "unverifiable", "invalid"}
+	values := make([]string, 0, 1+len(fieldNames)+len(kindNames)+len(stateNames))
+	values = append(values, "verifoxx")
+	values = append(values, fieldNames...)
+	values = append(values, kindNames...)
+	values = append(values, stateNames...)
+	p := &program.Program{PolicyName: 1, ProgramSymbolCount: uint32(len(values))}
+	for _, value := range values {
+		p.SymbolStarts = append(p.SymbolStarts, uint32(len(p.SymbolBytes)))
+		p.SymbolLengths = append(p.SymbolLengths, uint32(len(value)))
+		p.SymbolBytes = append(p.SymbolBytes, value...)
+	}
+	for i := range fieldNames {
+		p.FieldNames = append(p.FieldNames, schema.SymbolID(2+i))
+		p.FieldKinds = append(p.FieldKinds, schema.ValueKindSymbol)
+		p.FieldGroups = append(p.FieldGroups, schema.FieldGroupContext)
+	}
+	for i := range kindNames {
+		p.EvidenceKindNames = append(p.EvidenceKindNames, schema.SymbolID(2+len(fieldNames)+i))
+	}
+	for i := range stateNames {
+		p.EvidenceStateNames = append(p.EvidenceStateNames, schema.SymbolID(2+len(fieldNames)+len(kindNames)+i))
 	}
 	slots := 4
 	for slots < 2*len(values) {
@@ -451,5 +505,74 @@ func TestDecodeRequestsRejectsInvalidRows(t *testing.T) {
 			err := d.decodeRequests(&b, source, Limits{}, tc.rows, tc.refs)
 			requireDecodeError(t, err, InputRequests, tc.code)
 		})
+	}
+}
+
+func TestDecodeSuppliedVerifoxxPacks(t *testing.T) {
+	p := fixtureDecoderProgram(t)
+	requests := []byte(fixtures.RequestsJSON())
+	evidence := []byte(fixtures.EvidenceJSON())
+	var d Decoder
+	var b eval.Builder
+	batch, err := d.Decode(&b, p, requests, evidence, Limits{})
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if batch.Rows != 5 || !slices.Equal(batch.RequestIDs, []schema.RequestID{1, 2, 3, 4, 5}) {
+		t.Fatalf("requests = %v rows=%d", batch.RequestIDs, batch.Rows)
+	}
+	wantOffsets := []uint32{0, 2, 4, 6, 7, 10}
+	wantRefs := []uint32{0, 1, 0, 1, 0, 1, 0, 1, 2, 3}
+	if !slices.Equal(batch.EvidenceOffsets, wantOffsets) || !slices.Equal(batch.EvidenceRefs, wantRefs) {
+		t.Fatalf("evidence CSR = %v %v, want %v %v", batch.EvidenceOffsets, batch.EvidenceRefs, wantOffsets, wantRefs)
+	}
+	if !slices.Equal(batch.Evidence.IDs, []schema.EvidenceID{1, 2, 3, 4}) ||
+		!slices.Equal(batch.Evidence.Kinds, []schema.EvidenceKindID{1, 2, 3, 1}) ||
+		!slices.Equal(batch.Evidence.States, []schema.EvidenceStateID{1, 2, 3, 4}) {
+		t.Fatalf("evidence identity = IDs %v kinds %v states %v", batch.Evidence.IDs, batch.Evidence.Kinds, batch.Evidence.States)
+	}
+	const rows = 5
+	wantTeams := []string{"external_partner", "external_partner", "internal_team", "external_partner", "internal_team"}
+	for row, want := range wantTeams {
+		id := batch.SymbolValues[row]
+		got, ok := b.Symbol(id)
+		if !ok || string(got) != want {
+			t.Errorf("requester.team row %d = (%q, %v), want %q", row, got, ok, want)
+		}
+		for field := schema.FieldID(1); field <= 7; field++ {
+			if !batch.Present(field, uint32(row)) {
+				t.Errorf("field %d row %d is missing", field, row)
+			}
+		}
+	}
+	if len(batch.SymbolValues) != 7*rows {
+		t.Fatalf("symbol column length = %d, want %d", len(batch.SymbolValues), 7*rows)
+	}
+}
+
+func TestDecodeFailureAbortsAndRecovers(t *testing.T) {
+	p := fixtureDecoderProgram(t)
+	requests := []byte(fixtures.RequestsJSON())
+	evidence := []byte(fixtures.EvidenceJSON())
+	var d Decoder
+	var b eval.Builder
+	first, err := d.Decode(&b, p, requests, evidence, Limits{})
+	if err != nil {
+		t.Fatalf("first Decode: %v", err)
+	}
+	wantCap := cap(first.RequestIDs)
+	bad := []byte(`{"schema_version":1,"pack":"verifoxx","requests":[{"id":"R1","unknown":"x"}]}`)
+	if _, err := d.Decode(&b, p, bad, evidence, Limits{}); err == nil {
+		t.Fatal("malformed Decode succeeded")
+	}
+	if _, err := b.Finish(); !errors.Is(err, eval.ErrInvalidBuilder) {
+		t.Fatalf("Finish after failed Decode = %v, want %v", err, eval.ErrInvalidBuilder)
+	}
+	second, err := d.Decode(&b, p, requests, evidence, Limits{})
+	if err != nil {
+		t.Fatalf("recovery Decode: %v", err)
+	}
+	if cap(second.RequestIDs) != wantCap || !slices.Equal(second.RequestIDs, []schema.RequestID{1, 2, 3, 4, 5}) {
+		t.Fatalf("recovered requests = %v cap=%d, want cap=%d", second.RequestIDs, cap(second.RequestIDs), wantCap)
 	}
 }
