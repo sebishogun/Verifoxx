@@ -576,3 +576,20 @@ func TestDecodeFailureAbortsAndRecovers(t *testing.T) {
 		t.Fatalf("recovered requests = %v cap=%d, want cap=%d", second.RequestIDs, cap(second.RequestIDs), wantCap)
 	}
 }
+
+func TestDecodeWarmPathAllocatesZero(t *testing.T) {
+	p := fixtureDecoderProgram(t)
+	requests := []byte(fixtures.RequestsJSON())
+	evidence := []byte(fixtures.EvidenceJSON())
+	var d Decoder
+	var b eval.Builder
+	decode := func() {
+		if _, err := d.Decode(&b, p, requests, evidence, Limits{}); err != nil {
+			panic(err)
+		}
+	}
+	decode()
+	if got := testing.AllocsPerRun(100, decode); got != 0 {
+		t.Fatalf("warm Decode allocations = %v, want 0", got)
+	}
+}
