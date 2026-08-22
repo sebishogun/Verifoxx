@@ -227,3 +227,69 @@ func (p Policy) Clone() Policy {
 		WordCount:        p.WordCount,
 	}
 }
+
+func (p Policy) validQueryShape(dst []uint64, fields []schema.FieldID, values []schema.SymbolID, present []uint8) bool {
+	words := uint64(p.WordCount)
+	if uint64(len(dst)) != words || len(fields) != len(values) || len(fields) != len(present) ||
+		uint64(len(p.AllMask)) != words || p.WordCount != uint32(policyWordCount(p.RequirementCount)) ||
+		len(p.FieldValueStarts) != len(p.FieldIDs) || len(p.FieldValueCounts) != len(p.FieldIDs) ||
+		uint64(len(p.WildcardMasks)) != uint64(len(p.FieldIDs))*words ||
+		uint64(len(p.ValueMasks)) != uint64(len(p.Values))*words {
+		return false
+	}
+	for _, field := range fields {
+		if field == 0 {
+			return false
+		}
+	}
+	for fieldRow := range p.FieldIDs {
+		if p.FieldIDs[fieldRow] == 0 {
+			return false
+		}
+		start := uint64(p.FieldValueStarts[fieldRow])
+		end := start + uint64(p.FieldValueCounts[fieldRow])
+		if end > uint64(len(p.Values)) {
+			return false
+		}
+	}
+	return true
+}
+
+// Candidates writes the conservative requirement-row mask for the supplied
+// selector facts into dst. Missing selectors (present == 0) do not filter;
+// present values absent from the index select only wildcard requirements.
+func (p Policy) Candidates(dst []uint64, fields []schema.FieldID, values []schema.SymbolID, present []uint8) error {
+	if !p.validQueryShape(dst, fields, values, present) {
+		return ErrInvalidQuery
+	}
+	copy(dst, p.AllMask)
+	words := int(p.WordCount)
+	for selectorRow, field := range fields {
+		if present[selectorRow] == 0 {
+			continue
+		}
+		fieldRow, found := slices.BinarySearch(p.FieldIDs, field)
+		if !found {
+			continue
+		}
+		valueStart := int(p.FieldValueStarts[fieldRow])
+		valueEnd := valueStart + int(p.FieldValueCounts[fieldRow])
+		valueRow, valueFound := slices.BinarySearch(p.Values[valueStart:valueEnd], values[selectorRow])
+		var mask []uint64
+		if valueFound {
+			valueRow += valueStart
+			mask = p.ValueMasks[valueRow*words : (valueRow+1)*words]
+		} else {
+			mask = p.WildcardMasks[fieldRow*words : (fieldRow+1)*words]
+		}
+		allZero := true
+		for word := range words {
+			dst[word] &= mask[word]
+			allZero = allZero && dst[word] == 0
+		}
+		if allZero {
+			return nil
+		}
+	}
+	return nil
+}

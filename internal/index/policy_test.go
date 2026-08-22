@@ -176,3 +176,141 @@ func TestPolicyBuildRejectsMalformedAtomically(t *testing.T) {
 		t.Fatalf("nil builder error = %v", err)
 	}
 }
+
+func buildTestPolicy(t *testing.T) Policy {
+	t.Helper()
+	var builder PolicyBuilder
+	var policy Policy
+	if err := builder.Build(&policy, 5, policyConstraints()); err != nil {
+		t.Fatal(err)
+	}
+	return policy
+}
+
+func TestPolicyCandidatesExactAndConservative(t *testing.T) {
+	policy := buildTestPolicy(t)
+	tests := []struct {
+		name    string
+		fields  []schema.FieldID
+		values  []schema.SymbolID
+		present []uint8
+		want    uint64
+	}{
+		{
+			name:    "action resource trust",
+			fields:  []schema.FieldID{testActionField, testResourceField, testTrustField},
+			values:  []schema.SymbolID{20, 30, 10},
+			present: []uint8{1, 1, 1},
+			want:    0x0b,
+		},
+		{"action", []schema.FieldID{testActionField}, []schema.SymbolID{20}, []uint8{1}, 0x0f},
+		{"resource", []schema.FieldID{testResourceField}, []schema.SymbolID{30}, []uint8{1}, 0x1f},
+		{"trust", []schema.FieldID{testTrustField}, []schema.SymbolID{10}, []uint8{1}, 0x1b},
+		{
+			name:    "missing trust does not filter",
+			fields:  []schema.FieldID{testTrustField, testActionField},
+			values:  []schema.SymbolID{10, 20},
+			present: []uint8{0, 1},
+			want:    0x0f,
+		},
+		{"present unknown action", []schema.FieldID{testActionField}, []schema.SymbolID{0}, []uint8{1}, 0x0d},
+		{"absent action symbol", []schema.FieldID{testActionField}, []schema.SymbolID{99}, []uint8{1}, 0x0d},
+		{"unindexed field", []schema.FieldID{4}, []schema.SymbolID{99}, []uint8{1}, 0x1f},
+		{
+			name:    "selector order independent",
+			fields:  []schema.FieldID{testTrustField, testActionField, testResourceField},
+			values:  []schema.SymbolID{10, 20, 30},
+			present: []uint8{1, 1, 1},
+			want:    0x0b,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dst := []uint64{math.MaxUint64}
+			if err := policy.Candidates(dst, tt.fields, tt.values, tt.present); err != nil {
+				t.Fatalf("Candidates: %v", err)
+			}
+			if dst[0] != tt.want {
+				t.Fatalf("candidate mask = %#x, want %#x", dst[0], tt.want)
+			}
+		})
+	}
+}
+
+func TestPolicyCandidatesEmptyAndTail(t *testing.T) {
+	var builder PolicyBuilder
+	var empty Policy
+	if err := builder.Build(&empty, 0, Constraints{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := empty.Candidates(nil, nil, nil, nil); err != nil {
+		t.Fatalf("empty Candidates: %v", err)
+	}
+
+	constraints := Constraints{
+		Rows:        []uint32{64},
+		Fields:      []schema.FieldID{testTrustField},
+		ValueStarts: []uint32{0},
+		ValueCounts: []uint32{1},
+		Values:      []schema.SymbolID{10},
+	}
+	var tail Policy
+	if err := builder.Build(&tail, 65, constraints); err != nil {
+		t.Fatal(err)
+	}
+	dst := []uint64{0, 0}
+	if err := tail.Candidates(dst, []schema.FieldID{4}, []schema.SymbolID{99}, []uint8{1}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(dst, []uint64{math.MaxUint64, 1}) {
+		t.Fatalf("tail candidates = %#x", dst)
+	}
+}
+
+func TestPolicyCandidatesRejectsMalformedQueryAtomically(t *testing.T) {
+	policy := buildTestPolicy(t)
+	tests := []struct {
+		name    string
+		dst     []uint64
+		fields  []schema.FieldID
+		values  []schema.SymbolID
+		present []uint8
+	}{
+		{"short destination", nil, nil, nil, nil},
+		{"short values", []uint64{0xaa}, []schema.FieldID{1}, nil, []uint8{1}},
+		{"short presence", []uint64{0xaa}, []schema.FieldID{1}, []schema.SymbolID{20}, nil},
+		{"zero field", []uint64{0xaa}, []schema.FieldID{0}, []schema.SymbolID{20}, []uint8{1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := append([]uint64(nil), tt.dst...)
+			if err := policy.Candidates(tt.dst, tt.fields, tt.values, tt.present); !errors.Is(err, ErrInvalidQuery) {
+				t.Fatalf("Candidates error = %v, want %v", err, ErrInvalidQuery)
+			}
+			if !reflect.DeepEqual(tt.dst, want) {
+				t.Fatalf("failed query changed destination: %#x", tt.dst)
+			}
+		})
+	}
+}
+
+func TestPolicyCandidatesWarmAllocations(t *testing.T) {
+	policy := buildTestPolicy(t)
+	dst := make([]uint64, policy.WordCount)
+	fields := []schema.FieldID{testActionField, testResourceField, testTrustField}
+	values := []schema.SymbolID{20, 30, 10}
+	present := []uint8{1, 1, 1}
+	if err := policy.Candidates(dst, fields, values, present); err != nil {
+		t.Fatal(err)
+	}
+	var queryErr error
+	allocs := testing.AllocsPerRun(1000, func() {
+		queryErr = policy.Candidates(dst, fields, values, present)
+	})
+	if queryErr != nil {
+		t.Fatal(queryErr)
+	}
+	if allocs != 0 {
+		t.Fatalf("Candidates allocations = %g, want 0", allocs)
+	}
+}
