@@ -11,7 +11,7 @@ import (
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
 
-func batchTestProgram(t *testing.T, kinds ...schema.ValueKind) *program.Program {
+func batchTestProgram(t testing.TB, kinds ...schema.ValueKind) *program.Program {
 	t.Helper()
 	var fields policyindex.Schema
 	if err := policyindex.BuildSchema(&fields, kinds); err != nil {
@@ -20,9 +20,12 @@ func batchTestProgram(t *testing.T, kinds ...schema.ValueKind) *program.Program 
 	return &program.Program{FieldIndex: fields}
 }
 
-func batchTestProgramWithSymbol(t *testing.T, value string) *program.Program {
+func batchTestProgramWithSymbol(t testing.TB, value string, kinds ...schema.ValueKind) *program.Program {
 	t.Helper()
-	p := batchTestProgram(t, schema.ValueKindSymbol)
+	if len(kinds) == 0 {
+		kinds = []schema.ValueKind{schema.ValueKindSymbol}
+	}
+	p := batchTestProgram(t, kinds...)
 	b := []byte(value)
 	h := schema.HashSymbol(b)
 	p.SymbolBytes = slices.Clone(b)
@@ -450,5 +453,202 @@ func TestBuilderBeginFailurePreservesBatchAndExtensionSymbols(t *testing.T) {
 	}
 	if got, err := b.InternSymbol([]byte("alpha")); err != nil || got != 2 {
 		t.Fatalf("InternSymbol(alpha) after failed Begin = (%d, %v), want (2, nil)", got, err)
+	}
+}
+
+func TestBuilderFinishRequiresCompleteIDsAndCSR(t *testing.T) {
+	p := batchTestProgram(t, schema.ValueKindSymbol)
+	var b Builder
+	if err := b.Begin(p, 2, 1, 1); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	if err := b.SetRequestID(0, 1); err != nil {
+		t.Fatalf("SetRequestID(0): %v", err)
+	}
+	if _, err := b.Finish(); !errors.Is(err, ErrIncompleteBatch) {
+		t.Fatalf("incomplete Finish error = %v, want %v", err, ErrIncompleteBatch)
+	}
+	if !b.active {
+		t.Fatal("failed Finish sealed the builder")
+	}
+
+	if err := b.SetRequestID(1, 2); err != nil {
+		t.Fatalf("SetRequestID(1): %v", err)
+	}
+	if err := b.SetEvidence(0, EvidenceRecord{ID: 1, Kind: 2, State: 3}); err != nil {
+		t.Fatalf("SetEvidence: %v", err)
+	}
+	if err := b.SetEvidenceCSR([]uint32{0, 1, 1}, []uint32{0}); err != nil {
+		t.Fatalf("SetEvidenceCSR: %v", err)
+	}
+	batch, err := b.Finish()
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	if batch.Rows != 2 || !slices.Equal(batch.RequestIDs, []schema.RequestID{1, 2}) {
+		t.Fatalf("finished batch = %+v", batch)
+	}
+	if b.active {
+		t.Fatal("successful Finish left builder active")
+	}
+	if err := b.SetRequestID(0, 9); !errors.Is(err, ErrInvalidBuilder) {
+		t.Fatalf("setter after Finish error = %v, want %v", err, ErrInvalidBuilder)
+	}
+	if _, err := b.Finish(); !errors.Is(err, ErrInvalidBuilder) {
+		t.Fatalf("second Finish error = %v, want %v", err, ErrInvalidBuilder)
+	}
+}
+
+func TestBuilderFinishAcceptsEmptyBatch(t *testing.T) {
+	p := batchTestProgram(t, schema.ValueKindBoolean)
+	var b Builder
+	if err := b.Begin(p, 0, 0, 0); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	batch, err := b.Finish()
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	if batch.Rows != 0 || !slices.Equal(batch.EvidenceOffsets, []uint32{0}) {
+		t.Fatalf("empty finished batch = %+v", batch)
+	}
+}
+
+func TestBuilderReuseClearsActiveSlabsAndTailBits(t *testing.T) {
+	p := batchTestProgram(t,
+		schema.ValueKindSymbol,
+		schema.ValueKindInteger,
+		schema.ValueKindBoolean,
+		schema.ValueKindTimestamp,
+		schema.ValueKindPresence,
+	)
+	var b Builder
+	if err := b.Begin(p, 130, 2, 2); err != nil {
+		t.Fatalf("large Begin: %v", err)
+	}
+	for i := range b.batch.SymbolValues {
+		b.batch.SymbolValues[i] = math.MaxUint32
+	}
+	for i := range b.batch.IntegerValues {
+		b.batch.IntegerValues[i] = -1
+	}
+	for i := range b.batch.TimestampValues {
+		b.batch.TimestampValues[i] = -1
+	}
+	for i := range b.batch.BooleanValues {
+		b.batch.BooleanValues[i] = math.MaxUint64
+	}
+	for i := range b.batch.PresenceMasks {
+		b.batch.PresenceMasks[i] = math.MaxUint64
+	}
+	for i := range b.batch.RequestIDs {
+		b.batch.RequestIDs[i] = schema.RequestID(i + 1)
+	}
+	for i := range b.batch.EvidenceOffsets {
+		b.batch.EvidenceOffsets[i] = math.MaxUint32
+	}
+	for i := range b.batch.EvidenceRefs {
+		b.batch.EvidenceRefs[i] = math.MaxUint32
+	}
+	for i := range b.batch.Evidence.IDs {
+		b.batch.Evidence.IDs[i] = math.MaxUint32
+		b.batch.Evidence.Kinds[i] = math.MaxUint32
+		b.batch.Evidence.States[i] = math.MaxUint32
+		b.batch.Evidence.Subjects[i] = math.MaxUint32
+		b.batch.Evidence.Scopes[i] = math.MaxUint32
+		b.batch.Evidence.Reviewers[i] = math.MaxUint32
+		b.batch.Evidence.Timings[i] = math.MaxUint32
+		b.batch.Evidence.Timestamps[i] = -1
+	}
+
+	wantCaps := []int{
+		cap(b.batch.SymbolValues), cap(b.batch.IntegerValues), cap(b.batch.TimestampValues),
+		cap(b.batch.BooleanValues), cap(b.batch.PresenceMasks), cap(b.batch.RequestIDs),
+		cap(b.batch.EvidenceOffsets), cap(b.batch.EvidenceRefs), cap(b.batch.Evidence.IDs),
+	}
+	if err := b.Begin(p, 65, 1, 0); err != nil {
+		t.Fatalf("small Begin: %v", err)
+	}
+	gotCaps := []int{
+		cap(b.batch.SymbolValues), cap(b.batch.IntegerValues), cap(b.batch.TimestampValues),
+		cap(b.batch.BooleanValues), cap(b.batch.PresenceMasks), cap(b.batch.RequestIDs),
+		cap(b.batch.EvidenceOffsets), cap(b.batch.EvidenceRefs), cap(b.batch.Evidence.IDs),
+	}
+	if !slices.Equal(gotCaps, wantCaps) {
+		t.Errorf("reused capacities = %v, want %v", gotCaps, wantCaps)
+	}
+	if !allZero(b.batch.SymbolValues) || !allZero(b.batch.IntegerValues) ||
+		!allZero(b.batch.TimestampValues) || !allZero(b.batch.BooleanValues) ||
+		!allZero(b.batch.PresenceMasks) || !allZero(b.batch.RequestIDs) ||
+		!allZero(b.batch.EvidenceOffsets) || !allZero(b.batch.Evidence.IDs) ||
+		!allZero(b.batch.Evidence.Kinds) || !allZero(b.batch.Evidence.States) ||
+		!allZero(b.batch.Evidence.Subjects) || !allZero(b.batch.Evidence.Scopes) ||
+		!allZero(b.batch.Evidence.Reviewers) || !allZero(b.batch.Evidence.Timings) ||
+		!allZero(b.batch.Evidence.Timestamps) {
+		t.Fatal("smaller Begin retained poisoned active data")
+	}
+	if err := b.SetBoolean(64, 3, true); err != nil {
+		t.Fatalf("SetBoolean tail: %v", err)
+	}
+	if err := b.SetPresent(64, 5); err != nil {
+		t.Fatalf("SetPresent tail: %v", err)
+	}
+	if got := b.batch.BooleanValues[1]; got != 1 {
+		t.Errorf("Boolean tail word = %#x, want 0x1", got)
+	}
+	if got := b.batch.PresenceMasks[2*2+1]; got != 1 {
+		t.Errorf("Boolean presence tail word = %#x, want 0x1", got)
+	}
+	if got := b.batch.PresenceMasks[4*2+1]; got != 1 {
+		t.Errorf("presence-only tail word = %#x, want 0x1", got)
+	}
+}
+
+func allZero[T comparable](values []T) bool {
+	var zero T
+	for _, value := range values {
+		if value != zero {
+			return false
+		}
+	}
+	return true
+}
+
+func TestBuilderWarmBuildAllocatesZero(t *testing.T) {
+	p := batchTestProgramWithSymbol(t, "known")
+	var b Builder
+	offsets := []uint32{0, 1, 1}
+	refs := []uint32{0}
+	unknown := []byte("unknown")
+	build := func() {
+		if err := b.Begin(p, 2, 1, 1); err != nil {
+			panic(err)
+		}
+		id, err := b.InternSymbol(unknown)
+		if err != nil {
+			panic(err)
+		}
+		if err = b.SetRequestID(0, 1); err != nil {
+			panic(err)
+		}
+		if err = b.SetRequestID(1, 2); err != nil {
+			panic(err)
+		}
+		if err = b.SetSymbol(0, 1, id); err != nil {
+			panic(err)
+		}
+		if err = b.SetEvidence(0, EvidenceRecord{ID: 1, Kind: 1, State: 1, Subject: id}); err != nil {
+			panic(err)
+		}
+		if err = b.SetEvidenceCSR(offsets, refs); err != nil {
+			panic(err)
+		}
+		if _, err = b.Finish(); err != nil {
+			panic(err)
+		}
+	}
+	build()
+	if got := testing.AllocsPerRun(100, build); got != 0 {
+		t.Fatalf("warm batch build allocations = %v, want 0", got)
 	}
 }

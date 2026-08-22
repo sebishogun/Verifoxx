@@ -26,6 +26,8 @@ var (
 	ErrInvalidValue = errors.New("eval: invalid zero value")
 	// ErrInvalidEvidence reports an invalid evidence row or CSR relationship.
 	ErrInvalidEvidence = errors.New("eval: invalid evidence")
+	// ErrIncompleteBatch reports missing required IDs or an unfinished CSR.
+	ErrIncompleteBatch = errors.New("eval: incomplete batch")
 )
 
 // Builder owns one reusable mutable Batch. It is not safe for concurrent use.
@@ -333,4 +335,48 @@ func (b *Builder) SetEvidenceCSR(offsets, refs []uint32) error {
 	copy(b.batch.EvidenceOffsets, offsets)
 	copy(b.batch.EvidenceRefs, refs)
 	return nil
+}
+
+// Finish validates required columns, seals the current build, and returns a
+// borrowed view valid until the next successful Begin call.
+func (b *Builder) Finish() (Batch, error) {
+	if b == nil || !b.active {
+		return Batch{}, ErrInvalidBuilder
+	}
+	for _, id := range b.batch.RequestIDs {
+		if id == 0 {
+			return Batch{}, ErrIncompleteBatch
+		}
+	}
+	evidence := &b.batch.Evidence
+	n := len(evidence.IDs)
+	if len(evidence.Kinds) != n || len(evidence.States) != n || len(evidence.Subjects) != n ||
+		len(evidence.Scopes) != n || len(evidence.Reviewers) != n || len(evidence.Timings) != n ||
+		len(evidence.Timestamps) != n {
+		return Batch{}, ErrIncompleteBatch
+	}
+	for i, id := range evidence.IDs {
+		if id == 0 || evidence.Kinds[i] == 0 || evidence.States[i] == 0 {
+			return Batch{}, ErrIncompleteBatch
+		}
+	}
+	if uint64(len(b.batch.EvidenceOffsets)) != uint64(b.batch.Rows)+1 || len(b.batch.EvidenceOffsets) == 0 ||
+		b.batch.EvidenceOffsets[0] != 0 ||
+		uint64(b.batch.EvidenceOffsets[len(b.batch.EvidenceOffsets)-1]) != uint64(len(b.batch.EvidenceRefs)) {
+		return Batch{}, ErrIncompleteBatch
+	}
+	previous := uint32(0)
+	for _, offset := range b.batch.EvidenceOffsets[1:] {
+		if offset < previous || uint64(offset) > uint64(len(b.batch.EvidenceRefs)) {
+			return Batch{}, ErrIncompleteBatch
+		}
+		previous = offset
+	}
+	for _, ref := range b.batch.EvidenceRefs {
+		if uint64(ref) >= uint64(n) {
+			return Batch{}, ErrIncompleteBatch
+		}
+	}
+	b.active = false
+	return b.batch, nil
 }
