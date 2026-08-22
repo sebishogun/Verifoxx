@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/sebishogun/verifoxx/internal/ast"
+	policyindex "github.com/sebishogun/verifoxx/internal/index"
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
@@ -113,6 +114,20 @@ type Lowerer struct {
 	slotReasonLive  []uint8
 	slotTruth       []schema.SlotID
 	slotReasons     []schema.SlotID
+
+	// Conservative applicability-index construction state. Constraints are
+	// emitted as pointerless SoA/CSR columns and canonicalized by indexBuilder.
+	indexBuilder         policyindex.PolicyBuilder
+	indexStack           []schema.InstructionID
+	indexVisited         []uint8
+	indexFieldState      []uint8
+	indexFieldValueStart []uint32
+	indexFieldValueCount []uint32
+	indexConstraintRows  []uint32
+	indexConstraintField []schema.FieldID
+	indexConstraintStart []uint32
+	indexConstraintCount []uint32
+	indexConstraintValue []schema.SymbolID
 
 	// output owns reusable stage output. It follows every scratch slice so its
 	// scalar tail and the fixed scheduler arrays remain outside GC pointer scan.
