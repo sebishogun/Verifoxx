@@ -176,6 +176,9 @@ func (l *Lowerer) Lower(dst *program.Program, doc *ast.Document, fields *schema.
 	if err := l.assignSlots(&l.output, slotReuse); err != nil {
 		return err
 	}
+	if err := l.lowerIndexes(&l.output); err != nil {
+		return err
+	}
 	frozen, err := program.Freeze(&l.output)
 	if err != nil {
 		return ErrInvalidGeneratedProgram
@@ -470,6 +473,18 @@ func resetInstructionColumns(dst *program.Program) {
 	dst.NodeInstructionStarts = dst.NodeInstructionStarts[:0]
 	dst.NodeInstructionCounts = dst.NodeInstructionCounts[:0]
 	dst.NodeInstructionIDs = dst.NodeInstructionIDs[:0]
+	dst.FieldIndex.Kinds = dst.FieldIndex.Kinds[:0]
+	dst.FieldIndex.Columns = dst.FieldIndex.Columns[:0]
+	dst.FieldIndex.Counts = [6]uint32{}
+	dst.ApplicabilityIndex.FieldIDs = dst.ApplicabilityIndex.FieldIDs[:0]
+	dst.ApplicabilityIndex.FieldValueStarts = dst.ApplicabilityIndex.FieldValueStarts[:0]
+	dst.ApplicabilityIndex.FieldValueCounts = dst.ApplicabilityIndex.FieldValueCounts[:0]
+	dst.ApplicabilityIndex.WildcardMasks = dst.ApplicabilityIndex.WildcardMasks[:0]
+	dst.ApplicabilityIndex.Values = dst.ApplicabilityIndex.Values[:0]
+	dst.ApplicabilityIndex.ValueMasks = dst.ApplicabilityIndex.ValueMasks[:0]
+	dst.ApplicabilityIndex.AllMask = dst.ApplicabilityIndex.AllMask[:0]
+	dst.ApplicabilityIndex.RequirementCount = 0
+	dst.ApplicabilityIndex.WordCount = 0
 }
 
 // resetInstructionScratch clears the instruction-stage Lowerer scratch so

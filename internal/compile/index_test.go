@@ -3,6 +3,7 @@ package compile
 import (
 	"errors"
 	"math"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -207,5 +208,48 @@ func TestApplicabilityIndexExtractRejectsMalformedProgram(t *testing.T) {
 				t.Fatalf("error = %v, want %v", err, ErrInvalidGeneratedProgram)
 			}
 		})
+	}
+}
+
+func TestLowerIndexesWarmReuse(t *testing.T) {
+	p := applicabilityIndexProgram()
+	var lowerer Lowerer
+	if err := lowerer.lowerIndexes(&p); err != nil {
+		t.Fatalf("prime lowerIndexes: %v", err)
+	}
+	wantField := p.FieldIndex.Clone()
+	wantPolicy := p.ApplicabilityIndex.Clone()
+	var indexErr error
+	allocs := testing.AllocsPerRun(100, func() {
+		indexErr = lowerer.lowerIndexes(&p)
+	})
+	if indexErr != nil {
+		t.Fatalf("warm lowerIndexes: %v", indexErr)
+	}
+	if allocs != 0 {
+		t.Fatalf("warm lowerIndexes allocations = %g, want 0", allocs)
+	}
+
+	small := slotTestProgram(
+		[]program.Opcode{program.OpcodeEqual},
+		[][]schema.InstructionID{nil},
+		[]program.RootFlags{program.RootApplicability},
+	)
+	small.Fields[0], small.Values[0] = 1, 1
+	small.FieldKinds = []schema.ValueKind{schema.ValueKindSymbol}
+	small.ValueKinds = []schema.ValueKind{schema.ValueKindSymbol}
+	small.ValueRefs = []uint32{7}
+	small.ProgramSymbolCount = 7
+	small.RequirementIDs = []schema.RequirementID{1}
+	small.RequirementRoots = []schema.InstructionID{1}
+	if err := lowerer.lowerIndexes(&small); err != nil {
+		t.Fatalf("small lowerIndexes: %v", err)
+	}
+	if err := lowerer.lowerIndexes(&p); err != nil {
+		t.Fatalf("re-plan lowerIndexes: %v", err)
+	}
+	if !reflect.DeepEqual(p.FieldIndex, wantField) || !reflect.DeepEqual(p.ApplicabilityIndex, wantPolicy) {
+		t.Fatalf("reused indexes differ:\n got  %+v / %+v\n want %+v / %+v",
+			p.FieldIndex, p.ApplicabilityIndex, wantField, wantPolicy)
 	}
 }

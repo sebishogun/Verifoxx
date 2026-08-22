@@ -1,6 +1,7 @@
 package compile
 
 import (
+	"errors"
 	"math"
 
 	policyindex "github.com/sebishogun/verifoxx/internal/index"
@@ -27,6 +28,29 @@ func validateApplicabilityProgram(p *program.Program) error {
 		if root == 0 || uint64(root) > uint64(len(p.Opcodes)) || !p.RootFlags[root-1].Has(program.RootApplicability) {
 			return ErrInvalidGeneratedProgram
 		}
+	}
+	return nil
+}
+
+func compileIndexError(err error) error {
+	if errors.Is(err, policyindex.ErrIndexTooLarge) {
+		return ErrProgramTooLarge
+	}
+	return ErrInvalidGeneratedProgram
+}
+
+// lowerIndexes builds reusable private index output. Public Lower freezes exact
+// copies only after every compiler stage has succeeded.
+func (l *Lowerer) lowerIndexes(p *program.Program) error {
+	constraints, err := l.extractApplicabilityConstraints(p)
+	if err != nil {
+		return err
+	}
+	if err := policyindex.BuildSchema(&p.FieldIndex, p.FieldKinds); err != nil {
+		return compileIndexError(err)
+	}
+	if err := l.indexBuilder.Build(&p.ApplicabilityIndex, uint32(len(p.RequirementIDs)), constraints); err != nil {
+		return compileIndexError(err)
 	}
 	return nil
 }

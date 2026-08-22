@@ -21,6 +21,34 @@ func TestLowerAPI(t *testing.T) {
 		t.Fatal("Lower returned an empty Program")
 	}
 	assertProgramSlots(t, got)
+	assertProgramIndexes(t, got)
+	external, ok := got.LookupSymbol([]byte("external"))
+	if !ok {
+		t.Fatal("external selector symbol is missing")
+	}
+	candidates := make([]uint64, got.ApplicabilityIndex.WordCount)
+	if err := got.ApplicabilityIndex.Candidates(
+		candidates,
+		[]schema.FieldID{1},
+		[]schema.SymbolID{external},
+		[]uint8{1},
+	); err != nil {
+		t.Fatalf("known selector Candidates: %v", err)
+	}
+	if !reflect.DeepEqual(candidates, []uint64{1}) {
+		t.Fatalf("known selector candidates = %#x, want [1]", candidates)
+	}
+	if err := got.ApplicabilityIndex.Candidates(
+		candidates,
+		[]schema.FieldID{1},
+		[]schema.SymbolID{0},
+		[]uint8{0},
+	); err != nil {
+		t.Fatalf("missing selector Candidates: %v", err)
+	}
+	if !reflect.DeepEqual(candidates, []uint64{1}) {
+		t.Fatalf("missing selector candidates = %#x, want [1]", candidates)
+	}
 	var lowerer Lowerer
 	var dst program.Program
 	if err := lowerer.Lower(&dst, doc, fields, syms); err != nil {
@@ -200,6 +228,17 @@ func TestLowerDeterministic(t *testing.T) {
 			t.Fatalf("warm call %d differs from cold output", i)
 		}
 	}
+	otherFixture := buildNormalizeFixture(t)
+	var other program.Program
+	if err := lowerer.Lower(&other, otherFixture.doc, otherFixture.fields, otherFixture.syms); err != nil {
+		t.Fatalf("interleaved fixture: %v", err)
+	}
+	if err := lowerer.Lower(&warm, doc, fields, syms); err != nil {
+		t.Fatalf("warm call after interleave: %v", err)
+	}
+	if !reflect.DeepEqual(&warm, coldA) {
+		t.Fatal("warm output after interleave differs from cold output")
+	}
 }
 
 func TestProgramPointerlessColumns(t *testing.T) {
@@ -246,6 +285,32 @@ func assertProgramSlots(t *testing.T, p *program.Program) {
 		} else if p.ReasonSlots[row] != 0 {
 			t.Fatalf("reason-irrelevant row %d has slot %d", row, p.ReasonSlots[row])
 		}
+	}
+}
+
+func assertProgramIndexes(t *testing.T, p *program.Program) {
+	t.Helper()
+	if len(p.FieldIndex.Kinds) != len(p.FieldKinds) || len(p.FieldIndex.Columns) != len(p.FieldKinds) {
+		t.Fatalf("field index lengths = %d/%d, want %d", len(p.FieldIndex.Kinds), len(p.FieldIndex.Columns), len(p.FieldKinds))
+	}
+	var next [6]uint32
+	for row, wantKind := range p.FieldKinds {
+		kind, column, ok := p.FieldIndex.Lookup(schema.FieldID(row + 1))
+		if !ok || kind != wantKind || column != next[wantKind] {
+			t.Fatalf("field index row %d = (%d,%d,%v), want (%d,%d,true)",
+				row, kind, column, ok, wantKind, next[wantKind])
+		}
+		next[wantKind]++
+	}
+	if p.FieldIndex.Counts != next {
+		t.Fatalf("field counts = %v, want %v", p.FieldIndex.Counts, next)
+	}
+	if p.ApplicabilityIndex.RequirementCount != uint32(len(p.RequirementIDs)) {
+		t.Fatalf("applicability requirement count = %d, want %d", p.ApplicabilityIndex.RequirementCount, len(p.RequirementIDs))
+	}
+	wantWords := (uint32(len(p.RequirementIDs)) + 63) >> 6
+	if p.ApplicabilityIndex.WordCount != wantWords || len(p.ApplicabilityIndex.AllMask) != int(wantWords) {
+		t.Fatalf("applicability words = %d/%d, want %d", p.ApplicabilityIndex.WordCount, len(p.ApplicabilityIndex.AllMask), wantWords)
 	}
 }
 

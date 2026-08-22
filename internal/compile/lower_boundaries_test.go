@@ -95,6 +95,7 @@ func TestLowerIntegrationNormalizationOwnershipAndResolution(t *testing.T) {
 		t.Fatalf("Lower: %v", err)
 	}
 	assertProgramSlots(t, got)
+	assertProgramIndexes(t, got)
 	if duplicate := requireSingleInstruction(t, got, fx.aDuplicate); duplicate != requireSingleInstruction(t, got, fx.a) {
 		t.Fatalf("duplicate compare maps to %d", duplicate)
 	}
