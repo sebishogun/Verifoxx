@@ -409,3 +409,63 @@ func TestEvalEvidenceRejectsMalformedInputsBeforeMutation(t *testing.T) {
 		})
 	}
 }
+
+func TestEvidenceValidationSplitRejectsMalformed(t *testing.T) {
+	p := evidenceEvalTestProgram()
+	var states EvidenceStateIndex
+	if err := states.Bind(p); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	batch := evidenceEvalBatch(t, p, 1,
+		[]EvidenceRecord{evidenceRecord(1, testEvidenceKindApproval, testEvidenceStateValid)},
+		[]uint32{0, 1}, []uint32{0})
+	requireEvidenceBatch(batch, p, &states)
+
+	badBatch := batch
+	badBatch.Evidence.States = badBatch.Evidence.States[:0]
+	requirePanic(t, func() { requireEvidenceBatch(badBatch, p, &states) })
+
+	dst := truth.Planes{Positive: []uint64{11}, Negative: []uint64{12}}
+	reasons := ReasonPlanes{Words: slices.Repeat([]uint64{13}, truth.ReasonCount)}
+	requirePanic(t, func() {
+		evalEvidenceValidated(dst, reasons, batch, p, &states, EvidencePredicate{State: testEvidenceStateValid})
+	})
+	if dst.Positive[0] != 11 || dst.Negative[0] != 12 ||
+		!slices.Equal(reasons.Words, slices.Repeat([]uint64{13}, truth.ReasonCount)) {
+		t.Fatal("invalid validated predicate mutated output")
+	}
+}
+
+func TestEvalEvidenceValidatedMatchesWrapper(t *testing.T) {
+	p := evidenceEvalTestProgram()
+	var states EvidenceStateIndex
+	if err := states.Bind(p); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	records := []EvidenceRecord{
+		evidenceRecord(1, testEvidenceKindApproval, testEvidenceStateValid),
+		evidenceRecord(2, testEvidenceKindApproval, testEvidenceStateStale),
+		evidenceRecord(3, testEvidenceKindApproval, testEvidenceStateConflicting),
+	}
+	batch := evidenceEvalBatch(t, p, 3, records, []uint32{0, 1, 2, 3}, []uint32{0, 1, 2})
+	predicate := EvidencePredicate{Kind: testEvidenceKindApproval, State: testEvidenceStateValid}
+	wantTruth, wantReasons := makeLeafOutputs(batch.Rows)
+	evalEvidence(wantTruth, wantReasons, batch, p, &states, predicate)
+
+	requireEvidenceBatch(batch, p, &states)
+	gotTruth, gotReasons := makeLeafOutputs(batch.Rows)
+	for i := range gotTruth.Positive {
+		gotTruth.Positive[i], gotTruth.Negative[i] = math.MaxUint64, math.MaxUint64
+	}
+	for i := range gotReasons.Words {
+		gotReasons.Words[i] = math.MaxUint64
+	}
+	evalEvidenceValidated(gotTruth, gotReasons, batch, p, &states, predicate)
+	if !slices.Equal(gotTruth.Positive, wantTruth.Positive) ||
+		!slices.Equal(gotTruth.Negative, wantTruth.Negative) ||
+		!slices.Equal(gotReasons.Words, wantReasons.Words) {
+		t.Fatalf("validated result = %#x/%#x %#x, want %#x/%#x %#x",
+			gotTruth.Positive, gotTruth.Negative, gotReasons.Words,
+			wantTruth.Positive, wantTruth.Negative, wantReasons.Words)
+	}
+}

@@ -130,6 +130,13 @@ func TestLeafEvaluationAllocations(t *testing.T) {
 	}); allocs != 0 {
 		t.Fatalf("evalEvidence allocations = %g, want 0", allocs)
 	}
+	requireEvidenceBatch(evidenceBatch, evidenceProgram, &states)
+	evalEvidenceValidated(dst, reasons, evidenceBatch, evidenceProgram, &states, predicate)
+	if allocs := testing.AllocsPerRun(1000, func() {
+		evalEvidenceValidated(dst, reasons, evidenceBatch, evidenceProgram, &states, predicate)
+	}); allocs != 0 {
+		t.Fatalf("evalEvidenceValidated allocations = %g, want 0", allocs)
+	}
 }
 
 func BenchmarkEvalPredicate(b *testing.B) {

@@ -82,11 +82,9 @@ func (i *EvidenceStateIndex) reason(state schema.EvidenceStateID) schema.ReasonI
 	return i.reasons[state-1]
 }
 
-func requireEvidenceBatch(batch Batch, p *program.Program, states *EvidenceStateIndex, predicate EvidencePredicate) {
-	if p == nil || states == nil || states.program != p || len(states.reasons) != len(p.EvidenceStateNames) ||
-		predicate.Kind == 0 || uint64(predicate.Kind) > uint64(len(p.EvidenceKindNames)) ||
-		predicate.State == 0 || uint64(predicate.State) > uint64(len(p.EvidenceStateNames)) {
-		panic("eval: invalid evidence predicate")
+func requireEvidenceBatch(batch Batch, p *program.Program, states *EvidenceStateIndex) {
+	if p == nil || states == nil || states.program != p || len(states.reasons) != len(p.EvidenceStateNames) {
+		panic("eval: invalid evidence program")
 	}
 	if uint64(len(batch.RequestIDs)) != uint64(batch.Rows) ||
 		uint64(len(batch.EvidenceOffsets)) != uint64(batch.Rows)+1 ||
@@ -122,8 +120,26 @@ func requireEvidenceBatch(batch Batch, p *program.Program, states *EvidenceState
 	}
 }
 
+func requireEvidencePredicate(p *program.Program, states *EvidenceStateIndex, predicate EvidencePredicate) {
+	if p == nil || states == nil || states.program != p || len(states.reasons) != len(p.EvidenceStateNames) ||
+		predicate.Kind == 0 || uint64(predicate.Kind) > uint64(len(p.EvidenceKindNames)) ||
+		predicate.State == 0 || uint64(predicate.State) > uint64(len(p.EvidenceStateNames)) {
+		panic("eval: invalid evidence predicate")
+	}
+}
+
 func evalEvidence(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *program.Program, states *EvidenceStateIndex, predicate EvidencePredicate) {
-	requireEvidenceBatch(batch, p, states, predicate)
+	requireEvidencePredicate(p, states, predicate)
+	requireEvidenceBatch(batch, p, states)
+	evalEvidenceUnchecked(dst, reasons, batch, states, predicate)
+}
+
+func evalEvidenceValidated(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *program.Program, states *EvidenceStateIndex, predicate EvidencePredicate) {
+	requireEvidencePredicate(p, states, predicate)
+	evalEvidenceUnchecked(dst, reasons, batch, states, predicate)
+}
+
+func evalEvidenceUnchecked(dst truth.Planes, reasons ReasonPlanes, batch Batch, states *EvidenceStateIndex, predicate EvidencePredicate) {
 	words := resetLeafOutputs(dst, reasons, batch.Rows)
 	evidence := batch.Evidence
 	for row := uint32(0); row < batch.Rows; row++ {
