@@ -24,11 +24,13 @@ var (
 
 // Decoder is a reusable request/evidence decode worker.
 type Decoder struct {
-	program    *program.Program
-	fieldTable symbolTable
-	kindTable  symbolTable
-	stateTable symbolTable
-	scan       scanner
+	program        *program.Program
+	fieldTable     symbolTable
+	kindTable      symbolTable
+	stateTable     symbolTable
+	evidenceIDKeys []schema.EvidenceID
+	evidenceIDRows []uint32
+	scan           scanner
 }
 
 type symbolTable struct {

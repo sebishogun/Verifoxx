@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/sebishogun/verifoxx/internal/eval"
 	policyindex "github.com/sebishogun/verifoxx/internal/index"
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/schema"
@@ -263,5 +264,100 @@ func TestBindRejectsMalformedProgramCatalogs(t *testing.T) {
 				t.Fatalf("bind error = %v, want %v", err, ErrInvalidProgram)
 			}
 		})
+	}
+}
+
+func TestDecodeEvidenceRowsAndStateQualifiers(t *testing.T) {
+	p := decoderTestProgram(t)
+	var d Decoder
+	if err := d.bind(p); err != nil {
+		t.Fatalf("bind: %v", err)
+	}
+	var b eval.Builder
+	if err := b.Begin(p, 0, 2, 0); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	source := []byte(`{"pack":"p","evidence":[` +
+		`{"attributes":{"status":"valid","subject":"alpha","reviewer":"r","timing":"before","timestamp":42},"type":"approval_record","id":"E2"},` +
+		`{"id":"E1","type":"approval_record","attributes":{"status":"valid","timestamp_state":"stale"}}` +
+		`],"schema_version":1}`)
+	if err := d.decodeEvidence(&b, source, Limits{}, 2); err != nil {
+		t.Fatalf("decodeEvidence: %v", err)
+	}
+	batch, err := b.Finish()
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	if got := batch.Evidence.IDs; len(got) != 2 || got[0] != 2 || got[1] != 1 {
+		t.Fatalf("evidence IDs = %v, want [2 1]", got)
+	}
+	if got := batch.Evidence.States; len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("evidence states = %v, want [valid stale]", got)
+	}
+	if batch.Evidence.Timestamps[0] != 42 {
+		t.Fatalf("timestamp = %d, want 42", batch.Evidence.Timestamps[0])
+	}
+	for _, id := range []schema.SymbolID{
+		batch.Evidence.Subjects[0], batch.Evidence.Reviewers[0], batch.Evidence.Timings[0],
+	} {
+		if id <= schema.SymbolID(p.ProgramSymbolCount) {
+			t.Fatalf("extension symbol ID %d does not exceed ProgramSymbolCount %d", id, p.ProgramSymbolCount)
+		}
+	}
+	if row, ok := d.lookupEvidenceRow(1); !ok || row != 1 {
+		t.Fatalf("lookupEvidenceRow(E1) = (%d, %v), want (1, true)", row, ok)
+	}
+}
+
+func TestDecodeEvidenceRejectsInvalidRecords(t *testing.T) {
+	tests := []struct {
+		name string
+		rows uint32
+		body string
+		code ErrorCode
+	}{
+		{"duplicate ID", 2, `{"id":"E1","type":"approval_record","attributes":{"status":"valid"}},{"id":"E1","type":"approval_record","attributes":{"status":"valid"}}`, CodeDuplicateID},
+		{"missing status", 1, `{"id":"E1","type":"approval_record","attributes":{}}`, CodeMissingKey},
+		{"unknown kind", 1, `{"id":"E1","type":"unknown","attributes":{"status":"valid"}}`, CodeInvalidReference},
+		{"unknown state", 1, `{"id":"E1","type":"approval_record","attributes":{"status":"unknown"}}`, CodeInvalidReference},
+		{"unknown attribute", 1, `{"id":"E1","type":"approval_record","attributes":{"status":"valid","other":"x"}}`, CodeUnknownKey},
+		{"bad ID", 1, `{"id":"E01","type":"approval_record","attributes":{"status":"valid"}}`, CodeInvalidID},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := decoderTestProgram(t)
+			var d Decoder
+			if err := d.bind(p); err != nil {
+				t.Fatalf("bind: %v", err)
+			}
+			var b eval.Builder
+			if err := b.Begin(p, 0, tc.rows, 0); err != nil {
+				t.Fatalf("Begin: %v", err)
+			}
+			source := []byte(`{"schema_version":1,"pack":"p","evidence":[` + tc.body + `]}`)
+			err := d.decodeEvidence(&b, source, Limits{}, tc.rows)
+			requireDecodeError(t, err, InputEvidence, tc.code)
+		})
+	}
+}
+
+func TestCanonicalExternalID(t *testing.T) {
+	for _, tc := range []struct {
+		value  string
+		prefix byte
+		want   uint32
+		ok     bool
+	}{
+		{"R1", 'R', 1, true},
+		{"E4294967295", 'E', math.MaxUint32, true},
+		{"E0", 'E', 0, false},
+		{"E01", 'E', 0, false},
+		{"E4294967296", 'E', 0, false},
+		{"X1", 'E', 0, false},
+	} {
+		got, ok := canonicalID([]byte(tc.value), tc.prefix)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("canonicalID(%q, %q) = (%d, %v), want (%d, %v)", tc.value, tc.prefix, got, ok, tc.want, tc.ok)
+		}
 	}
 }
