@@ -46,10 +46,14 @@ func (e *Executor) prepare(p *program.Program, batch Batch) error {
 			break
 		}
 	}
+	e.prepareValidated(p, truthLen, reasonLen)
+	return nil
+}
+
+func (e *Executor) prepareValidated(p *program.Program, truthLen, reasonLen int) {
 	e.truthWords = resizeExecutorScratch(e.truthWords, truthLen)
 	e.reasonWords = resizeExecutorScratch(e.reasonWords, reasonLen)
 	e.program = p
-	return nil
 }
 
 func executorScratchLen(a, b, c uint64) (int, bool) {
@@ -253,10 +257,14 @@ type outcomeCandidate struct {
 // Execute evaluates p over batch and replaces dst with one deterministic
 // policy-owned outcome and compact numeric provenance per request row.
 func (e *Executor) Execute(dst *result.Batch, p *program.Program, batch Batch) error {
-	if e == nil || dst == nil || !validExecutionSemantics(p) {
+	if e == nil || dst == nil || p == nil {
 		return ErrInvalidProgram
 	}
-	if uint64(len(batch.RequestIDs)) != uint64(batch.Rows) || !validExecutionSelectors(p, batch) {
+	rebind := e.program != p
+	if rebind && !validExecutionSemantics(p) {
+		return ErrInvalidProgram
+	}
+	if uint64(len(batch.RequestIDs)) != uint64(batch.Rows) || !validExecutionBatchColumns(p, batch) {
 		return ErrInvalidProgram
 	}
 	for _, opcode := range p.Opcodes {
@@ -267,10 +275,12 @@ func (e *Executor) Execute(dst *result.Batch, p *program.Program, batch Batch) e
 			break
 		}
 	}
-	if _, ok := executorScratchLen(uint64(p.TruthSlotCount), 2, uint64(truth.WordCount(batch.Rows))); !ok {
+	truthLen, ok := executorScratchLen(uint64(p.TruthSlotCount), 2, uint64(truth.WordCount(batch.Rows)))
+	if !ok {
 		return ErrBatchTooLarge
 	}
-	if _, ok := executorScratchLen(uint64(p.ReasonSlotCount), truth.ReasonCount, uint64(truth.WordCount(batch.Rows))); !ok {
+	reasonLen, ok := executorScratchLen(uint64(p.ReasonSlotCount), truth.ReasonCount, uint64(truth.WordCount(batch.Rows)))
+	if !ok {
 		return ErrBatchTooLarge
 	}
 	maxRequirements, ok := executorResultLen(uint64(batch.Rows), uint64(len(p.RequirementIDs)), 4)
@@ -289,12 +299,15 @@ func (e *Executor) Execute(dst *result.Batch, p *program.Program, batch Batch) e
 	if !ok {
 		return ErrBatchTooLarge
 	}
-	if err := e.query.Bind(&p.ApplicabilityIndex); err != nil {
-		return ErrInvalidProgram
+	if rebind {
+		if err := e.query.Bind(&p.ApplicabilityIndex); err != nil {
+			return ErrInvalidProgram
+		}
+		if err := e.states.Bind(p); err != nil {
+			return ErrInvalidProgram
+		}
 	}
-	if err := e.prepare(p, batch); err != nil {
-		return err
-	}
+	e.prepareValidated(p, truthLen, reasonLen)
 
 	e.candidateWords = resizeExecutorScratch(e.candidateWords, int(p.ApplicabilityIndex.WordCount))
 	e.selectorValues = resizeExecutorScratch(e.selectorValues, len(p.ApplicabilityIndex.FieldIDs))
@@ -408,6 +421,12 @@ func validExecutionSemantics(p *program.Program) bool {
 			return false
 		}
 	}
+	for _, field := range p.ApplicabilityIndex.FieldIDs {
+		kind, column, ok := p.FieldIndex.Lookup(field)
+		if !ok || kind != schema.ValueKindSymbol || column >= p.FieldIndex.Counts[schema.ValueKindSymbol] {
+			return false
+		}
+	}
 	for row, requirementID := range p.RequirementIDs {
 		root := p.RequirementRoots[row]
 		if requirementID == 0 || !validExecutionRoot(p, root, program.RootApplicability) {
@@ -457,19 +476,21 @@ func validExecutionRoot(p *program.Program, root schema.InstructionID, flag prog
 	return root != 0 && uint64(root) <= uint64(len(p.Opcodes)) && p.RootFlags[root-1].Has(flag)
 }
 
-func validExecutionSelectors(p *program.Program, batch Batch) bool {
+func validExecutionBatchColumns(p *program.Program, batch Batch) bool {
 	words := uint64(truth.WordCount(batch.Rows))
-	if uint64(len(batch.PresenceMasks)) != uint64(len(p.FieldIndex.Kinds))*words ||
-		uint64(len(batch.SymbolValues)) != uint64(p.FieldIndex.Counts[schema.ValueKindSymbol])*uint64(batch.Rows) {
+	rows := uint64(batch.Rows)
+	if !validExecutionColumnLength(len(batch.PresenceMasks), uint64(len(p.FieldIndex.Kinds)), words) ||
+		!validExecutionColumnLength(len(batch.SymbolValues), uint64(p.FieldIndex.Counts[schema.ValueKindSymbol]), rows) ||
+		!validExecutionColumnLength(len(batch.IntegerValues), uint64(p.FieldIndex.Counts[schema.ValueKindInteger]), rows) ||
+		!validExecutionColumnLength(len(batch.TimestampValues), uint64(p.FieldIndex.Counts[schema.ValueKindTimestamp]), rows) ||
+		!validExecutionColumnLength(len(batch.BooleanValues), uint64(p.FieldIndex.Counts[schema.ValueKindBoolean]), words) {
 		return false
 	}
-	for _, field := range p.ApplicabilityIndex.FieldIDs {
-		kind, column, ok := p.FieldIndex.Lookup(field)
-		if !ok || kind != schema.ValueKindSymbol || column >= p.FieldIndex.Counts[schema.ValueKindSymbol] {
-			return false
-		}
-	}
 	return true
+}
+
+func validExecutionColumnLength(length int, columns, stride uint64) bool {
+	return (columns == 0 || stride <= math.MaxUint64/columns) && uint64(length) == columns*stride
 }
 
 func (e *Executor) selectRequirementCandidates(p *program.Program, batch Batch, row uint32) {
@@ -526,7 +547,7 @@ func (e *Executor) resolveApplicability(
 		panic("eval: unresolved applicability has no reason")
 	}
 	return outcomeCandidate{
-		remediations: resolution.Remediations,
+		remediations: executionResolutionRemediations(resolution),
 		outcome:      resolution.Outcome,
 		requirement:  requirementID,
 		clause:       clauseID,
@@ -574,10 +595,17 @@ func (e *Executor) resolveActiveClause(
 		candidate.outcome = resolution.Outcome
 		candidate.driverReason = resolution.Reason
 		candidate.node = e.firstReasonNode(p, clauseRow, row, rows, resolution.Reason)
-		candidate.remediations = resolution.Remediations
+		candidate.remediations = executionResolutionRemediations(resolution)
 		candidate.reasons = reasons
 	}
 	return candidate
+}
+
+func executionResolutionRemediations(resolution result.Resolution) []schema.RemediationID {
+	if resolution.Terminal {
+		return nil
+	}
+	return resolution.Remediations
 }
 
 func executionClauseRemediations(p *program.Program, clauseRow int, outcomeID schema.OutcomeID) []schema.RemediationID {

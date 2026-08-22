@@ -867,3 +867,151 @@ func TestExecutorAllocations(t *testing.T) {
 		t.Fatalf("warm Execute allocations = %g, want 0", allocs)
 	}
 }
+
+func TestExecuteTerminalResolutionDropsRemediation(t *testing.T) {
+	t.Run("active clause", func(t *testing.T) {
+		p := executionTestProgram(t, 1)
+		row := int(truth.ReasonStale - 1)
+		p.Resolutions.OutcomeIDs[row] = 4
+		p.Resolutions.RemediationStarts[row] = 0
+		p.Resolutions.RemediationCounts[row] = 1
+		if err := p.ValidateResultTables(); err != nil {
+			t.Fatal(err)
+		}
+
+		var builder Builder
+		if err := builder.Begin(p, 1, 1, 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := builder.SetRequestID(0, 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := builder.SetSymbol(0, 1, executionSymbolActive); err != nil {
+			t.Fatal(err)
+		}
+		if err := builder.SetSymbol(0, 2, executionSymbolYes); err != nil {
+			t.Fatal(err)
+		}
+		if err := builder.SetEvidence(0, evidenceRecord(1, 1, 2)); err != nil {
+			t.Fatal(err)
+		}
+		if err := builder.SetEvidenceCSR([]uint32{0, 1}, []uint32{0}); err != nil {
+			t.Fatal(err)
+		}
+		batch, err := builder.Finish()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var executor Executor
+		var got result.Batch
+		if err := executor.Execute(&got, p, batch); err != nil {
+			t.Fatal(err)
+		}
+		if got.OutcomeIDs[0] != 4 || len(got.RemediationIDs) != 0 || got.RemediationOffsets[1] != 0 {
+			t.Fatalf("terminal clause resolution = outcome %d remediations %v offsets %v, want outcome 4 without remediation",
+				got.OutcomeIDs[0], got.RemediationIDs, got.RemediationOffsets)
+		}
+	})
+
+	t.Run("unresolved applicability", func(t *testing.T) {
+		p := executionTestProgram(t, 1)
+		row := int(truth.ReasonMissing - 1)
+		p.Resolutions.OutcomeIDs[row] = 4
+		p.Resolutions.RemediationStarts[row] = 0
+		p.Resolutions.RemediationCounts[row] = 1
+		if err := p.ValidateResultTables(); err != nil {
+			t.Fatal(err)
+		}
+
+		var builder Builder
+		if err := builder.Begin(p, 1, 0, 0); err != nil {
+			t.Fatal(err)
+		}
+		if err := builder.SetRequestID(0, 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := builder.SetSymbol(0, 2, executionSymbolYes); err != nil {
+			t.Fatal(err)
+		}
+		batch, err := builder.Finish()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var executor Executor
+		var got result.Batch
+		if err := executor.Execute(&got, p, batch); err != nil {
+			t.Fatal(err)
+		}
+		if got.OutcomeIDs[0] != 4 || len(got.RemediationIDs) != 0 || got.RemediationOffsets[1] != 0 {
+			t.Fatalf("terminal applicability resolution = outcome %d remediations %v offsets %v, want outcome 4 without remediation",
+				got.OutcomeIDs[0], got.RemediationIDs, got.RemediationOffsets)
+		}
+	})
+}
+
+func executionIntegerProgram(t testing.TB) *program.Program {
+	t.Helper()
+	p := executionTestProgram(t, 1)
+	if err := policyindex.BuildSchema(&p.FieldIndex, []schema.ValueKind{
+		schema.ValueKindSymbol,
+		schema.ValueKindInteger,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p.FieldKinds = []schema.ValueKind{schema.ValueKindSymbol, schema.ValueKindInteger}
+	p.ValueKinds = []schema.ValueKind{schema.ValueKindSymbol, schema.ValueKindInteger}
+	p.ValueRefs = []uint32{uint32(executionSymbolActive), 1}
+	p.IntegerValues = []int64{7}
+	return p
+}
+
+func executionIntegerBatch(t testing.TB, p *program.Program) Batch {
+	t.Helper()
+	var builder Builder
+	if err := builder.Begin(p, 1, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.SetRequestID(0, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.SetSymbol(0, 1, executionSymbolActive); err != nil {
+		t.Fatal(err)
+	}
+	if err := builder.SetInteger(0, 2, 7); err != nil {
+		t.Fatal(err)
+	}
+	batch, err := builder.Finish()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return batch
+}
+
+func TestExecutorRejectsMalformedTypedColumnsAtomically(t *testing.T) {
+	p := executionIntegerProgram(t)
+	batch := executionIntegerBatch(t, p)
+	var executor Executor
+	var dst result.Batch
+	if err := executor.Execute(&dst, p, batch); err != nil {
+		t.Fatal(err)
+	}
+	bad := batch
+	bad.IntegerValues = bad.IntegerValues[:0]
+	assertExecutorRejectedAtomically(t, &executor, &dst, p, p, bad)
+}
+
+func TestExecutorSameProgramBindIsNoOp(t *testing.T) {
+	p := executionTestProgram(t, 1)
+	batch := executionRowsBatch(t, p, 1)
+	var executor Executor
+	var dst result.Batch
+	if err := executor.Execute(&dst, p, batch); err != nil {
+		t.Fatal(err)
+	}
+	p.InstructionSourceStarts[0] = p.InstructionSourceEnds[0] + 1
+	if err := executor.Execute(&dst, p, batch); err != nil {
+		t.Fatalf("same immutable Program Execute rescanned static columns: %v", err)
+	}
+}
