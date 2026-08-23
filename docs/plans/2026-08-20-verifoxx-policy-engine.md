@@ -1181,3 +1181,289 @@ until upstream conformance suites and controlled benchmarks prove both.
     generated-code, frontend conformance, integration, Docker, and benchmark
     gates with explicit outer and test timeouts.
 14. Commit when requested: `feat: add policy language compatibility frontends`.
+
+## Phase 19: Strategic Policy Platform Extensions
+
+### Task 53: Add A Reviewed Natural-Language Policy Frontend
+
+**Scope:**
+
+Treat model output as an untrusted policy proposal, never as an executable or
+publishable policy. Every extracted requirement must retain exact source
+citations, unresolved ambiguity, and conflicts for deterministic validation and
+human approval. Do not claim legal correctness or autonomous compliance.
+
+**Files:**
+- Create: `frontend/natural/frontend.go`
+- Create: `frontend/natural/proposal.go`
+- Create: `frontend/natural/provider.go`
+- Create: `frontend/natural/validate.go`
+- Create: `internal/frontend/natural/lower.go`
+- Create: `internal/frontend/natural/citations.go`
+- Create: `internal/frontend/natural/review.go`
+- Test: `frontend/natural/frontend_test.go`
+- Test: `internal/frontend/natural/conformance_test.go`
+- Fuzz: `frontend/natural/fuzz_test.go`
+- Create: `testdata/frontends/natural/`
+- Document: `docs/natural-language-frontend.md`
+
+**Steps:**
+
+1. Define a provider-neutral extraction contract for plain text and
+   page-addressable documents. Record document hashes, page or byte spans,
+   quoted source text, requirement type, evidence obligations, exceptions,
+   non-negotiable restrictions, and unresolved ambiguity in a bounded proposal
+   representation separate from the trusted semantic AST.
+2. Write a threat model before adding an LLM provider. Cover prompt injection in
+   source documents, fabricated citations, omitted restrictions, conflicting
+   clauses, data exfiltration, provider retention, oversized documents,
+   nondeterministic output, and model-version drift.
+3. Implement deterministic text segmentation and structured extraction limits.
+   Keep PDF, OCR, and provider SDKs behind ingestion/provider interfaces; do not
+   introduce model calls, reflection, or document object graphs into compile or
+   evaluation paths.
+4. Require strict schema decoding, exact citation verification against the
+   hashed source, duplicate/conflict detection, and normal AST validation before
+   lowering. Missing, unclear, stale, or conflicting required material must
+   remain explicit uncertainty and must not be converted into approval logic.
+5. Emit a review artifact that shows each proposed semantic node beside its
+   source citation and assumptions. Require an explicit reviewer approval token
+   before conversion to native policy JSON or registry publication; never let a
+   provider publish or activate a policy directly.
+6. Add a deterministic non-LLM fixture provider and provider contract tests.
+   Then add optional LLM adapters without making network access part of default
+   tests or the offline assignment demonstration.
+7. Build a licensed or public-domain corpus with hand-reviewed expected
+   requirements, restrictions, evidence rules, exceptions, conflicts, and
+   citation spans. Measure precision, recall, citation validity, unsupported
+   cases, and reviewer corrections by corpus revision and provider version.
+8. Add malformed-output, prompt-injection, fabricated-citation, truncation,
+   Unicode, depth/size, cancellation, retry, and fuzz tests. Redact source
+   content and credentials from logs and telemetry.
+9. Run native, purego, 386, race, fuzz, vet, field-alignment, offline
+   conformance, and optional provider integration gates with explicit timeouts.
+10. Commit when requested: `feat: add reviewed natural language frontend`.
+
+### Task 54: Add SQL And PostgreSQL RLS Frontends
+
+**Scope:**
+
+Start with a documented PostgreSQL expression and Row-Level Security subset.
+Snowflake, Databricks, and other dialects require separate capability matrices
+and differential suites. Publish throughput claims only from controlled
+end-to-end measurements; the unverified `120+ GB/s` figure is not a target or
+project claim.
+
+**Files:**
+- Create: `frontend/sql/frontend.go`
+- Create: `frontend/sql/schema.go`
+- Create: `frontend/sql/diagnostic.go`
+- Create: `frontend/sql/postgres/parser.go`
+- Create: `frontend/sql/postgres/expression.go`
+- Create: `frontend/sql/postgres/rls.go`
+- Create: `internal/frontend/sql/lower.go`
+- Create: `internal/frontend/sql/types.go`
+- Test: `frontend/sql/postgres/expression_test.go`
+- Test: `frontend/sql/postgres/rls_test.go`
+- Test: `internal/frontend/sql/conformance_test.go`
+- Benchmark: `internal/frontend/sql/benchmark_test.go`
+- Create: `testdata/frontends/sql/postgres/`
+- Document: `docs/sql-frontend.md`
+
+**Steps:**
+
+1. Publish a capability matrix for PostgreSQL scalar expressions, operators,
+   NULL behavior, casts, functions, parameters, roles, commands, `USING`,
+   `WITH CHECK`, permissive policies, and restrictive policies. Reject every
+   unsupported construct with a source-spanned diagnostic.
+2. Parse expressions and RLS definitions without executing user SQL. Bind all
+   columns, parameters, roles, actions, and types against an explicit schema;
+   prohibit catalog or database access during evaluator execution.
+3. Define and test the exact mapping from SQL three-valued logic and evaluation
+   errors into Verifoxx truth, reason, and decision semantics. Preserve NULL,
+   missing input, cast failure, and unsupported function behavior rather than
+   coercing them to false.
+4. Lower PostgreSQL RLS command selection, role matching, permissive OR,
+   restrictive AND, `USING`, and `WITH CHECK` into the shared semantic IR.
+   Preserve non-negotiable restrictions and policy precedence.
+5. Add differential tests against PostgreSQL 19 for every supported expression
+   and RLS combination, including NULL-heavy rows, type boundaries, role sets,
+   INSERT/UPDATE/DELETE behavior, malformed policies, and conflicting rules.
+6. Add bounded columnar input bindings for native SoA and optional Arrow-style
+   buffers. Keep parsing, row decoding, maps, reflection, and string conversion
+   outside per-row evaluator kernels.
+7. Add parser fuzzing, depth/size limits, Unicode identifiers, parameter
+   binding, injection-shaped input, dialect mismatch, and unsupported-function
+   tests. Pin parser and PostgreSQL corpus revisions.
+8. Benchmark parse/lower cost separately from scalar, SIMD, indexed, and
+   parallel row evaluation. Report row width, data layout, NULL density, policy
+   shape, setup cost, allocations, SIMD tier, memory bandwidth, and hardware.
+9. Add additional SQL dialects only behind their own capability and
+   differential suites; do not infer compatibility from PostgreSQL syntax.
+10. Commit when requested: `feat: add sql and postgres rls frontends`.
+
+### Task 55: Add Semantic Policy Diff And Regression Analysis
+
+**Scope:**
+
+Report proven equivalence or change only within explicit bounded domains and
+supported semantics. For unbounded strings, external functions, unsupported
+frontends, or exhausted search budgets, return `Inconclusive` rather than a
+false proof. Every widening finding must include a reproducible counterexample
+when one is available.
+
+**Files:**
+- Create: `policy/diff/diff.go`
+- Create: `policy/diff/result.go`
+- Create: `policy/diff/domain.go`
+- Create: `policy/diff/counterexample.go`
+- Create: `internal/diff/compare.go`
+- Create: `internal/diff/search.go`
+- Create: `internal/diff/prune.go`
+- Test: `policy/diff/diff_test.go`
+- Test: `internal/diff/exhaustive_test.go`
+- Fuzz: `internal/diff/fuzz_test.go`
+- Create: `testdata/diff/`
+- Document: `docs/policy-diff.md`
+
+**Steps:**
+
+1. Define machine-readable outcomes `Equivalent`, `Widened`, `Narrowed`,
+   `Changed`, and `Inconclusive`. Define a caller-supplied decision-risk matrix
+   rather than assuming one universal ordering among Approve, Reject, Revise,
+   and Escalate.
+2. Compare validated canonical Programs and prune identical immutable slabs,
+   symbols, clauses, resolution rows, and subgraphs by stable identity before
+   exploring changed regions. Never compare source formatting alone.
+3. Define bounded domains for fields, evidence states, time/staleness,
+   environment verification, roles, approvals, and usage limits. Include all
+   four truth states and every decision in exhaustive small-domain tests.
+4. Implement deterministic counterexample search over changed applicability and
+   fact dependencies. Reuse SoA batches and bulk evaluation so candidate
+   generation does not add maps or per-row allocation to evaluator kernels.
+5. For each behavior change, report the smallest reproducible input found,
+   old/new decisions, reason masks, applied requirements, evidence differences,
+   remediation changes, source spans, assumptions, and remaining uncertainty.
+6. Add policy-pack allow/deny regression assertions for CI, including
+   forbidden approval widening, permitted bounded revisions, expected
+   escalation changes, and approved exception files with expiry metadata.
+7. Prove the analyzer against exhaustive enumeration for small generated
+   policies, mutation testing, symmetry checks, deterministic ordering, stale
+   evidence, conflicts, and native/frontend-equivalent policies. Fuzz both the
+   domain and policy pair.
+8. Add optional symbolic backends only behind the same result contract and
+   validate every claimed proof against the concrete evaluator. Solver timeout
+   or unsupported semantics must produce `Inconclusive`.
+9. Add `verifoxx diff` JSON and human-readable output with stable exit codes for
+   no change, allowed change, forbidden regression, and inconclusive analysis.
+10. Commit when requested: `feat: add semantic policy regression analysis`.
+
+### Task 56: Add A Conformant WebAssembly Target
+
+**Scope:**
+
+Export the same validated immutable Program and evaluator semantics through a
+versioned WebAssembly ABI. Begin with a portable WASI/browser-compatible module;
+Envoy, Istio, Cloudflare, and other host ABIs are separate adapters and require
+their own conformance and deployment tests.
+
+**Files:**
+- Create: `target/wasm/abi.go`
+- Create: `target/wasm/export.go`
+- Create: `target/wasm/manifest.go`
+- Create: `internal/target/wasm/layout.go`
+- Create: `internal/target/wasm/runtime.go`
+- Create: `cmd/verifoxx-wasm/main.go`
+- Test: `target/wasm/export_test.go`
+- Test: `internal/target/wasm/conformance_test.go`
+- Benchmark: `internal/target/wasm/benchmark_test.go`
+- Create: `testdata/wasm/`
+- Document: `docs/wasm.md`
+
+**Steps:**
+
+1. Define a versioned ABI for module metadata, Program loading, bounded input
+   columns, output columns, errors, cancellation/fuel, memory ownership, and
+   host capability negotiation. Do not expose Go pointers or transport types.
+2. Serialize canonical Program slabs deterministically with checksums, limits,
+   schema/version metadata, and validation on module load. Reject malformed or
+   incompatible artifacts before allocating evaluator storage.
+3. Pre-size linear-memory arenas for request columns, scratch bitplanes,
+   results, and encoded output. Keep steady-state per-row and per-node paths free
+   of host calls and allocation.
+4. Preserve scalar, four-valued truth, reason, resolution, remediation, and
+   explanation semantics first. Enable WebAssembly SIMD only behind runtime
+   feature detection and differential parity with the scalar module.
+5. Run the native and WebAssembly evaluators over the same conformance corpus in
+   at least two independent runtimes, plus a browser harness. Cover malformed
+   modules, memory limits, fuel exhaustion, cancellation, traps, large batches,
+   Unicode, and deterministic output.
+6. Add reproducible build and generated-artifact drift checks. Record toolchain,
+   ABI, Program schema, module hash, runtime, and SIMD feature metadata.
+7. Add host adapters only after the base ABI is stable. Treat proxy request
+   metadata, edge storage, clocks, and network access as explicit host inputs;
+   never silently weaken missing-evidence or verified-environment rules.
+8. Benchmark module startup, Program load, host copy cost, warm evaluation,
+   scalar/SIMD throughput, memory growth, output encoding, and native parity.
+   Report runtime and host overhead separately.
+9. Commit when requested: `feat: add conformant wasm target`.
+
+### Task 57: Add Low-Overhead OpenTelemetry And Production Telemetry
+
+**Scope:**
+
+Extend Task 35 rather than building a second metrics path. Telemetry is updated
+once per batch or bounded outcome group outside evaluator kernels. Labels must
+have fixed cardinality, and traces/logs must never contain request, evidence,
+policy source, database credentials, or other protected payloads.
+
+**Files:**
+- Create: `telemetry/telemetry.go`
+- Create: `telemetry/config.go`
+- Create: `telemetry/metrics.go`
+- Create: `telemetry/tracing.go`
+- Create: `internal/telemetry/counters.go`
+- Create: `internal/telemetry/batch.go`
+- Test: `telemetry/telemetry_test.go`
+- Test: `internal/telemetry/counters_test.go`
+- Benchmark: `internal/telemetry/benchmark_test.go`
+- Create: `deploy/telemetry/prometheus-rules.yaml`
+- Document: `docs/telemetry.md`
+
+**Steps:**
+
+1. Define stable metric names, units, bounded labels, temporality, and privacy
+   rules before instrumentation. Include evaluation totals by the four fixed
+   decisions, escalation totals by bounded reason enum, batch rows, latency,
+   queue wait, active admissions, policy reloads, audit outcomes, and shutdown
+   failures. Never label by request ID, evidence value, arbitrary policy name,
+   source hash, user, URL, or error string.
+2. Implement cache-conscious atomic batch counters and fixed decision/reason
+   arrays. Aggregate evaluator results once per batch; do not add per-node
+   callbacks, spans, interfaces, locks, maps, formatting, or exporter calls to
+   scalar/SIMD kernels.
+3. Expose Prometheus collection and OpenTelemetry metrics through one snapshot
+   contract so exporters cannot alter evaluator behavior. Keep telemetry fully
+   optional and preserve zero steady-state evaluation allocations when disabled.
+4. Add sampled transport/service spans for admission, decode, policy lookup,
+   evaluation, audit acknowledgment, and response encoding. Propagate trace
+   context through HTTP and gRPC adapters while keeping database and provider
+   credentials redacted.
+5. Define readiness/liveness signals separately from metrics. Export active
+   policy version, SIMD tier, build version, migration status, and dependency
+   health only as bounded metadata, not high-cardinality labels.
+6. Add deterministic exporter tests, race tests, cardinality-limit tests,
+   redaction tests, shutdown flush tests, unavailable-collector behavior, and
+   checks that exporter backpressure cannot block required policy evaluation or
+   required audit persistence.
+7. Benchmark telemetry disabled, counters only, Prometheus scrape, sampled OTel,
+   and forced tracing with interleaved runs. Report throughput, tail latency,
+   allocations, bytes, contention, scrape cost, sample rate, and hardware; set
+   an overhead budget from measurements rather than assumption.
+8. Add bounded Prometheus recording/alerting rules for decision-rate changes,
+   escalation spikes, audit failures, queue saturation, reload failures, and
+   shutdown timeouts. Document multi-window alerts and expected false-positive
+   tradeoffs.
+9. Run native, purego, 386, race, integration, redaction, cardinality,
+   field-alignment, and benchmark gates with explicit timeouts.
+10. Commit when requested: `feat: add production telemetry`.
