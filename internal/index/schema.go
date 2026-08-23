@@ -11,10 +11,11 @@ import (
 )
 
 var (
-	ErrInvalidSchema = errors.New("index: invalid field schema")
-	ErrInvalidPolicy = errors.New("index: invalid applicability constraints")
-	ErrInvalidQuery  = errors.New("index: invalid candidate query")
-	ErrIndexTooLarge = errors.New("index: fixed-width limit exceeded")
+	ErrInvalidSchema    = errors.New("index: invalid field schema")
+	ErrInvalidPolicy    = errors.New("index: invalid applicability constraints")
+	ErrInvalidQuery     = errors.New("index: invalid candidate query")
+	ErrInvalidFactIndex = errors.New("index: invalid fact bitmap index")
+	ErrIndexTooLarge    = errors.New("index: fixed-width limit exceeded")
 )
 
 // Schema maps each one-based FieldID to its value kind and zero-based column

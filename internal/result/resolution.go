@@ -16,6 +16,7 @@ type RuleSetID uint32
 // is a separate CSR backing array; all four are borrowed.
 type ResolutionTable struct {
 	OutcomeIDs        []schema.OutcomeID
+	ExplanationIDs    []schema.ExplanationID
 	RemediationStarts []uint32
 	RemediationCounts []uint16
 	RemediationIDs    []schema.RemediationID
@@ -54,7 +55,7 @@ func NewResolver(outcomes OutcomeTable, remediations RemediationTable, rules Res
 		return Resolver{}, ErrInvalidRemediationTable
 	}
 	n := len(rules.OutcomeIDs)
-	if n == 0 || len(rules.RemediationStarts) != n || len(rules.RemediationCounts) != n {
+	if n == 0 || len(rules.ExplanationIDs) != n || len(rules.RemediationStarts) != n || len(rules.RemediationCounts) != n {
 		return Resolver{}, ErrInvalidResolutionTable
 	}
 	if n%truth.ReasonCount != 0 {
@@ -63,6 +64,11 @@ func NewResolver(outcomes OutcomeTable, remediations RemediationTable, rules Res
 	for _, id := range rules.OutcomeIDs {
 		if _, ok := outcomes.Lookup(id); !ok {
 			return Resolver{}, ErrInvalidOutcomeReference
+		}
+	}
+	for _, id := range rules.ExplanationIDs {
+		if id == 0 {
+			return Resolver{}, ErrInvalidExplanationReference
 		}
 	}
 	edgeLen := uint64(len(rules.RemediationIDs))
@@ -83,6 +89,7 @@ func NewResolver(outcomes OutcomeTable, remediations RemediationTable, rules Res
 type Resolution struct {
 	Remediations []schema.RemediationID
 	Outcome      schema.OutcomeID
+	Explanation  schema.ExplanationID
 	Reason       schema.ReasonID
 	Terminal     bool
 }
@@ -126,6 +133,7 @@ func (r *Resolver) Resolve(ruleSet RuleSetID, reasons truth.ReasonMask) (Resolut
 	count := int(r.rules.RemediationCounts[winRow])
 	return Resolution{
 		Outcome:      current,
+		Explanation:  r.rules.ExplanationIDs[winRow],
 		Reason:       reason,
 		Terminal:     r.outcomes.Terminal[int(current-1)],
 		Remediations: r.rules.RemediationIDs[start : start+count],

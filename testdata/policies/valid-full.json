@@ -2,6 +2,9 @@
   "schema_version": 1,
   "name": "verifoxx",
   "version": "1.0.0",
+  "assumptions": [
+    "Policy {policy_name} version {policy_version} applies to request {request_id}."
+  ],
   "evidence_kinds": [
     {"name": "approval_record"},
     {"name": "usage_adjustment"}
@@ -35,16 +38,45 @@
             ]
           },
           "evidence": [
-            {"op": "evidence_matches", "kind": "approval_record", "state": "current"}
+            {
+              "op": "evidence_matches",
+              "kind": "approval_record",
+              "state": "current",
+              "explanation": {
+                "issue": "Required {evidence_kind} evidence is {reason}.",
+                "conflict": "Evidence {evidence_id} has conflicting state {evidence_state}."
+              }
+            }
           ],
           "resolution": {
-            "satisfied": "Approve",
-            "false": "Reject",
-            "missing": "Escalate",
-            "stale": "Escalate",
-            "unclear": "Escalate",
-            "unverifiable": "Escalate",
-            "conflict": "Escalate"
+            "satisfied": {
+              "outcome": "Approve",
+              "explanation": {"rationale": "Requirement {requirement_id} is satisfied.", "uncertainty": []}
+            },
+            "false": {
+              "outcome": "Reject",
+              "explanation": {"rationale": "Requirement {requirement_id} is violated.", "uncertainty": []}
+            },
+            "missing": {
+              "outcome": "Escalate",
+              "explanation": {"rationale": "Required evidence is {reason}.", "uncertainty": ["Qualifying evidence remains unresolved."]}
+            },
+            "stale": {
+              "outcome": "Escalate",
+              "explanation": {"rationale": "Required evidence is {reason}.", "uncertainty": []}
+            },
+            "unclear": {
+              "outcome": "Escalate",
+              "explanation": {"rationale": "Required evidence is {reason}.", "uncertainty": []}
+            },
+            "unverifiable": {
+              "outcome": "Escalate",
+              "explanation": {"rationale": "Required evidence is {reason}.", "uncertainty": []}
+            },
+            "conflict": {
+              "outcome": "Escalate",
+              "explanation": {"rationale": "Required evidence is {reason}.", "uncertainty": []}
+            }
           },
           "remediations": [
             {"kind": "set_field", "field": "context.usage", "value": "standard"},

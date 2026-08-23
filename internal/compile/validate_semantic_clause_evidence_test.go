@@ -28,6 +28,7 @@ func appendClause(t *testing.T, doc *ast.Document, assertion schema.NodeID, evid
 	doc.ClauseOnUnclear = append(doc.ClauseOnUnclear, 1)
 	doc.ClauseOnUnverifiable = append(doc.ClauseOnUnverifiable, 1)
 	doc.ClauseOnConflict = append(doc.ClauseOnConflict, 1)
+	doc.ClauseExplanationIDs = append(doc.ClauseExplanationIDs, doc.ClauseExplanationIDs[:ast.ResolutionBranchCount]...)
 	doc.ClauseSourceStarts = append(doc.ClauseSourceStarts, span.Start)
 	doc.ClauseSourceEnds = append(doc.ClauseSourceEnds, span.End)
 }

@@ -105,8 +105,8 @@ The following criteria determine whether the design is acceptable.
 
 | Area | Decision | Reason |
 |---|---|---|
-| Language | Go 1.27 | It matches the developer's strongest language and provides the required systems tooling and experimental SIMD support. |
-| SIMD | `github.com/sebishogun/simd` v1.21.0 with `GOEXPERIMENT=simd` | The library provides measured whole-slice kernels, runtime dispatch, portable fallbacks, masks, and columnar primitives. |
+| Language | Go 1.27 | It matches the developer's strongest language and provides the required systems tooling. |
+| SIMD | `github.com/sebishogun/simd` v1.21.0 whole-slice API | The library provides measured kernels, runtime dispatch, portable fallbacks, masks, and columnar primitives without an experiment flag. |
 | Policy representation | Bounded semantic AST | A custom AST can preserve evidence state, remediation, and uncertainty without outsourcing the main assignment. |
 | AST layout | Pointerless typed slabs with SoA payloads and integer references | This follows the useful part of WunderGraph's AST architecture while keeping hot columns contiguous. |
 | Execution representation | Immutable, indexed SoA program | Compilation can remove names and pointers from the hot path and arrange operations for bulk execution. |
@@ -555,7 +555,7 @@ Indexes must be conservative. A missing field cannot be treated as a definite mi
 ```text
 Go 1.27.0
 github.com/sebishogun/simd v1.21.0
-GOEXPERIMENT=simd
+normal runtime-dispatched slice API
 ```
 
 ### 14.2 Responsibility
@@ -589,11 +589,15 @@ A direct Go 1.27 intrinsic implementation is allowed only when all of these cond
 The project will verify:
 
 - Normal optimized build
-- `GOEXPERIMENT=simd` build
 - `purego` build
+- 386 scalar-fallback build
 - Pinned SIMD tiers through the library's controls
 - Scalar and accelerated equivalence
 - Lengths around every vector and dispatch boundary
+
+The v1.21.0 experiment-gated vector-type API uses Go 1.26 `archsimd` names and
+does not compile with Go 1.27. Verifoxx does not use that API; add its build lane
+only after the pinned dependency ships a compatible release.
 
 ## 15. Evaluation Algorithm
 
@@ -1220,7 +1224,7 @@ The repository includes:
 - `Dockerfile.debug` with Delve and symbols
 - `compose.yaml` for PostgreSQL 19 and service adapters
 
-The release image pins Go 1.27, uses `GOEXPERIMENT=simd`, and uses a multi-stage build. The runtime image contains no compiler or source tree.
+The release image pins Go 1.27 and uses a multi-stage build. Normal dependency runtime dispatch selects the available SIMD tier. The runtime image contains no compiler or source tree.
 
 `devx demo` runs with embedded data and no database. `devx full` starts PostgreSQL 19, applies migrations, starts HTTP and gRPC, waits for health, and can launch the TUI.
 

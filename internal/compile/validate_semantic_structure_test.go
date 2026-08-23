@@ -13,8 +13,8 @@ var clausePeerNames = [...]string{
 	"ClauseEvidenceStarts", "ClauseEvidenceCounts", "ClauseRemediationStarts",
 	"ClauseRemediationCounts", "ClauseOnSatisfied", "ClauseOnFalse",
 	"ClauseOnMissing", "ClauseOnStale", "ClauseOnUnclear",
-	"ClauseOnUnverifiable", "ClauseOnConflict", "ClauseSourceStarts",
-	"ClauseSourceEnds",
+	"ClauseOnUnverifiable", "ClauseOnConflict", "ClauseExplanationIDs",
+	"ClauseSourceStarts", "ClauseSourceEnds",
 }
 
 // requirementPeerNames is the fixed column-name table for the requirement
@@ -64,6 +64,7 @@ var clausePeers = []func(*ast.Document){
 	func(d *ast.Document) { d.ClauseOnUnclear = append(d.ClauseOnUnclear, 0) },
 	func(d *ast.Document) { d.ClauseOnUnverifiable = append(d.ClauseOnUnverifiable, 0) },
 	func(d *ast.Document) { d.ClauseOnConflict = append(d.ClauseOnConflict, 0) },
+	func(d *ast.Document) { d.ClauseExplanationIDs = append(d.ClauseExplanationIDs, 0) },
 	func(d *ast.Document) { d.ClauseSourceStarts = append(d.ClauseSourceStarts, 0) },
 	func(d *ast.Document) { d.ClauseSourceEnds = append(d.ClauseSourceEnds, 0) },
 }
@@ -79,7 +80,7 @@ func TestValidateStructuralClauseColumnLengths(t *testing.T) {
 			})
 		})
 	}
-	t.Run("all thirteen peers", func(t *testing.T) {
+	t.Run("all fourteen peers", func(t *testing.T) {
 		doc, fields := buildMinimal(t)
 		for _, mutate := range clausePeers {
 			mutate(doc)
@@ -134,6 +135,8 @@ func TestValidateStructuralAllTableOrder(t *testing.T) {
 	doc.RemediationKinds = append(doc.RemediationKinds, 0)
 	doc.ClauseEvidenceStarts = append(doc.ClauseEvidenceStarts, 0)
 	doc.RequirementApplicabilityRoots = append(doc.RequirementApplicabilityRoots, 0)
+	doc.TemplateArgs = append(doc.TemplateArgs, 0)
+	doc.ExplanationUncertaintyCounts = append(doc.ExplanationUncertaintyCounts, 0)
 	var v Validator
 	want(t, v.validateStructure(nil, doc, fields), []Diagnostic{
 		{Code: CodeColumnLength, Table: TableNode},
@@ -147,6 +150,8 @@ func TestValidateStructuralAllTableOrder(t *testing.T) {
 		{Code: CodeColumnLength, Table: TableRemediation},
 		{Code: CodeColumnLength, Table: TableClause},
 		{Code: CodeColumnLength, Table: TableRequirement},
+		{Code: CodeColumnLength, Table: TableTemplate},
+		{Code: CodeColumnLength, Table: TableExplanation},
 	})
 }
 

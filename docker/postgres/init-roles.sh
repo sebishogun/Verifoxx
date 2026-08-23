@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -eu
+
+: "${POSTGRES_USER:?POSTGRES_USER is required}"
+: "${POSTGRES_DB:?POSTGRES_DB is required}"
+: "${VERIFOXX_MIGRATION_PASSWORD:?VERIFOXX_MIGRATION_PASSWORD is required}"
+: "${VERIFOXX_RUNTIME_PASSWORD:?VERIFOXX_RUNTIME_PASSWORD is required}"
+
+psql --set=ON_ERROR_STOP=1 \
+  --username "$POSTGRES_USER" \
+  --dbname "$POSTGRES_DB" \
+  --set=migration_password="$VERIFOXX_MIGRATION_PASSWORD" \
+  --set=runtime_password="$VERIFOXX_RUNTIME_PASSWORD" \
+  --set=database_name="$POSTGRES_DB" <<'SQL'
+CREATE ROLE verifoxx_migrator LOGIN PASSWORD :'migration_password'
+  NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+CREATE ROLE verifoxx_runtime LOGIN PASSWORD :'runtime_password'
+  NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+
+ALTER DATABASE :"database_name" OWNER TO verifoxx_migrator;
+REVOKE ALL ON DATABASE :"database_name" FROM PUBLIC;
+GRANT CONNECT ON DATABASE :"database_name" TO verifoxx_runtime;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+SQL

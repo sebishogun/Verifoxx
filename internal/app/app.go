@@ -1,60 +1,23 @@
+// Package app connects process I/O to the command-line adapter.
 package app
 
 import (
 	"io"
 
-	"github.com/sebishogun/verifoxx/internal/buildinfo"
+	"github.com/sebishogun/verifoxx/internal/adapters/cli"
 )
 
-const helpText = `verifoxx - evidence-aware policy engine
+type emptyReader struct{}
 
-Usage:
-  verifoxx <command>
-
-Commands:
-  help       show this help
-  --version  print the build version
-`
+func (emptyReader) Read([]byte) (int, error) { return 0, io.EOF }
 
 // Run dispatches the command-line interface and returns the process exit code.
-// Output goes to the caller-provided writers so tests can capture it.
+// It preserves the original no-stdin entry point for callers and tests.
 func Run(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		return runHelp(stdout)
-	}
-	switch args[0] {
-	case "--version":
-		if len(args) != 1 {
-			return runUsage(stderr)
-		}
-		return runVersion(stdout)
-	case "help", "--help", "-h":
-		if len(args) != 1 {
-			return runUsage(stderr)
-		}
-		return runHelp(stdout)
-	default:
-		return runUsage(stderr)
-	}
+	return RunWithInput(args, emptyReader{}, stdout, stderr)
 }
 
-func runVersion(w io.Writer) int {
-	if _, err := io.WriteString(w, buildinfo.Version()+"\n"); err != nil {
-		return 1
-	}
-	return 0
-}
-
-func runHelp(w io.Writer) int {
-	if _, err := io.WriteString(w, helpText); err != nil {
-		return 1
-	}
-	return 0
-}
-
-func runUsage(w io.Writer) int {
-	if _, err := io.WriteString(w, helpText); err != nil {
-		return 1
-	}
-	return 2
+// RunWithInput dispatches the command-line interface with caller-owned I/O.
+func RunWithInput(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	return cli.Execute(args, stdin, stdout, stderr)
 }

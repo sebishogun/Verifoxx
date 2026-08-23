@@ -62,6 +62,7 @@ func buildLinearFixture(tb testing.TB, nodes int) (*ast.Document, *schema.Schema
 	if err := ab.SetSource(benchmarkSource); err != nil {
 		tb.Fatal(err)
 	}
+	explanations := installValidExplanations(tb, ab)
 	outName, err := ab.AddSymbolValue(benchmarkOutcomeName)
 	if err != nil {
 		tb.Fatal(err)
@@ -82,10 +83,14 @@ func buildLinearFixture(tb testing.TB, nodes int) (*ast.Document, *schema.Schema
 	if err != nil {
 		tb.Fatal(err)
 	}
-	resolution := ast.Resolution{
-		OnSatisfied: outcome, OnFalse: outcome, OnMissing: outcome, OnStale: outcome,
-		OnUnclear: outcome, OnUnverifiable: outcome, OnConflict: outcome,
-	}
+	resolution := explanations.resolution
+	resolution.OnSatisfied = outcome
+	resolution.OnFalse = outcome
+	resolution.OnMissing = outcome
+	resolution.OnStale = outcome
+	resolution.OnUnclear = outcome
+	resolution.OnUnverifiable = outcome
+	resolution.OnConflict = outcome
 	clause, err := ab.AddClause(group, nil, resolution, nil, benchmarkSpan)
 	if err != nil {
 		tb.Fatal(err)
@@ -160,6 +165,7 @@ func buildRequirementFixture(tb testing.TB, reqs int) (*ast.Document, *schema.Sc
 	if err := ab.SetSource(benchmarkSource); err != nil {
 		tb.Fatal(err)
 	}
+	explanations := installValidExplanations(tb, ab)
 	outName, err := ab.AddSymbolValue(benchmarkOutcomeName)
 	if err != nil {
 		tb.Fatal(err)
@@ -172,10 +178,14 @@ func buildRequirementFixture(tb testing.TB, reqs int) (*ast.Document, *schema.Sc
 	if err != nil {
 		tb.Fatal(err)
 	}
-	resolution := ast.Resolution{
-		OnSatisfied: outcome, OnFalse: outcome, OnMissing: outcome, OnStale: outcome,
-		OnUnclear: outcome, OnUnverifiable: outcome, OnConflict: outcome,
-	}
+	resolution := explanations.resolution
+	resolution.OnSatisfied = outcome
+	resolution.OnFalse = outcome
+	resolution.OnMissing = outcome
+	resolution.OnStale = outcome
+	resolution.OnUnclear = outcome
+	resolution.OnUnverifiable = outcome
+	resolution.OnConflict = outcome
 	clause, err := ab.AddClause(exists, nil, resolution, nil, benchmarkSpan)
 	if err != nil {
 		tb.Fatal(err)

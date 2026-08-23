@@ -6,7 +6,8 @@
 // positive and assigned sequentially by the owning builder. The rule is
 // uniform across RequirementID, RequestID, EvidenceID, NodeID, FieldID,
 // ValueID, SymbolID, OutcomeID, RemediationID, EvidenceKindID,
-// EvidenceStateID, ClauseID, InstructionID, SlotID, and ReasonID.
+// EvidenceStateID, ClauseID, InstructionID, SlotID, ReasonID, TemplateID, and
+// ExplanationID.
 package schema
 
 // RequirementID identifies a requirement in the policy pack's R1..Rn space.
@@ -57,3 +58,9 @@ type SlotID uint32
 
 // ReasonID identifies a reason-mask slot or explanation reason.
 type ReasonID uint32
+
+// TemplateID identifies one compiled policy-authored text template.
+type TemplateID uint32
+
+// ExplanationID identifies one rationale and its uncertainty templates.
+type ExplanationID uint32

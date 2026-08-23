@@ -13,6 +13,22 @@ type Document struct {
 	NodeKinds []NodeKind
 	NodeRefs  []uint32
 
+	TemplateBytes         []byte
+	TemplateOpStarts      []uint32
+	TemplateOpCounts      []uint16
+	TemplateLiteralStarts []uint32
+	TemplateMaxBytes      []uint32
+	TemplateContexts      []TemplateContext
+	TemplateOps           []TemplateOp
+	TemplateArgs          []uint32
+	AssumptionTemplateIDs []schema.TemplateID
+	AssumptionsSet        []uint8
+
+	ExplanationRationaleIDs      []schema.TemplateID
+	ExplanationUncertaintyStarts []uint32
+	ExplanationUncertaintyCounts []uint16
+	ExplanationUncertaintyIDs    []schema.TemplateID
+
 	CompareFields     []schema.FieldID
 	CompareOps        []CompareOp
 	CompareValues     []schema.ValueID
@@ -26,16 +42,16 @@ type Document struct {
 
 	NotChildren []schema.NodeID
 
-	EvidenceKinds    []schema.EvidenceKindID
-	EvidenceStates   []schema.EvidenceStateID
-	EvidenceSubjects []schema.ValueID
-	EvidenceScopes   []schema.ValueID
-	EvidenceTimings  []schema.ValueID
+	EvidenceKinds            []schema.EvidenceKindID
+	EvidenceStates           []schema.EvidenceStateID
+	EvidenceSubjects         []schema.ValueID
+	EvidenceScopes           []schema.ValueID
+	EvidenceTimings          []schema.ValueID
+	EvidenceIssueTemplateIDs []schema.TemplateID
 
 	SourceStarts []uint32
 	SourceEnds   []uint32
 	InputBytes   []byte
-	Metadata     PolicyMetadata
 
 	ValueKinds      []schema.ValueKind
 	ValueRefs       []uint32
@@ -80,6 +96,7 @@ type Document struct {
 	ClauseOnUnclear         []schema.OutcomeID
 	ClauseOnUnverifiable    []schema.OutcomeID
 	ClauseOnConflict        []schema.OutcomeID
+	ClauseExplanationIDs    []schema.ExplanationID
 	ClauseSourceStarts      []uint32
 	ClauseSourceEnds        []uint32
 
@@ -90,6 +107,8 @@ type Document struct {
 	RequirementClauseIDs          []schema.ClauseID
 	RequirementSourceStarts       []uint32
 	RequirementSourceEnds         []uint32
+
+	Metadata PolicyMetadata
 }
 
 // Len returns the number of AST nodes.

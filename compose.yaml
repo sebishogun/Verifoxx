@@ -1,0 +1,26 @@
+name: verifoxx
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:19beta3}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-verifoxx-admin-local}
+      POSTGRES_DB: ${POSTGRES_DB:-verifoxx}
+      VERIFOXX_MIGRATION_PASSWORD: ${VERIFOXX_MIGRATION_PASSWORD:-verifoxx-migrator-local}
+      VERIFOXX_RUNTIME_PASSWORD: ${VERIFOXX_RUNTIME_PASSWORD:-verifoxx-runtime-local}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./docker/postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-init-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    stop_grace_period: 30s
+
+volumes:
+  postgres-data:

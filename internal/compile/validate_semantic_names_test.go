@@ -8,6 +8,58 @@ import (
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
 
+func makeSymbolValueEmpty(t *testing.T, doc *ast.Document, id schema.ValueID) {
+	t.Helper()
+	if id == 0 || uint64(id) > uint64(len(doc.ValueRefs)) || doc.ValueKinds[id-1] != schema.ValueKindSymbol {
+		t.Fatalf("value %d is not a symbol", id)
+	}
+	ref := doc.ValueRefs[id-1]
+	if uint64(ref) >= uint64(len(doc.SymbolLengths)) {
+		t.Fatalf("symbol ref %d is out of range", ref)
+	}
+	doc.SymbolLengths[ref] = 0
+}
+
+func TestValidateSemanticNamesRejectEmptySymbols(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*ast.Document) Diagnostic
+	}{
+		{"policy name", func(doc *ast.Document) Diagnostic {
+			id := doc.Metadata.Name
+			makeSymbolValueEmpty(t, doc, id)
+			return Diagnostic{Code: CodeInvalidValue, Table: TableDocument, Member: MemberMetadataName, Value: id}
+		}},
+		{"policy version", func(doc *ast.Document) Diagnostic {
+			id := doc.Metadata.Version
+			makeSymbolValueEmpty(t, doc, id)
+			return Diagnostic{Code: CodeInvalidValue, Table: TableDocument, Member: MemberMetadataVersion, Value: id}
+		}},
+		{"evidence kind", func(doc *ast.Document) Diagnostic {
+			id := doc.EvidenceKindNames[0]
+			makeSymbolValueEmpty(t, doc, id)
+			return Diagnostic{Code: CodeInvalidValue, Table: TableEvidenceKind, Member: MemberName, Row: 1, Span: ast.SourceSpan{Start: 0, End: 2}, Value: id, EvidenceKind: 1}
+		}},
+		{"evidence state", func(doc *ast.Document) Diagnostic {
+			id := doc.EvidenceStateNames[0]
+			makeSymbolValueEmpty(t, doc, id)
+			return Diagnostic{Code: CodeInvalidValue, Table: TableEvidenceState, Member: MemberName, Row: 1, Span: ast.SourceSpan{Start: 0, End: 2}, Value: id, EvidenceState: 1}
+		}},
+		{"outcome", func(doc *ast.Document) Diagnostic {
+			id := doc.OutcomeNames[0]
+			makeSymbolValueEmpty(t, doc, id)
+			return Diagnostic{Code: CodeInvalidValue, Table: TableOutcome, Member: MemberName, Row: 1, Span: ast.SourceSpan{Start: 0, End: 2}, Value: id, Outcome: 1}
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := buildExplanationCSEFixture(t)
+			wantDiagnostic := test.mutate(fixture.doc)
+			want(t, Validate(nil, fixture.doc, fixture.fields), []Diagnostic{wantDiagnostic})
+		})
+	}
+}
+
 // appendLiteral appends one structurally valid literal value row of kind to doc
 // and returns its ValueID.
 func appendLiteral(t *testing.T, doc *ast.Document, kind schema.ValueKind) schema.ValueID {

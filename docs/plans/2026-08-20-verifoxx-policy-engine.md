@@ -403,7 +403,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 4. Run `go test -timeout 60s ./internal/simdops`; expect failure.
 5. Implement thin whole-slice wrappers with no per-element function calls.
 6. Expose runtime tier and threshold metadata for diagnostics.
-7. Run `GOEXPERIMENT=simd go test -timeout 60s ./internal/simdops`; expect success.
+7. Run `GOARCH=386 go test -timeout 60s ./internal/simdops`; expect scalar-fallback success.
 8. Run `go test -timeout 60s -tags=purego ./internal/simdops`; expect success.
 9. Commit when requested: `feat: integrate simd primitives`.
 
@@ -418,11 +418,11 @@ SoA data + grouped lifetimes + zero per-record allocation
 
 1. Write differential tests comparing scalar and SIMD outputs across all truth states and evidence reasons.
 2. Cover rows 0, 1, 7, 8, 15, 16, 31, 32, 63, 64, 65 and each library threshold plus or minus one.
-3. Run `GOEXPERIMENT=simd go test -timeout 60s ./internal/eval`; expect failure before SIMD execution exists.
+3. Run `go test -timeout 60s ./internal/eval`; expect failure before SIMD execution exists.
 4. Route compatible program stages through `simdops` whole-slice operations.
 5. Retain scalar handling below measured crossover and for unsupported shapes.
-6. Run `GOEXPERIMENT=simd go test -timeout 60s ./internal/eval`; expect success.
-7. Run `GOEXPERIMENT=simd go test -timeout 120s -bench=Evaluate -benchmem ./internal/eval`.
+6. Run `go test -timeout 60s ./internal/eval`; expect success.
+7. Run `go test -timeout 120s -bench=Evaluate -benchmem ./internal/eval`.
 8. Verify selected dispatch through library diagnostics and disassembly.
 9. Commit when requested: `feat: evaluate policy batches with simd`.
 
@@ -442,8 +442,8 @@ SoA data + grouped lifetimes + zero per-record allocation
 3. Run `go test -timeout 60s ./internal/index`; expect failure.
 4. Implement index construction only for compiler-selected reused fields.
 5. Set the initial crossover from measured results, not a guessed constant.
-6. Run `GOEXPERIMENT=simd go test -timeout 60s ./internal/index ./internal/eval`.
-7. Run `GOEXPERIMENT=simd go test -timeout 120s -bench=BatchIndex -benchmem ./internal/index`.
+6. Run `go test -timeout 60s ./internal/index ./internal/eval`.
+7. Run `go test -timeout 120s -bench=BatchIndex -benchmem ./internal/index`.
 8. Commit when requested: `feat: prune batch predicates with bitmaps`.
 
 ## Phase 9: Add Parallel Execution And Arena Ownership
@@ -482,7 +482,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 5. Add a global work budget that prevents nested oversubscription.
 6. Run `go test -timeout 60s -race ./internal/scheduler`; expect success.
 7. Benchmark batch and worker sizes; record the measured parallel crossover.
-8. Run `GOEXPERIMENT=simd go test -timeout 120s -bench=Scheduler -benchmem ./internal/scheduler`.
+8. Run `go test -timeout 120s -bench=Scheduler -benchmem ./internal/scheduler`.
 9. Commit when requested: `feat: evaluate large batches in parallel`.
 
 ### Task 23: Add Immutable Policy Registry Publication
@@ -649,7 +649,9 @@ SoA data + grouped lifetimes + zero per-record allocation
 
 1. Write integration tests for publication notification, duplicate delivery, reconnect, cancellation, and shutdown.
 2. Run `go test -timeout 300s -race -tags=integration ./internal/adapters/postgres`; expect failure.
-3. Implement `LISTEN/NOTIFY` as a hint; always reload by version/hash and tolerate duplicates.
+3. Implement `LISTEN/NOTIFY` as a hint; reload the configured policy's durable
+   active version, use the payload hash only to detect stale or foreign hints,
+   and tolerate duplicates.
 4. Run `go test -timeout 300s -race -tags=integration ./internal/adapters/postgres`; expect success.
 5. Commit when requested: `feat: reload published policies`.
 
@@ -888,7 +890,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 
 1. Write an opt-in end-to-end test that builds the image, runs default evaluation, and compares JSON with the golden file.
 2. Run `go test -timeout 600s -tags=docker ./internal/e2e`; expect failure.
-3. Implement a multi-stage Go 1.27 release image with `GOEXPERIMENT=simd`.
+3. Implement a multi-stage Go 1.27 release image using normal SIMD runtime dispatch.
 4. Implement a debug image with Delve and unstripped symbols.
 5. Run `timeout 600s docker build -t verifoxx:test .`; expect success.
 6. Run `timeout 60s docker run --rm verifoxx:test evaluate`; compare output.
@@ -929,7 +931,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 1. Add deterministic generators for batch rows, policy nodes, evidence density, and match density.
 2. Benchmark scalar, SIMD, indexed, and parallel modes independently.
 3. Report SIMD tier, rows, nodes, evidence density, workers, allocations, and bytes.
-4. Run `GOEXPERIMENT=simd go test -timeout 300s -run='^$' -bench=BenchmarkEvaluate -benchmem ./internal/eval`.
+4. Run `go test -timeout 300s -run='^$' -bench=BenchmarkEvaluate -benchmem ./internal/eval`.
 5. Add HTTP and gRPC load generation without exposing a production benchmark endpoint.
 6. Add interleaved benchstat comparison and `perf stat` guidance.
 7. Commit measured baselines only after a quiet-machine run.
@@ -1026,7 +1028,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 
 **Steps:**
 
-1. Add CI jobs for normal, `GOEXPERIMENT=simd`, purego, unit, race, integration, generated-code drift, docs, and Docker.
+1. Add CI jobs for normal runtime-dispatched SIMD, purego, 386 scalar fallback, unit, race, integration, generated-code drift, docs, and Docker.
 2. Add a release matrix for Linux and macOS on amd64 and arm64 where supported.
 3. Ensure every test/build command in CI has an explicit timeout.
 4. Run `timeout 300s go run ./cmd/devx test`; expect success.
@@ -1039,6 +1041,25 @@ SoA data + grouped lifetimes + zero per-record allocation
 11. Inspect `git status --short` and confirm only intended files changed.
 12. Commit when requested: `ci: verify verifoxx release`.
 
+### Task 51: Audit And Consolidate Reusable Core Paths
+
+**Files:**
+- Modify: production and test files identified by the audit
+- Modify: `docs/performance.md`
+- Modify: `docs/plans/2026-08-20-verifoxx-policy-engine-design.md`
+
+**Steps:**
+
+1. Inventory repeated parsing, validation, sizing, CSR, provenance, formatting, and adapter logic after Tasks 1-50 are complete.
+2. Distinguish semantic duplication from intentionally specialized hot paths; do not introduce abstraction into per-row or per-element kernels without measurement.
+3. Consolidate only behaviorally identical paths behind allocation-free helpers or shared immutable data.
+4. Add regression tests before every behavior-affecting consolidation.
+5. Run focused `-benchmem` and interleaved before/after benchmarks for every hot-path change; delete any cleanup that regresses the measured path.
+6. Audit production struct layout with the pinned field-alignment analyzer and review GC pointer-scan bytes and cache locality.
+7. Run native, purego, 386, race/checkptr, vet, generated-code, docs, integration, and full release gates with explicit timeouts.
+8. Record retained specializations and their measured rationale in `docs/performance.md`.
+9. Commit when requested: `refactor: consolidate reusable core paths`.
+
 ## Final Acceptance Gate
 
 Before calling the system complete, gather fresh output for all of these commands:
@@ -1046,7 +1067,7 @@ Before calling the system complete, gather fresh output for all of these command
 ```bash
 go test -timeout 180s ./...
 go test -timeout 180s -race ./internal/... ./cmd/...
-GOEXPERIMENT=simd go test -timeout 180s ./...
+GOARCH=386 go test -timeout 180s ./...
 go test -timeout 180s -tags=purego ./...
 go test -timeout 300s -tags=integration ./...
 timeout 300s go run ./cmd/devx policy:check
@@ -1069,3 +1090,94 @@ Then verify manually:
 - Neovim connects to the debug worker through Delve DAP while the TUI runs separately.
 - `devx doctor`, `devx demo`, and `devx full` work from documented commands.
 - The one-page design note remains within the assignment limit.
+
+## Phase 18: Post-Submission OSS Compatibility Frontends
+
+### Task 52: Add CEL, Rego, Cedar, And Protobuf Compatibility Frontends
+
+**Scope:**
+
+This is a post-submission expansion task, not part of the bounded assignment
+deliverable. Treat each source language as a compiler frontend over the shared
+Verifoxx semantic IR. Do not claim drop-in compatibility or a fixed speedup
+until upstream conformance suites and controlled benchmarks prove both.
+
+**Files:**
+- Create: `frontend/frontend.go`
+- Create: `frontend/diagnostic.go`
+- Create: `frontend/cel/parser.go`
+- Create: `frontend/cel/lower.go`
+- Create: `frontend/rego/parser.go`
+- Create: `frontend/rego/lower.go`
+- Create: `frontend/cedar/parser.go`
+- Create: `frontend/cedar/lower.go`
+- Create: `frontend/proto/options.proto`
+- Create: `frontend/proto/plugin.go`
+- Create: `internal/frontend/semantic.go`
+- Create: `internal/frontend/lower.go`
+- Create: `cmd/protoc-gen-verifoxx/main.go`
+- Test: `frontend/cel/cel_test.go`
+- Test: `frontend/rego/rego_test.go`
+- Test: `frontend/cedar/cedar_test.go`
+- Test: `frontend/proto/plugin_test.go`
+- Test: `internal/frontend/conformance_test.go`
+- Benchmark: `internal/frontend/benchmark_test.go`
+- Create: `testdata/frontends/cel/`
+- Create: `testdata/frontends/rego/`
+- Create: `testdata/frontends/cedar/`
+- Create: `testdata/frontends/proto/`
+- Document: `docs/frontends.md`
+
+**Steps:**
+
+1. Write a language-by-language capability matrix before implementation. Mark
+   every CEL macro/function/type, Rego rule/data/comprehension feature, Cedar
+   entity/action/resource construct, and Protobuf option shape as supported,
+   lowered with restrictions, or rejected. Full-language claims require full
+   upstream conformance.
+2. Define one bounded public frontend contract for source bytes, schema and
+   environment bindings, diagnostics with exact source spans, capability
+   reporting, and lowering into the shared semantic representation. Keep
+   parser-owned objects out of the evaluator and registry APIs.
+3. Add failing differential tests against the official CEL, OPA/Rego, and Cedar
+   evaluators for every supported construct. Include true, false, unknown,
+   error, missing-data, type-error, and policy-conflict cases; preserve each
+   language's semantics rather than translating only convenient syntax.
+4. Implement the CEL frontend first. Parse standard CEL source, bind a declared
+   environment, lower the supported typed expression graph into canonical
+   Verifoxx nodes, and emit explicit diagnostics for unsupported dynamic
+   dispatch, macros, functions, or aggregate semantics.
+5. Implement the Rego frontend second. Parse modules and data references, lower
+   only the capability-matrix subset, preserve undefined/error behavior, and
+   reject unsupported recursion, comprehensions, mutation-like built-ins, or
+   object/set semantics rather than silently changing their meaning.
+6. Implement the Cedar frontend third. Preserve permit/forbid precedence,
+   principal/action/resource typing, context conditions, entity references, and
+   authorization errors. Extend the shared semantic IR only where a reusable
+   authorization concept cannot be represented by existing clauses and
+   outcomes.
+7. Implement the Protobuf frontend as a deterministic `protoc` plugin over
+   custom options. Generate bounded policy/schema bindings at build time; keep
+   protobuf reflection and descriptor traversal out of runtime evaluation.
+8. Retain a single canonical lowering and optimization pipeline after frontend
+   parsing. Frontends may normalize syntax but must not fork evaluator kernels,
+   create per-row maps, or introduce reflection, interface dispatch, database
+   calls, or allocation into per-node/per-row execution.
+9. Add corpus, malformed-input, depth/size-limit, Unicode, source-span,
+   duplicate-definition, and fuzz tests for every parser. Pin upstream grammar
+   and conformance-corpus revisions and check generated-code drift.
+10. Benchmark parse, semantic analysis, lowering, cold compilation, warm scalar
+    evaluation, SIMD evaluation, and parallel batch evaluation separately.
+    Compare equivalent policies and data against the official engines with
+    interleaved runs, `benchstat`, fixed hardware metadata, and `-benchmem`.
+11. Publish performance claims only for measured supported subsets. Report
+    policy shape, row count, data representation, setup excluded/included,
+    allocations, latency distributions, throughput, SIMD tier, and unsupported
+    semantics beside every comparison.
+12. Add CLI/API format selection and automatic detection only after explicit
+    format commands pass conformance. Existing native-policy behavior and
+    machine-readable results must remain byte-identical.
+13. Run native, purego, 386, race/checkptr, fuzz, vet, field-alignment,
+    generated-code, frontend conformance, integration, Docker, and benchmark
+    gates with explicit outer and test timeouts.
+14. Commit when requested: `feat: add policy language compatibility frontends`.

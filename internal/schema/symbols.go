@@ -2,6 +2,7 @@ package schema
 
 import (
 	"bytes"
+	"math/bits"
 
 	"github.com/sebishogun/verifoxx/internal/arena"
 )
@@ -27,14 +28,10 @@ func HashSymbol(b []byte) uint64 {
 
 // nextPow2 returns the smallest power of two >= n (n >= 1).
 func nextPow2(n int) int {
-	n--
-	n |= n >> 1
-	n |= n >> 2
-	n |= n >> 4
-	n |= n >> 8
-	n |= n >> 16
-	n |= n >> 32
-	return n + 1
+	if n <= 1 {
+		return 1
+	}
+	return int(uint(1) << bits.Len(uint(n-1)))
 }
 
 // Interner interns byte slices into SymbolIDs using open addressing over

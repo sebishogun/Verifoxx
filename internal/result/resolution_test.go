@@ -14,10 +14,19 @@ import (
 var (
 	sinkOutcome     schema.OutcomeID
 	sinkReason      schema.ReasonID
+	sinkExplanation schema.ExplanationID
 	sinkTerminal    bool
 	sinkOK          bool
 	sinkRemediation schema.RemediationID
 )
+
+func explanationRows(n int) []schema.ExplanationID {
+	rows := make([]schema.ExplanationID, n)
+	for i := range rows {
+		rows[i] = schema.ExplanationID(i + 1)
+	}
+	return rows
+}
 
 // outcomeTable returns the four-row fixture shared by the lookup and
 // precedence tests: precedence [1,4,2,3], terminal [true,true,false,true].
@@ -346,6 +355,7 @@ func newResolverFixture() (OutcomeTable, RemediationTable, ResolutionTable) {
 		},
 		ResolutionTable{
 			OutcomeIDs:        []schema.OutcomeID{3, 4, 4, 4, 4, 4, 4, 4, 4},
+			ExplanationIDs:    explanationRows(truth.ReasonCount),
 			RemediationStarts: []uint32{0, 2, 2, 2, 2, 2, 2, 2, 2},
 			RemediationCounts: []uint16{2, 0, 0, 0, 0, 0, 0, 0, 0},
 			RemediationIDs:    []schema.RemediationID{1, 2},
@@ -379,6 +389,7 @@ func TestNewResolverValid(t *testing.T) {
 	assertBorrows(t, "remediations.Values", got.remediations.Values, remediations.Values)
 	assertBorrows(t, "remediations.EvidenceKinds", got.remediations.EvidenceKinds, remediations.EvidenceKinds)
 	assertBorrows(t, "rules.OutcomeIDs", got.rules.OutcomeIDs, rules.OutcomeIDs)
+	assertBorrows(t, "rules.ExplanationIDs", got.rules.ExplanationIDs, rules.ExplanationIDs)
 	assertBorrows(t, "rules.RemediationStarts", got.rules.RemediationStarts, rules.RemediationStarts)
 	assertBorrows(t, "rules.RemediationCounts", got.rules.RemediationCounts, rules.RemediationCounts)
 	assertBorrows(t, "rules.RemediationIDs", got.rules.RemediationIDs, rules.RemediationIDs)
@@ -396,6 +407,7 @@ func TestNewResolverValid(t *testing.T) {
 	}
 	wantRules := ResolutionTable{
 		OutcomeIDs:        []schema.OutcomeID{3, 4, 4, 4, 4, 4, 4, 4, 4},
+		ExplanationIDs:    explanationRows(truth.ReasonCount),
 		RemediationStarts: []uint32{0, 2, 2, 2, 2, 2, 2, 2, 2},
 		RemediationCounts: []uint16{2, 0, 0, 0, 0, 0, 0, 0, 0},
 		RemediationIDs:    []schema.RemediationID{1, 2},
@@ -424,6 +436,9 @@ func TestNewResolverValid(t *testing.T) {
 	if !slices.Equal(rules.OutcomeIDs, wantRules.OutcomeIDs) {
 		t.Fatalf("rules.OutcomeIDs = %v, want %v", rules.OutcomeIDs, wantRules.OutcomeIDs)
 	}
+	if !slices.Equal(rules.ExplanationIDs, wantRules.ExplanationIDs) {
+		t.Fatalf("rules.ExplanationIDs = %v, want %v", rules.ExplanationIDs, wantRules.ExplanationIDs)
+	}
 	if !slices.Equal(rules.RemediationStarts, wantRules.RemediationStarts) {
 		t.Fatalf("rules.RemediationStarts = %v, want %v", rules.RemediationStarts, wantRules.RemediationStarts)
 	}
@@ -439,6 +454,7 @@ func TestNewResolverValidEmptyRemediations(t *testing.T) {
 	outcomes, _, _ := newResolverFixture()
 	rules := ResolutionTable{
 		OutcomeIDs:        []schema.OutcomeID{4, 4, 4, 4, 4, 4, 4, 4, 4},
+		ExplanationIDs:    explanationRows(truth.ReasonCount),
 		RemediationStarts: make([]uint32, 9),
 		RemediationCounts: make([]uint16, 9),
 	}
@@ -486,11 +502,15 @@ func TestNewResolverMalformed(t *testing.T) {
 		}, ErrInvalidRemediationTable},
 		{"empty resolution rows", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
 			x.OutcomeIDs = nil
+			x.ExplanationIDs = nil
 			x.RemediationStarts = nil
 			x.RemediationCounts = nil
 		}, ErrInvalidResolutionTable},
 		{"outcome row column mismatch", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
 			x.OutcomeIDs = x.OutcomeIDs[:8]
+		}, ErrInvalidResolutionTable},
+		{"explanation row column mismatch", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.ExplanationIDs = x.ExplanationIDs[:8]
 		}, ErrInvalidResolutionTable},
 		{"start row column mismatch", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
 			x.RemediationStarts = x.RemediationStarts[:8]
@@ -500,11 +520,13 @@ func TestNewResolverMalformed(t *testing.T) {
 		}, ErrInvalidResolutionTable},
 		{"row count not divisible by nine (8 rows)", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
 			x.OutcomeIDs = x.OutcomeIDs[:8]
+			x.ExplanationIDs = x.ExplanationIDs[:8]
 			x.RemediationStarts = x.RemediationStarts[:8]
 			x.RemediationCounts = x.RemediationCounts[:8]
 		}, ErrInvalidResolutionTable},
 		{"row count not divisible by nine (10 rows)", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
 			x.OutcomeIDs = append(x.OutcomeIDs, 4)
+			x.ExplanationIDs = append(x.ExplanationIDs, 10)
 			x.RemediationStarts = append(x.RemediationStarts, 2)
 			x.RemediationCounts = append(x.RemediationCounts, 0)
 		}, ErrInvalidResolutionTable},
@@ -514,6 +536,9 @@ func TestNewResolverMalformed(t *testing.T) {
 		{"out-of-range outcome reference", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
 			x.OutcomeIDs[0] = 5
 		}, ErrInvalidOutcomeReference},
+		{"zero explanation reference", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
+			x.ExplanationIDs[0] = 0
+		}, ErrInvalidExplanationReference},
 		{"csr range beyond edge length", func(_ *OutcomeTable, _ *RemediationTable, x *ResolutionTable) {
 			x.RemediationStarts[1] = 3
 		}, ErrInvalidResolutionTable},
@@ -619,6 +644,9 @@ func TestResolveOneHotReasons(t *testing.T) {
 		if got.Reason != id {
 			t.Fatalf("Resolve(1, bit(%d)).Reason = %d, want %d", id, got.Reason, id)
 		}
+		if got.Explanation != schema.ExplanationID(id) {
+			t.Fatalf("Resolve(1, bit(%d)).Explanation = %d, want %d", id, got.Explanation, id)
+		}
 		switch id {
 		case truth.ReasonMissing:
 			if got.Outcome != 3 || got.Terminal {
@@ -688,6 +716,9 @@ func TestResolveMissingStalePrecedence(t *testing.T) {
 	if got.Outcome != 4 || got.Reason != truth.ReasonStale {
 		t.Fatalf("Resolve({1,2}) = outcome %d reason %d, want outcome 4 reason Stale", got.Outcome, got.Reason)
 	}
+	if got.Explanation != schema.ExplanationID(truth.ReasonStale) {
+		t.Fatalf("Explanation = %d, want stale row", got.Explanation)
+	}
 }
 
 func TestResolvePolicyPrecedence(t *testing.T) {
@@ -723,6 +754,7 @@ func TestResolveEqualPrecedenceLowerID(t *testing.T) {
 		t.Run(a.name, func(t *testing.T) {
 			rules := ResolutionTable{
 				OutcomeIDs:        []schema.OutcomeID{a.first, a.second, 4, 4, 4, 4, 4, 4, 4},
+				ExplanationIDs:    explanationRows(truth.ReasonCount),
 				RemediationStarts: make([]uint32, 9),
 				RemediationCounts: make([]uint16, 9),
 			}
@@ -740,6 +772,9 @@ func TestResolveEqualPrecedenceLowerID(t *testing.T) {
 			if got.Reason != a.reason {
 				t.Fatalf("Reason = %d, want %d", got.Reason, a.reason)
 			}
+			if got.Explanation != schema.ExplanationID(a.reason) {
+				t.Fatalf("Explanation = %d, want %d", got.Explanation, a.reason)
+			}
 		})
 	}
 }
@@ -748,6 +783,7 @@ func TestResolveSameOutcomeLowerReason(t *testing.T) {
 	outcomes, remediations, _ := newResolverFixture()
 	rules := ResolutionTable{
 		OutcomeIDs:        []schema.OutcomeID{4, 4, 4, 4, 4, 4, 4, 4, 4},
+		ExplanationIDs:    explanationRows(truth.ReasonCount),
 		RemediationStarts: make([]uint32, 9),
 		RemediationCounts: make([]uint16, 9),
 	}
@@ -759,7 +795,7 @@ func TestResolveSameOutcomeLowerReason(t *testing.T) {
 	if !ok {
 		t.Fatal("Resolve = ok=false, want true")
 	}
-	if got.Outcome != 4 || got.Reason != truth.ReasonMissing {
+	if got.Outcome != 4 || got.Reason != truth.ReasonMissing || got.Explanation != schema.ExplanationID(truth.ReasonMissing) {
 		t.Fatalf("Resolve({1,2}) = outcome %d reason %d, want outcome 4 reason Missing", got.Outcome, got.Reason)
 	}
 }
@@ -786,7 +822,7 @@ func TestResolveEmptyMask(t *testing.T) {
 	if ok {
 		t.Fatalf("Resolve(1, 0) = ok=true, want false")
 	}
-	if got.Outcome != 0 || got.Reason != 0 || got.Terminal || got.Remediations != nil {
+	if got.Outcome != 0 || got.Reason != 0 || got.Explanation != 0 || got.Terminal || got.Remediations != nil {
 		t.Fatalf("Resolve(1, 0) = %+v, want all-zero fields", got)
 	}
 }
@@ -810,6 +846,7 @@ func TestResolveInvalidRuleSetPanics(t *testing.T) {
 func TestResolveSecondRuleSetBlock(t *testing.T) {
 	outcomes, remediations, _ := newResolverFixture()
 	rows := make([]schema.OutcomeID, 2*truth.ReasonCount)
+	explanations := explanationRows(2 * truth.ReasonCount)
 	starts := make([]uint32, 2*truth.ReasonCount)
 	counts := make([]uint16, 2*truth.ReasonCount)
 	for i := range rows {
@@ -821,6 +858,7 @@ func TestResolveSecondRuleSetBlock(t *testing.T) {
 	counts[truth.ReasonCount] = 2
 	rules := ResolutionTable{
 		OutcomeIDs:        rows,
+		ExplanationIDs:    explanations,
 		RemediationStarts: starts,
 		RemediationCounts: counts,
 		RemediationIDs:    []schema.RemediationID{1, 2},
@@ -840,6 +878,9 @@ func TestResolveSecondRuleSetBlock(t *testing.T) {
 	if second.Outcome != 3 || second.Reason != truth.ReasonMissing {
 		t.Fatalf("Resolve(2, bit(Missing)) = outcome %d reason %d, want outcome 3 reason Missing from second block", second.Outcome, second.Reason)
 	}
+	if second.Explanation != schema.ExplanationID(truth.ReasonCount+int(truth.ReasonMissing)) {
+		t.Fatalf("second Explanation = %d", second.Explanation)
+	}
 	if !slices.Equal(second.Remediations, []schema.RemediationID{1, 2}) {
 		t.Fatalf("Resolve(2, bit(Missing)).Remediations = %v, want [1 2]", second.Remediations)
 	}
@@ -848,32 +889,34 @@ func TestResolveSecondRuleSetBlock(t *testing.T) {
 // resolverSnap is a deep copy of every backing slice a Resolver borrows, for
 // proving Resolve never mutates its tables.
 type resolverSnap struct {
-	names      []schema.SymbolID
-	precedence []uint8
-	terminal   []bool
-	kinds      []RemediationKind
-	fields     []schema.FieldID
-	values     []schema.ValueID
-	evidence   []schema.EvidenceKindID
-	outcomes   []schema.OutcomeID
-	starts     []uint32
-	counts     []uint16
-	edges      []schema.RemediationID
+	names        []schema.SymbolID
+	precedence   []uint8
+	terminal     []bool
+	kinds        []RemediationKind
+	fields       []schema.FieldID
+	values       []schema.ValueID
+	evidence     []schema.EvidenceKindID
+	outcomes     []schema.OutcomeID
+	explanations []schema.ExplanationID
+	starts       []uint32
+	counts       []uint16
+	edges        []schema.RemediationID
 }
 
 func snapshotResolver(r *Resolver) resolverSnap {
 	return resolverSnap{
-		names:      slices.Clone(r.outcomes.Names),
-		precedence: slices.Clone(r.outcomes.Precedence),
-		terminal:   slices.Clone(r.outcomes.Terminal),
-		kinds:      slices.Clone(r.remediations.Kinds),
-		fields:     slices.Clone(r.remediations.Fields),
-		values:     slices.Clone(r.remediations.Values),
-		evidence:   slices.Clone(r.remediations.EvidenceKinds),
-		outcomes:   slices.Clone(r.rules.OutcomeIDs),
-		starts:     slices.Clone(r.rules.RemediationStarts),
-		counts:     slices.Clone(r.rules.RemediationCounts),
-		edges:      slices.Clone(r.rules.RemediationIDs),
+		names:        slices.Clone(r.outcomes.Names),
+		precedence:   slices.Clone(r.outcomes.Precedence),
+		terminal:     slices.Clone(r.outcomes.Terminal),
+		kinds:        slices.Clone(r.remediations.Kinds),
+		fields:       slices.Clone(r.remediations.Fields),
+		values:       slices.Clone(r.remediations.Values),
+		evidence:     slices.Clone(r.remediations.EvidenceKinds),
+		outcomes:     slices.Clone(r.rules.OutcomeIDs),
+		explanations: slices.Clone(r.rules.ExplanationIDs),
+		starts:       slices.Clone(r.rules.RemediationStarts),
+		counts:       slices.Clone(r.rules.RemediationCounts),
+		edges:        slices.Clone(r.rules.RemediationIDs),
 	}
 }
 
@@ -886,6 +929,7 @@ func (s resolverSnap) same(r *Resolver) bool {
 		slices.Equal(s.values, r.remediations.Values) &&
 		slices.Equal(s.evidence, r.remediations.EvidenceKinds) &&
 		slices.Equal(s.outcomes, r.rules.OutcomeIDs) &&
+		slices.Equal(s.explanations, r.rules.ExplanationIDs) &&
 		slices.Equal(s.starts, r.rules.RemediationStarts) &&
 		slices.Equal(s.counts, r.rules.RemediationCounts) &&
 		slices.Equal(s.edges, r.rules.RemediationIDs)
@@ -905,7 +949,7 @@ func TestResolverReuse(t *testing.T) {
 	if ok {
 		t.Fatal("Resolve(empty mask) = ok=true, want false")
 	}
-	if empty.Outcome != 0 || empty.Reason != 0 || empty.Terminal || len(empty.Remediations) != 0 {
+	if empty.Outcome != 0 || empty.Reason != 0 || empty.Explanation != 0 || empty.Terminal || len(empty.Remediations) != 0 {
 		t.Fatalf("Resolve(empty mask) = %+v, want zero scalars and no remediations", empty)
 	}
 	if !snap.same(r) {
@@ -917,7 +961,7 @@ func TestResolverReuse(t *testing.T) {
 		if !ok {
 			t.Fatalf("repeated Resolve %d = ok=false, want true", i)
 		}
-		if repeat.Outcome != first.Outcome || repeat.Reason != first.Reason || repeat.Terminal != first.Terminal {
+		if repeat.Outcome != first.Outcome || repeat.Reason != first.Reason || repeat.Explanation != first.Explanation || repeat.Terminal != first.Terminal {
 			t.Fatalf("repeated Resolve %d scalars = %d/%d/%v, want %d/%d/%v",
 				i, repeat.Outcome, repeat.Reason, repeat.Terminal, first.Outcome, first.Reason, first.Terminal)
 		}
@@ -938,6 +982,7 @@ func TestResolveAllocs(t *testing.T) {
 		got, ok := r.Resolve(1, mask)
 		sinkOutcome = got.Outcome
 		sinkReason = got.Reason
+		sinkExplanation = got.Explanation
 		sinkTerminal = got.Terminal
 		sinkOK = ok
 		if len(got.Remediations) != 0 {
@@ -953,6 +998,7 @@ func TestResolveConflictRemediationBoundary(t *testing.T) {
 	outcomes, remediations, _ := newResolverFixture()
 	rules := ResolutionTable{
 		OutcomeIDs:        []schema.OutcomeID{4, 4, 4, 4, 4, 4, 4, 4, 3},
+		ExplanationIDs:    explanationRows(truth.ReasonCount),
 		RemediationStarts: make([]uint32, 9),
 		RemediationCounts: []uint16{0, 0, 0, 0, 0, 0, 0, 0, 2},
 		RemediationIDs:    []schema.RemediationID{1, 2},

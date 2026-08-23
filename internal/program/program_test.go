@@ -1,8 +1,10 @@
 package program
 
 import (
+	"reflect"
 	"testing"
 
+	"github.com/sebishogun/verifoxx/internal/result"
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
 
@@ -238,5 +240,54 @@ func TestEmptyProgramLookupSafe(t *testing.T) {
 	}
 	if kind, ok := p.ValueKind(1); ok {
 		t.Fatalf("ValueKind on empty program = (%v, true), want (invalid, false)", kind)
+	}
+}
+
+func TestProgramExplanationCatalogBorrowsProgramStorage(t *testing.T) {
+	p := Program{
+		Templates:                   result.TemplateTable{LiteralBytes: []byte("literal")},
+		Explanations:                result.ExplanationTable{RationaleTemplateIDs: []schema.TemplateID{1}},
+		Outcomes:                    result.OutcomeTable{Names: []schema.SymbolID{3}},
+		Remediations:                result.RemediationTable{Kinds: []result.RemediationKind{result.RemediationAddEvidence}},
+		SymbolBytes:                 []byte("symbols"),
+		SymbolStarts:                []uint32{0},
+		SymbolLengths:               []uint32{7},
+		ValueKinds:                  []schema.ValueKind{schema.ValueKindInteger},
+		ValueRefs:                   []uint32{1},
+		IntegerValues:               []int64{-1},
+		BooleanValues:               []uint64{1},
+		TimestampValues:             []int64{2},
+		FieldNames:                  []schema.SymbolID{1},
+		FieldKinds:                  []schema.ValueKind{schema.ValueKindInteger},
+		EvidenceKindNames:           []schema.SymbolID{2},
+		EvidenceStateNames:          []schema.SymbolID{3},
+		RequirementIDs:              []schema.RequirementID{1},
+		EvidenceIssueNodeIDs:        []schema.NodeID{4},
+		EvidenceIssueTemplateIDs:    []schema.TemplateID{1},
+		ClauseEvidenceSourceNodeIDs: []schema.NodeID{4},
+		ClauseEvidenceIDs:           []schema.InstructionID{1},
+		EvidenceKinds:               []schema.EvidenceKindID{1},
+		EvidenceStates:              []schema.EvidenceStateID{1},
+		PolicyName:                  1,
+		PolicyVersion:               2,
+	}
+	catalog := p.ExplanationCatalog()
+	if !reflect.DeepEqual(catalog.Templates, p.Templates) || !reflect.DeepEqual(catalog.Explanations, p.Explanations) ||
+		!reflect.DeepEqual(catalog.Outcomes, p.Outcomes) || !reflect.DeepEqual(catalog.Remediations, p.Remediations) ||
+		catalog.PolicyName != p.PolicyName || catalog.PolicyVersion != p.PolicyVersion {
+		t.Fatalf("ExplanationCatalog scalar/table projection = %+v", catalog)
+	}
+	if &catalog.SymbolBytes[0] != &p.SymbolBytes[0] || &catalog.ValueKinds[0] != &p.ValueKinds[0] ||
+		&catalog.FieldNames[0] != &p.FieldNames[0] || &catalog.EvidenceKindNames[0] != &p.EvidenceKindNames[0] ||
+		&catalog.RequirementIDs[0] != &p.RequirementIDs[0] || &catalog.EvidenceIssueNodeIDs[0] != &p.EvidenceIssueNodeIDs[0] ||
+		&catalog.EvidenceSourceNodes[0] != &p.ClauseEvidenceSourceNodeIDs[0] ||
+		&catalog.EvidenceInstructionIDs[0] != &p.ClauseEvidenceIDs[0] ||
+		&catalog.InstructionEvidenceKinds[0] != &p.EvidenceKinds[0] ||
+		&catalog.InstructionEvidenceStates[0] != &p.EvidenceStates[0] {
+		t.Fatal("ExplanationCatalog copied Program storage")
+	}
+	var nilProgram *Program
+	if got := nilProgram.ExplanationCatalog(); !reflect.DeepEqual(got, result.ExplanationCatalog{}) {
+		t.Fatalf("nil Program catalog = %+v", got)
 	}
 }

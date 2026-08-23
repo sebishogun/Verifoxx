@@ -23,6 +23,19 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
+func TestRunWithInputDelegatesToCLI(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := RunWithInput([]string{"--version"}, bytes.NewReader(nil), &out, &errOut); code != 0 {
+		t.Fatalf("RunWithInput(--version) = %d, want 0", code)
+	}
+	if got := out.String(); got != "devel\n" {
+		t.Fatalf("RunWithInput(--version) stdout = %q, want %q", got, "devel\n")
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("RunWithInput(--version) wrote to stderr: %q", errOut.String())
+	}
+}
+
 func TestRunHelpFlags(t *testing.T) {
 	for _, flag := range []string{"help", "--help", "-h"} {
 		var out, errOut bytes.Buffer

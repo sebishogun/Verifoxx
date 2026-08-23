@@ -163,6 +163,9 @@ func buildValueFixture(t *testing.T) (*ast.Document, *schema.Schema, *schema.Int
 	if err := ab.SetMetadata(name, version); err != nil {
 		t.Fatal(err)
 	}
+	if err := ab.SetAssumptions(nil); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := ab.AddIntegerValue(1); err != nil {
 		t.Fatal(err)
 	}
@@ -819,6 +822,9 @@ func buildZeroValueFixture(t *testing.T) (*ast.Document, *schema.Schema, *schema
 	if err := ab.SetMetadata(name, version); err != nil {
 		t.Fatal(err)
 	}
+	if err := ab.SetAssumptions(nil); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := ab.AddIntegerValue(0); err != nil {
 		t.Fatal(err)
 	}
@@ -980,6 +986,7 @@ func buildInstructionFixture(t *testing.T) (*ast.Document, *schema.Schema, *sche
 	if err := ab.SetSource(src); err != nil {
 		t.Fatal(err)
 	}
+	explanations := installValidExplanations(t, ab)
 	span := ast.SourceSpan{Start: 0, End: 2}
 
 	high, err := ab.AddSymbolValue([]byte("high"))
@@ -1083,6 +1090,9 @@ func buildInstructionFixture(t *testing.T) (*ast.Document, *schema.Schema, *sche
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := ab.SetEvidenceIssueTemplates(ev, explanations.issues); err != nil {
+		t.Fatal(err)
+	}
 	leaf, err := ab.AddExists(env, span)
 	if err != nil {
 		t.Fatal(err)
@@ -1095,10 +1105,14 @@ func buildInstructionFixture(t *testing.T) (*ast.Document, *schema.Schema, *sche
 		}
 	}
 
-	resolution := ast.Resolution{
-		OnSatisfied: out, OnFalse: out, OnMissing: out, OnStale: out,
-		OnUnclear: out, OnUnverifiable: out, OnConflict: out,
-	}
+	resolution := explanations.resolution
+	resolution.OnSatisfied = out
+	resolution.OnFalse = out
+	resolution.OnMissing = out
+	resolution.OnStale = out
+	resolution.OnUnclear = out
+	resolution.OnUnverifiable = out
+	resolution.OnConflict = out
 	c1, err := ab.AddClause(any, []schema.NodeID{ev}, resolution, nil, span)
 	if err != nil {
 		t.Fatal(err)

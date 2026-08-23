@@ -18,6 +18,7 @@ func TestIDTypesAreDistinctNamedTypes(t *testing.T) {
 		RequirementID(1), RequestID(1), EvidenceID(1), NodeID(1), FieldID(1),
 		ValueID(1), SymbolID(1), OutcomeID(1), RemediationID(1), EvidenceKindID(1),
 		EvidenceStateID(1), ClauseID(1), InstructionID(1), SlotID(1), ReasonID(1),
+		TemplateID(1), ExplanationID(1),
 	}
 	seen := make(map[string]int, len(samples))
 	for _, s := range samples {
@@ -34,8 +35,8 @@ func TestIDTypesAreDistinctNamedTypes(t *testing.T) {
 		}
 		seen[name] = len(seen)
 	}
-	if len(seen) != 15 {
-		t.Fatalf("expected 15 distinct named handle types, got %d: %v", len(seen), seen)
+	if len(seen) != 17 {
+		t.Fatalf("expected 17 distinct named handle types, got %d: %v", len(seen), seen)
 	}
 }
 

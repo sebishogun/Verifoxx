@@ -67,10 +67,12 @@ func TestDecodeFullPolicyFixture(t *testing.T) {
 		t.Fatalf("RequirementClauses = (%v, %v)", clauses, ok)
 	}
 	assertion, resolution, ok := d.Clause(clauses[0])
-	if !ok || resolution != (ast.Resolution{
-		OnSatisfied: 1, OnFalse: 2, OnMissing: 4, OnStale: 4,
-		OnUnclear: 4, OnUnverifiable: 4, OnConflict: 4,
-	}) {
+	if !ok || resolution.OnSatisfied != 1 || resolution.OnFalse != 2 || resolution.OnMissing != 4 ||
+		resolution.OnStale != 4 || resolution.OnUnclear != 4 || resolution.OnUnverifiable != 4 ||
+		resolution.OnConflict != 4 || resolution.OnSatisfiedExplanation == 0 ||
+		resolution.OnFalseExplanation == 0 || resolution.OnMissingExplanation == 0 ||
+		resolution.OnStaleExplanation == 0 || resolution.OnUnclearExplanation == 0 ||
+		resolution.OnUnverifiableExplanation == 0 || resolution.OnConflictExplanation == 0 {
 		t.Fatalf("Clause = (%d, %+v, %v)", assertion, resolution, ok)
 	}
 	if kind, _ := d.Kind(assertion); kind != ast.NodeKindAll {
@@ -120,15 +122,24 @@ const outcomeCatalog = `"outcomes":[{"name":"Approve","precedence":1,"terminal":
 
 func rootWithRequirements(requirements string) string {
 	return `{"schema_version":1,"name":"p","version":"1",` +
+		`"assumptions":[],` +
 		`"evidence_kinds":[{"name":"approval_record"},{"name":"usage_adjustment"}],` +
 		`"evidence_states":[{"name":"current"}],` + outcomeCatalog + `,"requirements":` + requirements + `}`
 }
 
 func minimalClause() string {
 	return `{"assert":{"op":"exists","field":"context.environment"},` +
-		`"evidence":[],"resolution":{"satisfied":"Approve","false":"Reject",` +
-		`"missing":"Escalate","stale":"Escalate","unclear":"Escalate",` +
-		`"unverifiable":"Escalate","conflict":"Escalate"},"remediations":[]}`
+		`"evidence":[],"resolution":` + minimalResolution() + `,"remediations":[]}`
+}
+
+func minimalResolution() string {
+	return `{"satisfied":` + testResolutionBranch("Approve", "satisfied", `[]`) +
+		`,"false":` + testResolutionBranch("Reject", "false", `[]`) +
+		`,"missing":` + testResolutionBranch("Escalate", "{reason}", `[]`) +
+		`,"stale":` + testResolutionBranch("Escalate", "{reason}", `[]`) +
+		`,"unclear":` + testResolutionBranch("Escalate", "{reason}", `[]`) +
+		`,"unverifiable":` + testResolutionBranch("Escalate", "{reason}", `[]`) +
+		`,"conflict":` + testResolutionBranch("Escalate", "{reason}", `[]`) + `}`
 }
 
 func minimalRequirement(id string) string {
@@ -166,7 +177,11 @@ func TestDecodeTwoRequirementsAndRejectDuplicate(t *testing.T) {
 }
 
 func TestDecodeRequirementKeyPermutations(t *testing.T) {
-	resolution := `{"conflict":"Escalate","unverifiable":"Escalate","unclear":"Escalate","stale":"Escalate","missing":"Escalate","false":"Reject","satisfied":"Approve"}`
+	escalate := `{"explanation":{"uncertainty":[],"rationale":"{reason}"},"outcome":"Escalate"}`
+	resolution := `{"conflict":` + escalate + `,"unverifiable":` + escalate + `,"unclear":` + escalate +
+		`,"stale":` + escalate + `,"missing":` + escalate +
+		`,"false":` + testResolutionBranch("Reject", "false", `[]`) +
+		`,"satisfied":` + testResolutionBranch("Approve", "satisfied", `[]`) + `}`
 	remediation := `{"value":"standard","field":"context.usage","kind":"set_field"},{"evidence_kind":"usage_adjustment","kind":"add_evidence"}`
 	clause := `{"remediations":[` + remediation + `],"resolution":` + resolution + `,"evidence":[],"assert":{"field":"context.environment","op":"exists"}}`
 	requirement := `{"clauses":[` + clause + `],"applies":{"field":"context.environment","op":"exists"},"source":"source","id":"R1"}`
@@ -193,17 +208,17 @@ func TestDecodeRequirementRejects(t *testing.T) {
 		{"leading zero", `[` + minimalRequirement("R01") + `]`, CodeMalformed},
 		{"id overflow", `[` + minimalRequirement("R4294967296") + `]`, CodeLimit},
 		{"empty clauses", `[{"id":"R1","source":"s","applies":{"op":"exists","field":"context.environment"},"clauses":[]}]`, CodeInvalidArity},
-		{"non evidence evidence", `[{"id":"R1","source":"s","applies":{"op":"exists","field":"context.environment"},"clauses":[{"assert":{"op":"exists","field":"context.environment"},"evidence":[{"op":"exists","field":"context.environment"}],"resolution":{"satisfied":"Approve","false":"Reject","missing":"Escalate","stale":"Escalate","unclear":"Escalate","unverifiable":"Escalate","conflict":"Escalate"},"remediations":[]}]}]`, CodeInvalidType},
-		{"unknown outcome", `[` + bytesReplace(valid, `"satisfied":"Approve"`, `"satisfied":"Unknown"`) + `]`, CodeInvalidReference},
+		{"non evidence evidence", `[{"id":"R1","source":"s","applies":{"op":"exists","field":"context.environment"},"clauses":[{"assert":{"op":"exists","field":"context.environment"},"evidence":[{"op":"exists","field":"context.environment"}],"resolution":` + minimalResolution() + `,"remediations":[]}]}]`, CodeInvalidType},
+		{"unknown outcome", `[` + bytesReplace(valid, `"outcome":"Approve"`, `"outcome":"Unknown"`) + `]`, CodeInvalidReference},
 		{"unknown field remediation", `[` + bytesReplace(valid, `"remediations":[]`, `"remediations":[{"kind":"set_field","field":"no.field","value":"x"}]`) + `]`, CodeInvalidReference},
 		{"unknown evidence remediation", `[` + bytesReplace(valid, `"remediations":[]`, `"remediations":[{"kind":"add_evidence","evidence_kind":"unknown"}]`) + `]`, CodeInvalidReference},
 		{"missing requirement key", `[{"id":"R1","source":"s","clauses":[` + minimalClause() + `]}]`, CodeMissingKey},
 		{"unknown requirement key", `[` + bytesReplace(valid, `"clauses":`, `"extra":1,"clauses":`) + `]`, CodeUnknownKey},
 		{"duplicate requirement key", `[` + bytesReplace(valid, `"source":"source"`, `"source":"source","source":"again"`) + `]`, CodeDuplicateKey},
-		{"missing clause key", `[{"id":"R1","source":"s","applies":{"op":"exists","field":"context.environment"},"clauses":[{"assert":{"op":"exists","field":"context.environment"},"evidence":[],"resolution":{"satisfied":"Approve","false":"Reject","missing":"Escalate","stale":"Escalate","unclear":"Escalate","unverifiable":"Escalate","conflict":"Escalate"}}]}]`, CodeMissingKey},
+		{"missing clause key", `[{"id":"R1","source":"s","applies":{"op":"exists","field":"context.environment"},"clauses":[{"assert":{"op":"exists","field":"context.environment"},"evidence":[],"resolution":` + minimalResolution() + `}]}]`, CodeMissingKey},
 		{"unknown clause key", `[` + bytesReplace(valid, `"evidence":[]`, `"evidence":[],"extra":1`) + `]`, CodeUnknownKey},
-		{"missing resolution key", `[` + bytesReplace(valid, `,"conflict":"Escalate"`, ``) + `]`, CodeMissingKey},
-		{"duplicate resolution key", `[` + bytesReplace(valid, `"satisfied":"Approve"`, `"satisfied":"Approve","satisfied":"Approve"`) + `]`, CodeDuplicateKey},
+		{"missing resolution key", `[` + bytesReplace(valid, `,"conflict":`+testResolutionBranch("Escalate", "{reason}", `[]`), ``) + `]`, CodeMissingKey},
+		{"duplicate resolution key", `[` + bytesReplace(valid, `"satisfied":`+testResolutionBranch("Approve", "satisfied", `[]`), `"satisfied":`+testResolutionBranch("Approve", "satisfied", `[]`)+`,"satisfied":`+testResolutionBranch("Approve", "satisfied", `[]`)) + `]`, CodeDuplicateKey},
 		{"bad remediation kind", `[` + bytesReplace(valid, `"remediations":[]`, `"remediations":[{"kind":"other"}]`) + `]`, CodeMalformed},
 		{"wrong remediation keys", `[` + bytesReplace(valid, `"remediations":[]`, `"remediations":[{"kind":"add_evidence","field":"context.usage"}]`) + `]`, CodeInvalidArity},
 		{"missing remediation kind", `[` + bytesReplace(valid, `"remediations":[]`, `"remediations":[{"evidence_kind":"usage_adjustment"}]`) + `]`, CodeMissingKey},
@@ -233,7 +248,7 @@ func TestDecodeRequirementLimits(t *testing.T) {
 }
 
 func TestDecodeRequirementsBeforeCatalogs(t *testing.T) {
-	source := `{"schema_version":1,"name":"p","version":"1","requirements":[` + minimalRequirement("R1") + `],"evidence_kinds":[],"evidence_states":[],` + outcomeCatalog + `}`
+	source := `{"schema_version":1,"name":"p","version":"1","assumptions":[],"requirements":[` + minimalRequirement("R1") + `],"evidence_kinds":[],"evidence_states":[],` + outcomeCatalog + `}`
 	rejectPolicy(t, source, Limits{}, CodeInvalidReference)
 }
 

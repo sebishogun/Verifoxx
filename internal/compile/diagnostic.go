@@ -33,6 +33,9 @@ const (
 	CodeCycle
 	CodeUnreachableNode
 	CodeInvalidID
+	CodeInvalidTemplate
+	CodeInvalidExplanation
+	CodeMissingExplanation
 )
 
 // codeNames is the fixed name table indexed by code-1. It is the single source
@@ -58,11 +61,14 @@ var codeNames = [...]string{
 	"cycle",
 	"unreachable_node",
 	"invalid_id",
+	"invalid_template",
+	"invalid_explanation",
+	"missing_explanation",
 }
 
 // Valid reports whether c identifies a known diagnostic code.
 func (c DiagnosticCode) Valid() bool {
-	return c >= CodeInvalidDocument && c <= CodeInvalidID
+	return c >= CodeInvalidDocument && c <= CodeMissingExplanation
 }
 
 // String returns the fixed name for c, or "invalid" for zero and out-of-range
@@ -94,6 +100,8 @@ const (
 	TableRemediation
 	TableClause
 	TableRequirement
+	TableTemplate
+	TableExplanation
 )
 
 // tableNames is the fixed name table indexed by table-1. It is the single
@@ -112,11 +120,13 @@ var tableNames = [...]string{
 	"remediation",
 	"clause",
 	"requirement",
+	"template",
+	"explanation",
 }
 
 // Valid reports whether t identifies a known table kind.
 func (t TableKind) Valid() bool {
-	return t >= TableDocument && t <= TableRequirement
+	return t >= TableDocument && t <= TableExplanation
 }
 
 // String returns the fixed name for t, or "invalid" for zero and out-of-range
@@ -166,6 +176,18 @@ const (
 	MemberOutcomeConflict
 	MemberMetadataName
 	MemberMetadataVersion
+	MemberContext
+	MemberTemplate
+	MemberRationale
+	MemberUncertainty
+	MemberAssumptions
+	MemberExplanationSatisfied
+	MemberExplanationFalse
+	MemberExplanationMissing
+	MemberExplanationStale
+	MemberExplanationUnclear
+	MemberExplanationUnverifiable
+	MemberExplanationConflict
 )
 
 // memberNames is the fixed name table indexed by member-1. It is the single
@@ -200,11 +222,23 @@ var memberNames = [...]string{
 	"outcome_conflict",
 	"metadata_name",
 	"metadata_version",
+	"context",
+	"template",
+	"rationale",
+	"uncertainty",
+	"assumptions",
+	"explanation_satisfied",
+	"explanation_false",
+	"explanation_missing",
+	"explanation_stale",
+	"explanation_unclear",
+	"explanation_unverifiable",
+	"explanation_conflict",
 }
 
 // Valid reports whether m identifies a known member kind.
 func (m MemberKind) Valid() bool {
-	return m >= MemberID && m <= MemberMetadataVersion
+	return m >= MemberID && m <= MemberExplanationConflict
 }
 
 // String returns the fixed name for m, or "invalid" for zero and out-of-range

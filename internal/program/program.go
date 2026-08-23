@@ -83,6 +83,24 @@ type Program struct {
 	BooleanValues   []uint64
 	TimestampValues []int64
 
+	// Precompiled explanation templates and explanation rows. The result table
+	// headers below borrow these Program-owned backing columns.
+	TemplateBytes         []byte
+	TemplateOpStarts      []uint32
+	TemplateOpCounts      []uint16
+	TemplateLiteralStarts []uint32
+	TemplateMaxBytes      []uint32
+	TemplateOps           []result.TemplateOp
+	TemplateArgs          []uint32
+
+	ExplanationRationaleTemplateIDs   []schema.TemplateID
+	ExplanationUncertaintyStarts      []uint32
+	ExplanationUncertaintyCounts      []uint16
+	ExplanationUncertaintyTemplateIDs []schema.TemplateID
+	AssumptionTemplateIDs             []schema.TemplateID
+	EvidenceIssueNodeIDs              []schema.NodeID
+	EvidenceIssueTemplateIDs          []schema.TemplateID
+
 	// Copied field schema in FieldID order.
 	FieldNames  []schema.SymbolID
 	FieldKinds  []schema.ValueKind
@@ -105,31 +123,37 @@ type Program struct {
 	RemediationSourceEnds   []uint32
 
 	// Requirements in requirement-row order.
-	RequirementIDs          []schema.RequirementID
-	RequirementRoots        []schema.InstructionID
-	RequirementClauseStarts []uint32
-	RequirementClauseCounts []uint16
-	RequirementClauseIDs    []schema.ClauseID
-	RequirementSourceStarts []uint32
-	RequirementSourceEnds   []uint32
+	RequirementIDs           []schema.RequirementID
+	RequirementRoots         []schema.InstructionID
+	RequirementSourceNodeIDs []schema.NodeID
+	RequirementClauseStarts  []uint32
+	RequirementClauseCounts  []uint16
+	RequirementClauseIDs     []schema.ClauseID
+	RequirementSourceStarts  []uint32
+	RequirementSourceEnds    []uint32
 
 	// Clauses in ClauseID order. RuleSetID == ClauseID for the resolution
 	// table. ClauseEvidenceStarts/Counts range over ClauseEvidenceIDs;
 	// ClauseRemediationStarts/Counts range over ClauseRemediationIDs.
-	ClauseAssertionRoots    []schema.InstructionID
-	ClauseEvidenceStarts    []uint32
-	ClauseEvidenceCounts    []uint16
-	ClauseEvidenceIDs       []schema.InstructionID
-	ClauseOnSatisfied       []schema.OutcomeID
-	ClauseOnFalse           []schema.OutcomeID
-	ClauseRemediationStarts []uint32
-	ClauseRemediationCounts []uint16
-	ClauseRemediationIDs    []schema.RemediationID
-	ClauseSourceStarts      []uint32
-	ClauseSourceEnds        []uint32
+	ClauseAssertionRoots         []schema.InstructionID
+	ClauseAssertionSourceNodeIDs []schema.NodeID
+	ClauseEvidenceStarts         []uint32
+	ClauseEvidenceCounts         []uint16
+	ClauseEvidenceIDs            []schema.InstructionID
+	ClauseEvidenceSourceNodeIDs  []schema.NodeID
+	ClauseOnSatisfied            []schema.OutcomeID
+	ClauseOnFalse                []schema.OutcomeID
+	ClauseExplanationIDs         []schema.ExplanationID
+	ClauseRemediationStarts      []uint32
+	ClauseRemediationCounts      []uint16
+	ClauseRemediationIDs         []schema.RemediationID
+	ClauseSourceStarts           []uint32
+	ClauseSourceEnds             []uint32
 
 	// Result tables borrow the program-owned slices above; the Resolver is
 	// validated once at lowering time.
+	Templates    result.TemplateTable
+	Explanations result.ExplanationTable
 	Outcomes     result.OutcomeTable
 	Remediations result.RemediationTable
 	Resolutions  result.ResolutionTable
@@ -139,8 +163,11 @@ type Program struct {
 	InputBytes []byte
 	// FieldIndex maps fields to kind-local batch columns. ApplicabilityIndex
 	// conservatively prunes requirement rows from known symbolic selectors.
-	// Their scalar tails end the GC-scanned region before Program's fixed tail.
+	// FactIndexSpec selects frequently reused symbolic values for per-batch row
+	// masks. Their scalar tails end the GC-scanned region before Program's fixed
+	// tail.
 	ApplicabilityIndex policyindex.Policy
+	FactIndexSpec      policyindex.FactSpec
 	FieldIndex         policyindex.Schema
 
 	// Fixed scalar tail. ContentHash is the SHA-256 of the retained source;
@@ -163,6 +190,8 @@ func (p *Program) InstructionCount() int {
 // owning result columns are rebuilt.
 func (p *Program) ClearResultResolver() {
 	p.resolver = result.Resolver{}
+	p.Templates = result.TemplateTable{}
+	p.Explanations = result.ExplanationTable{}
 }
 
 // ValidateResultTables validates the Program-owned result columns and stores
@@ -170,10 +199,59 @@ func (p *Program) ClearResultResolver() {
 // before publication.
 func (p *Program) ValidateResultTables() error {
 	p.ClearResultResolver()
+	templates := result.TemplateTable{
+		LiteralBytes:  p.TemplateBytes,
+		OpStarts:      p.TemplateOpStarts,
+		OpCounts:      p.TemplateOpCounts,
+		LiteralStarts: p.TemplateLiteralStarts,
+		MaxBytes:      p.TemplateMaxBytes,
+		Ops:           p.TemplateOps,
+		Args:          p.TemplateArgs,
+	}
+	if err := templates.Validate(); err != nil {
+		return err
+	}
+	explanations := result.ExplanationTable{
+		RationaleTemplateIDs:   p.ExplanationRationaleTemplateIDs,
+		UncertaintyStarts:      p.ExplanationUncertaintyStarts,
+		UncertaintyCounts:      p.ExplanationUncertaintyCounts,
+		UncertaintyTemplateIDs: p.ExplanationUncertaintyTemplateIDs,
+		AssumptionTemplateIDs:  p.AssumptionTemplateIDs,
+	}
+	if err := explanations.Validate(&templates); err != nil {
+		return err
+	}
 	resolver, err := result.NewResolver(p.Outcomes, p.Remediations, p.Resolutions)
 	if err != nil {
 		return err
 	}
+	if uint64(len(p.EvidenceIssueNodeIDs))*result.EvidenceIssueTemplateCount != uint64(len(p.EvidenceIssueTemplateIDs)) {
+		return result.ErrInvalidEvidenceIssueTable
+	}
+	var previousIssueNode schema.NodeID
+	for _, node := range p.EvidenceIssueNodeIDs {
+		if node == 0 || node <= previousIssueNode {
+			return result.ErrInvalidEvidenceIssueTable
+		}
+		previousIssueNode = node
+	}
+	for _, id := range p.EvidenceIssueTemplateIDs {
+		if _, ok := templates.Lookup(id); !ok {
+			return result.ErrInvalidTemplateReference
+		}
+	}
+	for _, id := range p.ClauseExplanationIDs {
+		if _, ok := explanations.Lookup(id); !ok {
+			return result.ErrInvalidExplanationReference
+		}
+	}
+	for _, id := range p.Resolutions.ExplanationIDs {
+		if _, ok := explanations.Lookup(id); !ok {
+			return result.ErrInvalidExplanationReference
+		}
+	}
+	p.Templates = templates
+	p.Explanations = explanations
 	p.resolver = resolver
 	return nil
 }
@@ -185,6 +263,41 @@ func (p *Program) ResultResolver() result.Resolver {
 		return result.Resolver{}
 	}
 	return p.resolver
+}
+
+// ExplanationCatalog returns a read-only result-package view over the
+// Program-owned immutable columns used for lazy explanation materialization.
+func (p *Program) ExplanationCatalog() result.ExplanationCatalog {
+	if p == nil {
+		return result.ExplanationCatalog{}
+	}
+	return result.ExplanationCatalog{
+		Templates:                 p.Templates,
+		Explanations:              p.Explanations,
+		Outcomes:                  p.Outcomes,
+		Remediations:              p.Remediations,
+		SymbolBytes:               p.SymbolBytes,
+		SymbolStarts:              p.SymbolStarts,
+		SymbolLengths:             p.SymbolLengths,
+		ValueKinds:                p.ValueKinds,
+		ValueRefs:                 p.ValueRefs,
+		IntegerValues:             p.IntegerValues,
+		BooleanValues:             p.BooleanValues,
+		TimestampValues:           p.TimestampValues,
+		FieldNames:                p.FieldNames,
+		FieldKinds:                p.FieldKinds,
+		EvidenceKindNames:         p.EvidenceKindNames,
+		EvidenceStateNames:        p.EvidenceStateNames,
+		RequirementIDs:            p.RequirementIDs,
+		EvidenceIssueNodeIDs:      p.EvidenceIssueNodeIDs,
+		EvidenceIssueTemplateIDs:  p.EvidenceIssueTemplateIDs,
+		EvidenceSourceNodes:       p.ClauseEvidenceSourceNodeIDs,
+		EvidenceInstructionIDs:    p.ClauseEvidenceIDs,
+		InstructionEvidenceKinds:  p.EvidenceKinds,
+		InstructionEvidenceStates: p.EvidenceStates,
+		PolicyName:                p.PolicyName,
+		PolicyVersion:             p.PolicyVersion,
+	}
 }
 
 // Symbol returns the frozen bytes for id, or ok=false for the invalid zero

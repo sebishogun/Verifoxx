@@ -411,8 +411,8 @@ func TestDecodeExpressionEvidenceMatches(t *testing.T) {
 		wantKind  schema.EvidenceKindID
 		wantState schema.EvidenceStateID
 	}{
-		{"canonical order", `{"op":"evidence_matches","kind":"approval_record","state":"current"}`, 1, 1},
-		{"state before kind", `{"op":"evidence_matches","state":"stale","kind":"usage_adjustment"}`, 2, 2},
+		{"canonical order", `{"op":"evidence_matches","kind":"approval_record","state":"current","explanation":{"issue":"{evidence_kind}"}}`, 1, 1},
+		{"state before kind", `{"op":"evidence_matches","explanation":{"issue":"{evidence_kind}"},"state":"stale","kind":"usage_adjustment"}`, 2, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			b := catalogBuilder(t, tc.src, []string{"approval_record", "usage_adjustment"}, []string{"current", "stale"})
@@ -433,7 +433,7 @@ func TestDecodeExpressionEvidenceMatches(t *testing.T) {
 }
 
 func TestDecodeEvidenceMatchQualifiers(t *testing.T) {
-	src := `{"op":"evidence_matches","kind":"approval_record","state":"current","subject":"local_approved_env","scope":"trusted_internal_only","timing":"before_execution"}`
+	src := `{"op":"evidence_matches","kind":"approval_record","state":"current","subject":"local_approved_env","scope":"trusted_internal_only","timing":"before_execution","explanation":{"issue":"{evidence_kind}"}}`
 	b := catalogBuilder(t, src, []string{"approval_record"}, []string{"current"})
 	id := decodeExprInto(t, b, src, testInterner(t), Limits{})
 	kind, state, subject, scope, timing, ok := b.Document().EvidenceMatch(id)
@@ -600,10 +600,10 @@ func TestDecodeExpressionInvalidReferenceOffsets(t *testing.T) {
 	src := `{"op":"equal","field":"unknown.field","value":"x"}`
 	rejectExpr(t, src, syms, Limits{}, CodeInvalidReference, offsetOf(t, src, `"unknown.field"`))
 
-	src = `{"op":"evidence_matches","kind":"nope","state":"current"}`
+	src = `{"op":"evidence_matches","kind":"nope","state":"current","explanation":{"issue":"{evidence_kind}"}}`
 	rejectExpr(t, src, syms, Limits{}, CodeInvalidReference, offsetOf(t, src, `"nope"`))
 
-	src = `{"op":"evidence_matches","kind":"approval_record","state":"nope"}`
+	src = `{"op":"evidence_matches","kind":"approval_record","state":"nope","explanation":{"issue":"{evidence_kind}"}}`
 	b := catalogBuilder(t, src, []string{"approval_record"}, []string{"current"})
 	rejectExprInto(t, b, src, syms, Limits{}, CodeInvalidReference, offsetOf(t, src, `"nope"`))
 
@@ -647,8 +647,8 @@ func TestDecodeExpressionRejects(t *testing.T) {
 		{"empty in values", `{"op":"in","field":"context.usage","values":[]}`, CodeInvalidArity, false},
 		{"unknown op", `{"op":"xor","field":"context.count","value":1}`, CodeMalformed, false},
 		{"unknown field", `{"op":"equal","field":"unknown.field","value":"x"}`, CodeInvalidReference, false},
-		{"unknown evidence kind", `{"op":"evidence_matches","kind":"nope","state":"current"}`, CodeInvalidReference, false},
-		{"unknown evidence state", `{"op":"evidence_matches","kind":"approval_record","state":"nope"}`, CodeInvalidReference, true},
+		{"unknown evidence kind", `{"op":"evidence_matches","kind":"nope","state":"current","explanation":{"issue":"{evidence_kind}"}}`, CodeInvalidReference, false},
+		{"unknown evidence state", `{"op":"evidence_matches","kind":"approval_record","state":"nope","explanation":{"issue":"{evidence_kind}"}}`, CodeInvalidReference, true},
 		{"string value for integer field", `{"op":"equal","field":"context.count","value":"1"}`, CodeInvalidType, false},
 		{"integer value for symbol field", `{"op":"equal","field":"subject.trust","value":5}`, CodeInvalidType, false},
 		{"bool value for integer field", `{"op":"equal","field":"context.count","value":true}`, CodeInvalidType, false},

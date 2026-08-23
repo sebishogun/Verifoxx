@@ -35,6 +35,12 @@ type Limits struct {
 	MaxRequirements int
 	// MaxClauses is the maximum clauses appended by one decode.
 	MaxClauses int
+	// MaxTemplateBytes may tighten the AST's decoded-template byte limit.
+	MaxTemplateBytes int
+	// MaxAssumptions may tighten the AST's policy-assumption limit.
+	MaxAssumptions int
+	// MaxUncertainty may tighten the AST's uncertainty-per-explanation limit.
+	MaxUncertainty int
 }
 
 // rootKeys maps decoded root object keys to a stable bit. Order of appearance
@@ -45,6 +51,7 @@ var rootKeys = [...]struct {
 	{name: []byte("schema_version")},
 	{name: []byte("name")},
 	{name: []byte("version")},
+	{name: []byte("assumptions")},
 	{name: []byte("evidence_kinds")},
 	{name: []byte("evidence_states")},
 	{name: []byte("outcomes")},
@@ -149,7 +156,7 @@ func Decode(dst *ast.Builder, source []byte, fields *schema.Schema, symbols *sch
 	return dec.Decode(dst, source, fields, symbols, limits)
 }
 
-// decodeRoot consumes the top-level object, its seven required keys, and the
+// decodeRoot consumes the top-level object, its eight required keys, and the
 // end-of-input check.
 func (d *decoder) decodeRoot(dst *ast.Builder) error {
 	var nameValue, versionValue schema.ValueID
@@ -237,19 +244,23 @@ func (d *decoder) decodeRoot(dst *ast.Builder) error {
 			if err != nil {
 				return err
 			}
-		case 3: // evidence_kinds
+		case 3: // assumptions
+			if err := d.decodeAssumptions(dst); err != nil {
+				return err
+			}
+		case 4: // evidence_kinds
 			if err := d.decodeEvidenceKinds(dst); err != nil {
 				return err
 			}
-		case 4: // evidence_states
+		case 5: // evidence_states
 			if err := d.decodeEvidenceStates(dst); err != nil {
 				return err
 			}
-		case 5: // outcomes
+		case 6: // outcomes
 			if err := d.decodeOutcomes(dst); err != nil {
 				return err
 			}
-		case 6: // requirements
+		case 7: // requirements
 			if err := d.decodeRequirements(dst); err != nil {
 				return err
 			}
@@ -658,7 +669,10 @@ func (d *decoder) builderError(err error) error {
 		errors.Is(err, ast.ErrTooManyEvidenceStates) || errors.Is(err, ast.ErrTooManyOutcomes) ||
 		errors.Is(err, ast.ErrTooManyNodes) || errors.Is(err, ast.ErrTooManyChildren) ||
 		errors.Is(err, ast.ErrTooManyRemediations) || errors.Is(err, ast.ErrTooManyClauses) ||
-		errors.Is(err, ast.ErrTooManySemanticEdges) || errors.Is(err, ast.ErrTooManyRequirements) {
+		errors.Is(err, ast.ErrTooManySemanticEdges) || errors.Is(err, ast.ErrTooManyRequirements) ||
+		errors.Is(err, ast.ErrTemplateTooLarge) || errors.Is(err, ast.ErrTooManyTemplates) ||
+		errors.Is(err, ast.ErrTooManyAssumptions) || errors.Is(err, ast.ErrTooManyExplanations) ||
+		errors.Is(err, ast.ErrTooManyUncertainty) {
 		return d.fail(CodeLimit, err.Error())
 	}
 	return d.fail(CodeMalformed, err.Error())

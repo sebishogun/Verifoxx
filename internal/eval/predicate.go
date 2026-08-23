@@ -86,27 +86,25 @@ func compareInt64(opcode program.Opcode, left, right int64) bool {
 }
 
 func fillInMatches(dst []uint64, batch Batch, p *program.Program, kind schema.ValueKind, column uint32, start, count uint32) {
-	rows := uint64(batch.Rows)
-	words := uint64(len(dst))
 	for i := uint32(0); i < count; i++ {
 		value := programPredicateValue(p, p.ListValues[start+i], kind)
 		switch kind {
 		case schema.ValueKindSymbol:
-			values := batch.SymbolValues[uint64(column)*rows : uint64(column+1)*rows]
+			values := batchRowColumn(batch, batch.SymbolValues, column)
 			for request, got := range values {
 				if got == value.symbol {
 					dst[request>>6] |= uint64(1) << (uint(request) & 63)
 				}
 			}
 		case schema.ValueKindInteger:
-			values := batch.IntegerValues[uint64(column)*rows : uint64(column+1)*rows]
+			values := batchRowColumn(batch, batch.IntegerValues, column)
 			for request, got := range values {
 				if got == value.integer {
 					dst[request>>6] |= uint64(1) << (uint(request) & 63)
 				}
 			}
 		case schema.ValueKindBoolean:
-			values := batch.BooleanValues[uint64(column)*words : uint64(column+1)*words]
+			values := batchWordColumn(batch, batch.BooleanValues, column)
 			for word, got := range values {
 				if value.boolean {
 					dst[word] |= got
@@ -115,7 +113,7 @@ func fillInMatches(dst []uint64, batch Batch, p *program.Program, kind schema.Va
 				}
 			}
 		case schema.ValueKindTimestamp:
-			values := batch.TimestampValues[uint64(column)*rows : uint64(column+1)*rows]
+			values := batchRowColumn(batch, batch.TimestampValues, column)
 			for request, got := range values {
 				if got == value.timestamp {
 					dst[request>>6] |= uint64(1) << (uint(request) & 63)
@@ -148,12 +146,7 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 		panic("eval: invalid predicate column")
 	}
 	words := truth.WordCount(batch.Rows)
-	requireColumnLength(len(batch.PresenceMasks), uint32(len(p.FieldIndex.Kinds)), uint32(words))
-	presenceStart := uint64(field-1) * uint64(words)
-	presenceEnd := presenceStart + uint64(words)
-	if presenceEnd > uint64(len(batch.PresenceMasks)) {
-		panic("eval: invalid batch presence")
-	}
+	requireColumnLength(len(batch.PresenceMasks), uint32(len(p.FieldIndex.Kinds)), batch.sourceWords())
 
 	var value predicateValue
 	var listStart, listCount uint32
@@ -186,17 +179,17 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 
 	switch kind {
 	case schema.ValueKindSymbol:
-		requireColumnLength(len(batch.SymbolValues), p.FieldIndex.Counts[kind], batch.Rows)
+		requireColumnLength(len(batch.SymbolValues), p.FieldIndex.Counts[kind], batch.sourceRows())
 	case schema.ValueKindInteger:
-		requireColumnLength(len(batch.IntegerValues), p.FieldIndex.Counts[kind], batch.Rows)
+		requireColumnLength(len(batch.IntegerValues), p.FieldIndex.Counts[kind], batch.sourceRows())
 	case schema.ValueKindBoolean:
-		requireColumnLength(len(batch.BooleanValues), p.FieldIndex.Counts[kind], uint32(words))
+		requireColumnLength(len(batch.BooleanValues), p.FieldIndex.Counts[kind], batch.sourceWords())
 	case schema.ValueKindTimestamp:
-		requireColumnLength(len(batch.TimestampValues), p.FieldIndex.Counts[kind], batch.Rows)
+		requireColumnLength(len(batch.TimestampValues), p.FieldIndex.Counts[kind], batch.sourceRows())
 	}
 
 	resetLeafOutputs(dst, reasons, batch.Rows)
-	presence := batch.PresenceMasks[int(presenceStart):int(presenceEnd):int(presenceEnd)]
+	presence := batchWordColumn(batch, batch.PresenceMasks, uint32(field-1))
 	missing := reasons.plane(truth.ReasonMissing, words)
 	if opcode == program.OpcodeIn {
 		fillInMatches(dst.Positive, batch, p, kind, column, listStart, listCount)
@@ -215,7 +208,7 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 			matches = 0
 			switch kind {
 			case schema.ValueKindSymbol:
-				values := batch.SymbolValues[uint64(column)*uint64(batch.Rows):]
+				values := batchRowColumn(batch, batch.SymbolValues, column)
 				start := uint64(word) << 6
 				end := min(start+64, uint64(batch.Rows))
 				for request := start; request < end; request++ {
@@ -225,7 +218,7 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 					}
 				}
 			case schema.ValueKindInteger:
-				values := batch.IntegerValues[uint64(column)*uint64(batch.Rows):]
+				values := batchRowColumn(batch, batch.IntegerValues, column)
 				start := uint64(word) << 6
 				end := min(start+64, uint64(batch.Rows))
 				for request := start; request < end; request++ {
@@ -234,7 +227,7 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 					}
 				}
 			case schema.ValueKindBoolean:
-				values := batch.BooleanValues[uint64(column)*uint64(words):]
+				values := batchWordColumn(batch, batch.BooleanValues, column)
 				matches = values[word]
 				if !value.boolean {
 					matches = ^matches
@@ -243,7 +236,7 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 					matches = ^matches
 				}
 			case schema.ValueKindTimestamp:
-				values := batch.TimestampValues[uint64(column)*uint64(batch.Rows):]
+				values := batchRowColumn(batch, batch.TimestampValues, column)
 				start := uint64(word) << 6
 				end := min(start+64, uint64(batch.Rows))
 				for request := start; request < end; request++ {

@@ -33,6 +33,9 @@ func TestDiagnosticCodesValidOrderedUnique(t *testing.T) {
 		{CodeCycle, "cycle"},
 		{CodeUnreachableNode, "unreachable_node"},
 		{CodeInvalidID, "invalid_id"},
+		{CodeInvalidTemplate, "invalid_template"},
+		{CodeInvalidExplanation, "invalid_explanation"},
+		{CodeMissingExplanation, "missing_explanation"},
 	}
 	seen := make(map[string]bool, len(want))
 	for i, w := range want {
@@ -53,7 +56,7 @@ func TestDiagnosticCodesValidOrderedUnique(t *testing.T) {
 }
 
 func TestDiagnosticCodeInvalidBounds(t *testing.T) {
-	for _, code := range []DiagnosticCode{0, 21, 255} {
+	for _, code := range []DiagnosticCode{0, 24, 255} {
 		if code.Valid() {
 			t.Errorf("%d Valid() = true, want false", code)
 		}
@@ -81,6 +84,8 @@ func TestTableKindsValidOrderedUnique(t *testing.T) {
 		{TableRemediation, "remediation"},
 		{TableClause, "clause"},
 		{TableRequirement, "requirement"},
+		{TableTemplate, "template"},
+		{TableExplanation, "explanation"},
 	}
 	seen := make(map[string]bool, len(want))
 	for i, w := range want {
@@ -101,7 +106,7 @@ func TestTableKindsValidOrderedUnique(t *testing.T) {
 }
 
 func TestTableKindInvalidBounds(t *testing.T) {
-	for _, table := range []TableKind{0, 14, 255} {
+	for _, table := range []TableKind{0, 16, 255} {
 		if table.Valid() {
 			t.Errorf("%d Valid() = true, want false", table)
 		}
@@ -145,6 +150,18 @@ func TestMemberKindsValidOrderedUnique(t *testing.T) {
 		{MemberOutcomeConflict, "outcome_conflict"},
 		{MemberMetadataName, "metadata_name"},
 		{MemberMetadataVersion, "metadata_version"},
+		{MemberContext, "context"},
+		{MemberTemplate, "template"},
+		{MemberRationale, "rationale"},
+		{MemberUncertainty, "uncertainty"},
+		{MemberAssumptions, "assumptions"},
+		{MemberExplanationSatisfied, "explanation_satisfied"},
+		{MemberExplanationFalse, "explanation_false"},
+		{MemberExplanationMissing, "explanation_missing"},
+		{MemberExplanationStale, "explanation_stale"},
+		{MemberExplanationUnclear, "explanation_unclear"},
+		{MemberExplanationUnverifiable, "explanation_unverifiable"},
+		{MemberExplanationConflict, "explanation_conflict"},
 	}
 	seen := make(map[string]bool, len(want))
 	for i, w := range want {
@@ -165,7 +182,7 @@ func TestMemberKindsValidOrderedUnique(t *testing.T) {
 }
 
 func TestMemberKindInvalidBounds(t *testing.T) {
-	for _, member := range []MemberKind{0, 30, 255} {
+	for _, member := range []MemberKind{0, 42, 255} {
 		if member.Valid() {
 			t.Errorf("%d Valid() = true, want false", member)
 		}

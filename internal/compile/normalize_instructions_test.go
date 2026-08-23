@@ -46,6 +46,7 @@ func buildNormalizeFixture(t *testing.T) normalizeFixture {
 	if err := ab.SetSource([]byte("{}")); err != nil {
 		t.Fatal(err)
 	}
+	explanations := installValidExplanations(t, ab)
 	span := ast.SourceSpan{Start: 0, End: 2}
 	addSymbol := func(value string) schema.ValueID {
 		id, err := ab.AddSymbolValue([]byte(value))
@@ -67,11 +68,14 @@ func buildNormalizeFixture(t *testing.T) normalizeFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolution := ast.Resolution{
-		OnSatisfied: outcome, OnFalse: outcome, OnMissing: outcome,
-		OnStale: outcome, OnUnclear: outcome, OnUnverifiable: outcome,
-		OnConflict: outcome,
-	}
+	resolution := explanations.resolution
+	resolution.OnSatisfied = outcome
+	resolution.OnFalse = outcome
+	resolution.OnMissing = outcome
+	resolution.OnStale = outcome
+	resolution.OnUnclear = outcome
+	resolution.OnUnverifiable = outcome
+	resolution.OnConflict = outcome
 
 	addCompare := func(value schema.ValueID) schema.NodeID {
 		node, err := ab.AddCompare(field, ast.CompareOpEqual, value, span)

@@ -26,8 +26,12 @@ func TestBatchResetShapesAndReuses(t *testing.T) {
 	batch.DriverClauses = append(batch.DriverClauses, 1)
 	batch.DriverNodes = append(batch.DriverNodes, 1)
 	batch.DriverReasons = append(batch.DriverReasons, 1)
+	batch.DriverExplanations = append(batch.DriverExplanations, 1)
 	batch.EvidenceIDs = append(batch.EvidenceIDs, 1)
 	batch.ReasonIDs = append(batch.ReasonIDs, 1)
+	batch.ReasonNodes = append(batch.ReasonNodes, 1)
+	batch.ReasonEvidenceIDs = append(batch.ReasonEvidenceIDs, 1)
+	batch.ReasonEvidenceStates = append(batch.ReasonEvidenceStates, 1)
 	batch.RemediationIDs = append(batch.RemediationIDs, 1)
 	edgeCaps := batchEdgeCaps(&batch)
 
@@ -107,8 +111,12 @@ func assertBatchShape(t *testing.T, batch *Batch, rows uint32) {
 		"driver clauses":      len(batch.DriverClauses),
 		"driver nodes":        len(batch.DriverNodes),
 		"driver reasons":      len(batch.DriverReasons),
+		"driver explanations": len(batch.DriverExplanations),
 		"evidence":            len(batch.EvidenceIDs),
 		"reasons":             len(batch.ReasonIDs),
+		"reason nodes":        len(batch.ReasonNodes),
+		"reason evidence":     len(batch.ReasonEvidenceIDs),
+		"reason states":       len(batch.ReasonEvidenceStates),
 		"remediations":        len(batch.RemediationIDs),
 	} {
 		if length != 0 {
@@ -139,15 +147,19 @@ func assertBatchZero(t *testing.T, batch *Batch) {
 	}
 }
 
-func batchEdgeCaps(batch *Batch) [8]int {
-	return [8]int{
+func batchEdgeCaps(batch *Batch) [12]int {
+	return [12]int{
 		cap(batch.RequirementIDs),
 		cap(batch.DriverRequirements),
 		cap(batch.DriverClauses),
 		cap(batch.DriverNodes),
 		cap(batch.DriverReasons),
+		cap(batch.DriverExplanations),
 		cap(batch.EvidenceIDs),
 		cap(batch.ReasonIDs),
+		cap(batch.ReasonNodes),
+		cap(batch.ReasonEvidenceIDs),
+		cap(batch.ReasonEvidenceStates),
 		cap(batch.RemediationIDs),
 	}
 }

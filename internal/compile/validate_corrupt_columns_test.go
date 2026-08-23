@@ -17,12 +17,32 @@ type columnCase struct {
 }
 
 // corruptColumnCases enumerates every public slice column of ast.Document in
-// declaration order. The expected total is 65; the test fails setup if the
+// declaration order. The expected total is 84; the test fails setup if the
 // table ever drifts from that count.
 func corruptColumnCases(baseline *ast.Document) []columnCase {
 	return []columnCase{
 		{"NodeKinds", len(baseline.NodeKinds), func(d, s *ast.Document, cut int) { d.NodeKinds = s.NodeKinds[:cut] }},
 		{"NodeRefs", len(baseline.NodeRefs), func(d, s *ast.Document, cut int) { d.NodeRefs = s.NodeRefs[:cut] }},
+
+		{"TemplateBytes", len(baseline.TemplateBytes), func(d, s *ast.Document, cut int) { d.TemplateBytes = s.TemplateBytes[:cut] }},
+		{"TemplateOpStarts", len(baseline.TemplateOpStarts), func(d, s *ast.Document, cut int) { d.TemplateOpStarts = s.TemplateOpStarts[:cut] }},
+		{"TemplateOpCounts", len(baseline.TemplateOpCounts), func(d, s *ast.Document, cut int) { d.TemplateOpCounts = s.TemplateOpCounts[:cut] }},
+		{"TemplateLiteralStarts", len(baseline.TemplateLiteralStarts), func(d, s *ast.Document, cut int) { d.TemplateLiteralStarts = s.TemplateLiteralStarts[:cut] }},
+		{"TemplateMaxBytes", len(baseline.TemplateMaxBytes), func(d, s *ast.Document, cut int) { d.TemplateMaxBytes = s.TemplateMaxBytes[:cut] }},
+		{"TemplateContexts", len(baseline.TemplateContexts), func(d, s *ast.Document, cut int) { d.TemplateContexts = s.TemplateContexts[:cut] }},
+		{"TemplateOps", len(baseline.TemplateOps), func(d, s *ast.Document, cut int) { d.TemplateOps = s.TemplateOps[:cut] }},
+		{"TemplateArgs", len(baseline.TemplateArgs), func(d, s *ast.Document, cut int) { d.TemplateArgs = s.TemplateArgs[:cut] }},
+		{"AssumptionTemplateIDs", len(baseline.AssumptionTemplateIDs), func(d, s *ast.Document, cut int) { d.AssumptionTemplateIDs = s.AssumptionTemplateIDs[:cut] }},
+		{"AssumptionsSet", len(baseline.AssumptionsSet), func(d, s *ast.Document, cut int) { d.AssumptionsSet = s.AssumptionsSet[:cut] }},
+
+		{"ExplanationRationaleIDs", len(baseline.ExplanationRationaleIDs), func(d, s *ast.Document, cut int) { d.ExplanationRationaleIDs = s.ExplanationRationaleIDs[:cut] }},
+		{"ExplanationUncertaintyStarts", len(baseline.ExplanationUncertaintyStarts), func(d, s *ast.Document, cut int) {
+			d.ExplanationUncertaintyStarts = s.ExplanationUncertaintyStarts[:cut]
+		}},
+		{"ExplanationUncertaintyCounts", len(baseline.ExplanationUncertaintyCounts), func(d, s *ast.Document, cut int) {
+			d.ExplanationUncertaintyCounts = s.ExplanationUncertaintyCounts[:cut]
+		}},
+		{"ExplanationUncertaintyIDs", len(baseline.ExplanationUncertaintyIDs), func(d, s *ast.Document, cut int) { d.ExplanationUncertaintyIDs = s.ExplanationUncertaintyIDs[:cut] }},
 
 		{"CompareFields", len(baseline.CompareFields), func(d, s *ast.Document, cut int) { d.CompareFields = s.CompareFields[:cut] }},
 		{"CompareOps", len(baseline.CompareOps), func(d, s *ast.Document, cut int) { d.CompareOps = s.CompareOps[:cut] }},
@@ -39,6 +59,10 @@ func corruptColumnCases(baseline *ast.Document) []columnCase {
 
 		{"EvidenceKinds", len(baseline.EvidenceKinds), func(d, s *ast.Document, cut int) { d.EvidenceKinds = s.EvidenceKinds[:cut] }},
 		{"EvidenceStates", len(baseline.EvidenceStates), func(d, s *ast.Document, cut int) { d.EvidenceStates = s.EvidenceStates[:cut] }},
+		{"EvidenceSubjects", len(baseline.EvidenceSubjects), func(d, s *ast.Document, cut int) { d.EvidenceSubjects = s.EvidenceSubjects[:cut] }},
+		{"EvidenceScopes", len(baseline.EvidenceScopes), func(d, s *ast.Document, cut int) { d.EvidenceScopes = s.EvidenceScopes[:cut] }},
+		{"EvidenceTimings", len(baseline.EvidenceTimings), func(d, s *ast.Document, cut int) { d.EvidenceTimings = s.EvidenceTimings[:cut] }},
+		{"EvidenceIssueTemplateIDs", len(baseline.EvidenceIssueTemplateIDs), func(d, s *ast.Document, cut int) { d.EvidenceIssueTemplateIDs = s.EvidenceIssueTemplateIDs[:cut] }},
 
 		{"SourceStarts", len(baseline.SourceStarts), func(d, s *ast.Document, cut int) { d.SourceStarts = s.SourceStarts[:cut] }},
 		{"SourceEnds", len(baseline.SourceEnds), func(d, s *ast.Document, cut int) { d.SourceEnds = s.SourceEnds[:cut] }},
@@ -87,6 +111,7 @@ func corruptColumnCases(baseline *ast.Document) []columnCase {
 		{"ClauseOnUnclear", len(baseline.ClauseOnUnclear), func(d, s *ast.Document, cut int) { d.ClauseOnUnclear = s.ClauseOnUnclear[:cut] }},
 		{"ClauseOnUnverifiable", len(baseline.ClauseOnUnverifiable), func(d, s *ast.Document, cut int) { d.ClauseOnUnverifiable = s.ClauseOnUnverifiable[:cut] }},
 		{"ClauseOnConflict", len(baseline.ClauseOnConflict), func(d, s *ast.Document, cut int) { d.ClauseOnConflict = s.ClauseOnConflict[:cut] }},
+		{"ClauseExplanationIDs", len(baseline.ClauseExplanationIDs), func(d, s *ast.Document, cut int) { d.ClauseExplanationIDs = s.ClauseExplanationIDs[:cut] }},
 		{"ClauseSourceStarts", len(baseline.ClauseSourceStarts), func(d, s *ast.Document, cut int) { d.ClauseSourceStarts = s.ClauseSourceStarts[:cut] }},
 		{"ClauseSourceEnds", len(baseline.ClauseSourceEnds), func(d, s *ast.Document, cut int) { d.ClauseSourceEnds = s.ClauseSourceEnds[:cut] }},
 
@@ -126,8 +151,8 @@ func validateCorruptColumn(t *testing.T, name string, cut int, v *Validator, dst
 func TestValidateCorruptColumnsNoPanic(t *testing.T) {
 	baseline, fields := fixture(t)
 	columns := corruptColumnCases(baseline)
-	if len(columns) != 65 {
-		t.Fatalf("corrupt-column table has %d entries, want 65", len(columns))
+	if len(columns) != 84 {
+		t.Fatalf("corrupt-column table has %d entries, want 84", len(columns))
 	}
 
 	var v Validator

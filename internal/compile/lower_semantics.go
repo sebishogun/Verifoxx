@@ -12,23 +12,28 @@ import (
 
 func resetSemanticColumns(dst *program.Program) {
 	dst.ClearResultResolver()
+	resetExplanationColumns(dst)
 	dst.OutcomeSourceStarts = dst.OutcomeSourceStarts[:0]
 	dst.OutcomeSourceEnds = dst.OutcomeSourceEnds[:0]
 	dst.RemediationSourceStarts = dst.RemediationSourceStarts[:0]
 	dst.RemediationSourceEnds = dst.RemediationSourceEnds[:0]
 	dst.RequirementIDs = dst.RequirementIDs[:0]
 	dst.RequirementRoots = dst.RequirementRoots[:0]
+	dst.RequirementSourceNodeIDs = dst.RequirementSourceNodeIDs[:0]
 	dst.RequirementClauseStarts = dst.RequirementClauseStarts[:0]
 	dst.RequirementClauseCounts = dst.RequirementClauseCounts[:0]
 	dst.RequirementClauseIDs = dst.RequirementClauseIDs[:0]
 	dst.RequirementSourceStarts = dst.RequirementSourceStarts[:0]
 	dst.RequirementSourceEnds = dst.RequirementSourceEnds[:0]
 	dst.ClauseAssertionRoots = dst.ClauseAssertionRoots[:0]
+	dst.ClauseAssertionSourceNodeIDs = dst.ClauseAssertionSourceNodeIDs[:0]
 	dst.ClauseEvidenceStarts = dst.ClauseEvidenceStarts[:0]
 	dst.ClauseEvidenceCounts = dst.ClauseEvidenceCounts[:0]
 	dst.ClauseEvidenceIDs = dst.ClauseEvidenceIDs[:0]
+	dst.ClauseEvidenceSourceNodeIDs = dst.ClauseEvidenceSourceNodeIDs[:0]
 	dst.ClauseOnSatisfied = dst.ClauseOnSatisfied[:0]
 	dst.ClauseOnFalse = dst.ClauseOnFalse[:0]
+	dst.ClauseExplanationIDs = dst.ClauseExplanationIDs[:0]
 	dst.ClauseRemediationStarts = dst.ClauseRemediationStarts[:0]
 	dst.ClauseRemediationCounts = dst.ClauseRemediationCounts[:0]
 	dst.ClauseRemediationIDs = dst.ClauseRemediationIDs[:0]
@@ -42,6 +47,7 @@ func resetSemanticColumns(dst *program.Program) {
 	dst.Remediations.Values = dst.Remediations.Values[:0]
 	dst.Remediations.EvidenceKinds = dst.Remediations.EvidenceKinds[:0]
 	dst.Resolutions.OutcomeIDs = dst.Resolutions.OutcomeIDs[:0]
+	dst.Resolutions.ExplanationIDs = dst.Resolutions.ExplanationIDs[:0]
 	dst.Resolutions.RemediationStarts = dst.Resolutions.RemediationStarts[:0]
 	dst.Resolutions.RemediationCounts = dst.Resolutions.RemediationCounts[:0]
 	dst.Resolutions.RemediationIDs = nil
@@ -154,6 +160,7 @@ func (l *Lowerer) lowerRequirements(dst *program.Program, doc *ast.Document) err
 	}
 	dst.RequirementIDs = resizeSlots(dst.RequirementIDs, n)
 	dst.RequirementRoots = resizeSlots(dst.RequirementRoots, n)
+	dst.RequirementSourceNodeIDs = resizeSlots(dst.RequirementSourceNodeIDs, n)
 	dst.RequirementClauseStarts = resizeSlots(dst.RequirementClauseStarts, n)
 	dst.RequirementClauseCounts = resizeSlots(dst.RequirementClauseCounts, n)
 	dst.RequirementSourceStarts = resizeSlots(dst.RequirementSourceStarts, n)
@@ -177,6 +184,7 @@ func (l *Lowerer) lowerRequirements(dst *program.Program, doc *ast.Document) err
 		}
 		dst.RequirementIDs[i] = doc.RequirementIDs[i]
 		dst.RequirementRoots[i] = root
+		dst.RequirementSourceNodeIDs[i] = doc.RequirementApplicabilityRoots[i]
 		dst.RequirementClauseStarts[i] = start
 		dst.RequirementClauseCounts[i] = count
 		dst.RequirementSourceStarts[i] = doc.RequirementSourceStarts[i]
@@ -192,10 +200,12 @@ func (l *Lowerer) lowerClauses(dst *program.Program, doc *ast.Document) error {
 		len(doc.ClauseOnSatisfied) != n || len(doc.ClauseOnFalse) != n || len(doc.ClauseOnMissing) != n ||
 		len(doc.ClauseOnStale) != n || len(doc.ClauseOnUnclear) != n ||
 		len(doc.ClauseOnUnverifiable) != n || len(doc.ClauseOnConflict) != n ||
+		uint64(len(doc.ClauseExplanationIDs)) != uint64(n)*uint64(ast.ResolutionBranchCount) ||
 		len(doc.ClauseSourceStarts) != n || len(doc.ClauseSourceEnds) != n {
 		return ErrInvalidDocument
 	}
 	dst.ClauseAssertionRoots = resizeSlots(dst.ClauseAssertionRoots, n)
+	dst.ClauseAssertionSourceNodeIDs = resizeSlots(dst.ClauseAssertionSourceNodeIDs, n)
 	dst.ClauseEvidenceStarts = resizeSlots(dst.ClauseEvidenceStarts, n)
 	dst.ClauseEvidenceCounts = resizeSlots(dst.ClauseEvidenceCounts, n)
 	dst.ClauseOnSatisfied = resizeSlots(dst.ClauseOnSatisfied, n)
@@ -205,6 +215,9 @@ func (l *Lowerer) lowerClauses(dst *program.Program, doc *ast.Document) error {
 	dst.ClauseSourceStarts = resizeSlots(dst.ClauseSourceStarts, n)
 	dst.ClauseSourceEnds = resizeSlots(dst.ClauseSourceEnds, n)
 	dst.ClauseEvidenceIDs = resizeSlots(dst.ClauseEvidenceIDs, len(doc.ClauseEvidenceNodeIDs))
+	dst.ClauseEvidenceSourceNodeIDs = resizeSlots(dst.ClauseEvidenceSourceNodeIDs, len(doc.ClauseEvidenceNodeIDs))
+	dst.ClauseExplanationIDs = resizeSlots(dst.ClauseExplanationIDs, len(doc.ClauseExplanationIDs))
+	copy(dst.ClauseExplanationIDs, doc.ClauseExplanationIDs)
 	dst.ClauseRemediationIDs = resizeSlots(dst.ClauseRemediationIDs, len(doc.ClauseRemediationIDs))
 	copy(dst.ClauseRemediationIDs, doc.ClauseRemediationIDs)
 	for i := 0; i < n; i++ {
@@ -217,17 +230,20 @@ func (l *Lowerer) lowerClauses(dst *program.Program, doc *ast.Document) error {
 			return ErrInvalidDocument
 		}
 		for j := uint32(0); j < uint32(evidenceCount); j++ {
-			root, err := rootInstruction(dst, doc.ClauseEvidenceNodeIDs[evidenceStart+j], len(doc.NodeKinds))
+			sourceNode := doc.ClauseEvidenceNodeIDs[evidenceStart+j]
+			root, err := rootInstruction(dst, sourceNode, len(doc.NodeKinds))
 			if err != nil {
 				return err
 			}
 			dst.ClauseEvidenceIDs[evidenceStart+j] = root
+			dst.ClauseEvidenceSourceNodeIDs[evidenceStart+j] = sourceNode
 		}
 		remediationStart, remediationCount := doc.ClauseRemediationStarts[i], doc.ClauseRemediationCounts[i]
 		if uint64(remediationStart)+uint64(remediationCount) > uint64(len(doc.ClauseRemediationIDs)) {
 			return ErrInvalidDocument
 		}
 		dst.ClauseAssertionRoots[i] = assertion
+		dst.ClauseAssertionSourceNodeIDs[i] = doc.ClauseAssertionRoots[i]
 		dst.ClauseEvidenceStarts[i] = evidenceStart
 		dst.ClauseEvidenceCounts[i] = evidenceCount
 		dst.ClauseOnSatisfied[i] = doc.ClauseOnSatisfied[i]
@@ -247,6 +263,7 @@ func (l *Lowerer) lowerResolutionRows(dst *program.Program, doc *ast.Document) e
 	}
 	rows := clauses * truth.ReasonCount
 	dst.Resolutions.OutcomeIDs = resizeSlots(dst.Resolutions.OutcomeIDs, rows)
+	dst.Resolutions.ExplanationIDs = resizeSlots(dst.Resolutions.ExplanationIDs, rows)
 	dst.Resolutions.RemediationStarts = resizeSlots(dst.Resolutions.RemediationStarts, rows)
 	dst.Resolutions.RemediationCounts = resizeSlots(dst.Resolutions.RemediationCounts, rows)
 	for i := 0; i < clauses; i++ {
@@ -255,6 +272,7 @@ func (l *Lowerer) lowerResolutionRows(dst *program.Program, doc *ast.Document) e
 			return ErrInvalidDocument
 		}
 		var outcomes [truth.ReasonCount]schema.OutcomeID
+		var explanations [truth.ReasonCount]schema.ExplanationID
 		outcomes[truth.ReasonMissing-1] = resolution.OnMissing
 		outcomes[truth.ReasonStale-1] = resolution.OnStale
 		outcomes[truth.ReasonUnclear-1] = resolution.OnUnclear
@@ -264,6 +282,15 @@ func (l *Lowerer) lowerResolutionRows(dst *program.Program, doc *ast.Document) e
 		outcomes[truth.ReasonWrongTiming-1] = resolution.OnUnverifiable
 		outcomes[truth.ReasonInvalid-1] = resolution.OnUnverifiable
 		outcomes[truth.ReasonConflict-1] = resolution.OnConflict
+		explanations[truth.ReasonMissing-1] = resolution.OnMissingExplanation
+		explanations[truth.ReasonStale-1] = resolution.OnStaleExplanation
+		explanations[truth.ReasonUnclear-1] = resolution.OnUnclearExplanation
+		explanations[truth.ReasonUnverifiable-1] = resolution.OnUnverifiableExplanation
+		explanations[truth.ReasonWrongScope-1] = resolution.OnUnverifiableExplanation
+		explanations[truth.ReasonWrongSubject-1] = resolution.OnUnverifiableExplanation
+		explanations[truth.ReasonWrongTiming-1] = resolution.OnUnverifiableExplanation
+		explanations[truth.ReasonInvalid-1] = resolution.OnUnverifiableExplanation
+		explanations[truth.ReasonConflict-1] = resolution.OnConflictExplanation
 		remediationStart := dst.ClauseRemediationStarts[i]
 		remediationCount := dst.ClauseRemediationCounts[i]
 		base := i * truth.ReasonCount
@@ -274,6 +301,7 @@ func (l *Lowerer) lowerResolutionRows(dst *program.Program, doc *ast.Document) e
 			}
 			row := base + reason
 			dst.Resolutions.OutcomeIDs[row] = outcomeID
+			dst.Resolutions.ExplanationIDs[row] = explanations[reason]
 			if !outcome.Terminal {
 				dst.Resolutions.RemediationStarts[row] = remediationStart
 				dst.Resolutions.RemediationCounts[row] = remediationCount
@@ -296,6 +324,9 @@ func (l *Lowerer) lowerSemantics(dst *program.Program, doc *ast.Document) error 
 		return err
 	}
 	if err := l.lowerRemediations(dst, doc); err != nil {
+		return err
+	}
+	if err := l.lowerExplanationTables(dst, doc); err != nil {
 		return err
 	}
 	if err := l.lowerRequirements(dst, doc); err != nil {

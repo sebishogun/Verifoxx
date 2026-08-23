@@ -21,6 +21,19 @@ func TestHashSymbolKnownVectors(t *testing.T) {
 	}
 }
 
+func TestNextPow2(t *testing.T) {
+	for _, test := range []struct {
+		input int
+		want  int
+	}{
+		{0, 1}, {1, 1}, {2, 2}, {3, 4}, {4, 4}, {5, 8}, {31, 32}, {32, 32}, {33, 64},
+	} {
+		if got := nextPow2(test.input); got != test.want {
+			t.Fatalf("nextPow2(%d) = %d, want %d", test.input, got, test.want)
+		}
+	}
+}
+
 func TestInternAssignsSequentialIDs(t *testing.T) {
 	in := NewSymbolInterner(0)
 	a, err := in.Intern([]byte("alpha"))

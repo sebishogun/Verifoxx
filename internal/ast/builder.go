@@ -27,6 +27,12 @@ var (
 // Hints sizes each independently grown column before decoding begins.
 type Hints struct {
 	Nodes                  int
+	Templates              int
+	TemplateOps            int
+	TemplateBytes          int
+	Assumptions            int
+	Explanations           int
+	ExplanationUncertainty int
 	CompareNodes           int
 	CompareListValues      int
 	GroupNodes             int
@@ -58,6 +64,13 @@ func nonNegative(n int) int {
 	return n
 }
 
+func multipliedHint(n, factor int) int {
+	if n <= 0 || factor <= 0 || n > math.MaxInt/factor {
+		return 0
+	}
+	return n * factor
+}
+
 // Builder owns one mutable Document. It is not safe for concurrent use.
 type Builder struct {
 	doc Document
@@ -66,12 +79,19 @@ type Builder struct {
 // NewBuilder returns a builder with all columns pre-sized from hints.
 func NewBuilder(hints Hints) *Builder {
 	nodes := nonNegative(hints.Nodes)
+	templates := nonNegative(hints.Templates)
+	templateOps := nonNegative(hints.TemplateOps)
+	templateBytes := nonNegative(hints.TemplateBytes)
+	assumptions := nonNegative(hints.Assumptions)
+	explanations := nonNegative(hints.Explanations)
+	explanationUncertainty := nonNegative(hints.ExplanationUncertainty)
 	compares := nonNegative(hints.CompareNodes)
 	compareValues := nonNegative(hints.CompareListValues)
 	groups := nonNegative(hints.GroupNodes)
 	children := nonNegative(hints.ChildEdges)
 	nots := nonNegative(hints.NotNodes)
 	evidence := nonNegative(hints.EvidenceNodes)
+	evidenceIssues := multipliedHint(evidence, EvidenceIssueReasonCount)
 	values := nonNegative(hints.Values)
 	symbolValues := nonNegative(hints.SymbolValues)
 	symbolBytes := nonNegative(hints.SymbolBytes)
@@ -83,6 +103,7 @@ func NewBuilder(hints Hints) *Builder {
 	outcomes := nonNegative(hints.Outcomes)
 	remediations := nonNegative(hints.Remediations)
 	clauses := nonNegative(hints.Clauses)
+	clauseExplanations := multipliedHint(clauses, ResolutionBranchCount)
 	clauseEvidence := nonNegative(hints.ClauseEvidenceEdges)
 	clauseRemediations := nonNegative(hints.ClauseRemediationEdges)
 	requirements := nonNegative(hints.Requirements)
@@ -91,6 +112,20 @@ func NewBuilder(hints Hints) *Builder {
 	return &Builder{doc: Document{
 		NodeKinds:                     make([]NodeKind, 0, nodes),
 		NodeRefs:                      make([]uint32, 0, nodes),
+		TemplateBytes:                 make([]byte, 0, templateBytes),
+		TemplateOpStarts:              make([]uint32, 0, templates),
+		TemplateOpCounts:              make([]uint16, 0, templates),
+		TemplateLiteralStarts:         make([]uint32, 0, templates),
+		TemplateMaxBytes:              make([]uint32, 0, templates),
+		TemplateContexts:              make([]TemplateContext, 0, templates),
+		TemplateOps:                   make([]TemplateOp, 0, templateOps),
+		TemplateArgs:                  make([]uint32, 0, templateOps),
+		AssumptionTemplateIDs:         make([]schema.TemplateID, 0, assumptions),
+		AssumptionsSet:                make([]uint8, 0, 1),
+		ExplanationRationaleIDs:       make([]schema.TemplateID, 0, explanations),
+		ExplanationUncertaintyStarts:  make([]uint32, 0, explanations),
+		ExplanationUncertaintyCounts:  make([]uint16, 0, explanations),
+		ExplanationUncertaintyIDs:     make([]schema.TemplateID, 0, explanationUncertainty),
 		CompareFields:                 make([]schema.FieldID, 0, compares),
 		CompareOps:                    make([]CompareOp, 0, compares),
 		CompareValues:                 make([]schema.ValueID, 0, compares),
@@ -106,6 +141,7 @@ func NewBuilder(hints Hints) *Builder {
 		EvidenceSubjects:              make([]schema.ValueID, 0, evidence),
 		EvidenceScopes:                make([]schema.ValueID, 0, evidence),
 		EvidenceTimings:               make([]schema.ValueID, 0, evidence),
+		EvidenceIssueTemplateIDs:      make([]schema.TemplateID, 0, evidenceIssues),
 		SourceStarts:                  make([]uint32, 0, nodes),
 		SourceEnds:                    make([]uint32, 0, nodes),
 		InputBytes:                    make([]byte, 0, source),
@@ -148,6 +184,7 @@ func NewBuilder(hints Hints) *Builder {
 		ClauseOnUnclear:               make([]schema.OutcomeID, 0, clauses),
 		ClauseOnUnverifiable:          make([]schema.OutcomeID, 0, clauses),
 		ClauseOnConflict:              make([]schema.OutcomeID, 0, clauses),
+		ClauseExplanationIDs:          make([]schema.ExplanationID, 0, clauseExplanations),
 		ClauseSourceStarts:            make([]uint32, 0, clauses),
 		ClauseSourceEnds:              make([]uint32, 0, clauses),
 		RequirementIDs:                make([]schema.RequirementID, 0, requirements),
@@ -324,6 +361,8 @@ func (b *Builder) AddEvidenceMatch(kind schema.EvidenceKindID, state schema.Evid
 	b.doc.EvidenceSubjects = append(b.doc.EvidenceSubjects, subject)
 	b.doc.EvidenceScopes = append(b.doc.EvidenceScopes, scope)
 	b.doc.EvidenceTimings = append(b.doc.EvidenceTimings, timing)
+	var issues [EvidenceIssueReasonCount]schema.TemplateID
+	b.doc.EvidenceIssueTemplateIDs = append(b.doc.EvidenceIssueTemplateIDs, issues[:]...)
 	return b.addNode(NodeKindEvidence, ref, span), nil
 }
 
@@ -332,6 +371,20 @@ func (b *Builder) Reset() {
 	d := &b.doc
 	d.NodeKinds = d.NodeKinds[:0]
 	d.NodeRefs = d.NodeRefs[:0]
+	d.TemplateBytes = d.TemplateBytes[:0]
+	d.TemplateOpStarts = d.TemplateOpStarts[:0]
+	d.TemplateOpCounts = d.TemplateOpCounts[:0]
+	d.TemplateLiteralStarts = d.TemplateLiteralStarts[:0]
+	d.TemplateMaxBytes = d.TemplateMaxBytes[:0]
+	d.TemplateContexts = d.TemplateContexts[:0]
+	d.TemplateOps = d.TemplateOps[:0]
+	d.TemplateArgs = d.TemplateArgs[:0]
+	d.AssumptionTemplateIDs = d.AssumptionTemplateIDs[:0]
+	d.AssumptionsSet = d.AssumptionsSet[:0]
+	d.ExplanationRationaleIDs = d.ExplanationRationaleIDs[:0]
+	d.ExplanationUncertaintyStarts = d.ExplanationUncertaintyStarts[:0]
+	d.ExplanationUncertaintyCounts = d.ExplanationUncertaintyCounts[:0]
+	d.ExplanationUncertaintyIDs = d.ExplanationUncertaintyIDs[:0]
 	d.CompareFields = d.CompareFields[:0]
 	d.CompareOps = d.CompareOps[:0]
 	d.CompareValues = d.CompareValues[:0]
@@ -347,6 +400,7 @@ func (b *Builder) Reset() {
 	d.EvidenceSubjects = d.EvidenceSubjects[:0]
 	d.EvidenceScopes = d.EvidenceScopes[:0]
 	d.EvidenceTimings = d.EvidenceTimings[:0]
+	d.EvidenceIssueTemplateIDs = d.EvidenceIssueTemplateIDs[:0]
 	d.SourceStarts = d.SourceStarts[:0]
 	d.SourceEnds = d.SourceEnds[:0]
 	d.InputBytes = d.InputBytes[:0]
@@ -390,6 +444,7 @@ func (b *Builder) Reset() {
 	d.ClauseOnUnclear = d.ClauseOnUnclear[:0]
 	d.ClauseOnUnverifiable = d.ClauseOnUnverifiable[:0]
 	d.ClauseOnConflict = d.ClauseOnConflict[:0]
+	d.ClauseExplanationIDs = d.ClauseExplanationIDs[:0]
 	d.ClauseSourceStarts = d.ClauseSourceStarts[:0]
 	d.ClauseSourceEnds = d.ClauseSourceEnds[:0]
 	d.RequirementIDs = d.RequirementIDs[:0]

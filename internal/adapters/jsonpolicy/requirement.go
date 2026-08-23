@@ -127,7 +127,7 @@ func (d *decoder) decodeRequirements(dst *ast.Builder) error {
 		d.pos++
 		return nil
 	}
-	const dependencyMask = uint8(1<<3 | 1<<4 | 1<<5)
+	const dependencyMask = uint8(1<<4 | 1<<5 | 1<<6)
 	if d.saw&dependencyMask != dependencyMask || d.fields == nil || d.symbols == nil {
 		return d.fail(CodeInvalidReference, "requirements must follow catalogs and have a field schema")
 	}
@@ -537,30 +537,32 @@ func (d *decoder) decodeResolution(dst *ast.Builder) (ast.Resolution, error) {
 			return ast.Resolution{}, err
 		}
 		d.skipWS()
-		valueStart := d.pos
-		value, err := d.expectString(&d.valueScratch)
-		if err != nil {
-			return ast.Resolution{}, err
-		}
-		outcome, err := d.resolveOutcome(dst, value, valueStart)
+		outcome, explanation, err := d.decodeResolutionBranch(dst, index)
 		if err != nil {
 			return ast.Resolution{}, err
 		}
 		switch index {
 		case 0:
 			result.OnSatisfied = outcome
+			result.OnSatisfiedExplanation = explanation
 		case 1:
 			result.OnFalse = outcome
+			result.OnFalseExplanation = explanation
 		case 2:
 			result.OnMissing = outcome
+			result.OnMissingExplanation = explanation
 		case 3:
 			result.OnStale = outcome
+			result.OnStaleExplanation = explanation
 		case 4:
 			result.OnUnclear = outcome
+			result.OnUnclearExplanation = explanation
 		case 5:
 			result.OnUnverifiable = outcome
+			result.OnUnverifiableExplanation = explanation
 		case 6:
 			result.OnConflict = outcome
+			result.OnConflictExplanation = explanation
 		}
 		d.skipWS()
 		if d.atEOF() {

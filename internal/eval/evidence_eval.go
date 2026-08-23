@@ -39,6 +39,25 @@ type EvidencePredicate struct {
 	Timing  schema.SymbolID
 }
 
+type evidenceRecordClassification struct {
+	reasons  truth.ReasonMask
+	positive bool
+	negative bool
+}
+
+var evidenceReasonMasks = [truth.ReasonCount + 1]truth.ReasonMask{
+	0,
+	1 << (truth.ReasonMissing - 1),
+	1 << (truth.ReasonStale - 1),
+	1 << (truth.ReasonUnclear - 1),
+	1 << (truth.ReasonUnverifiable - 1),
+	1 << (truth.ReasonWrongScope - 1),
+	1 << (truth.ReasonWrongSubject - 1),
+	1 << (truth.ReasonWrongTiming - 1),
+	1 << (truth.ReasonInvalid - 1),
+	1 << (truth.ReasonConflict - 1),
+}
+
 // Bind validates and classifies p without changing a previously usable index
 // on error. Rebinding the same immutable Program is a no-op.
 func (i *EvidenceStateIndex) Bind(p *program.Program) error {
@@ -149,9 +168,38 @@ func evalEvidenceValidated(dst truth.Planes, reasons ReasonPlanes, batch Batch, 
 	evalEvidenceUnchecked(dst, reasons, batch, states, predicate)
 }
 
+func classifyEvidenceRecord(
+	state, expectedState schema.EvidenceStateID,
+	stateReason schema.ReasonID,
+	subject, expectedSubject schema.SymbolID,
+	scope, expectedScope schema.SymbolID,
+	timing, expectedTiming schema.SymbolID,
+) evidenceRecordClassification {
+	stateMatches := state == expectedState
+	if stateMatches {
+		stateReason = 0
+	}
+
+	var qualifierReasons truth.ReasonMask
+	if expectedSubject != 0 && subject != expectedSubject {
+		qualifierReasons |= 1 << (truth.ReasonWrongSubject - 1)
+	}
+	if expectedScope != 0 && scope != expectedScope {
+		qualifierReasons |= 1 << (truth.ReasonWrongScope - 1)
+	}
+	if expectedTiming != 0 && timing != expectedTiming {
+		qualifierReasons |= 1 << (truth.ReasonWrongTiming - 1)
+	}
+	return evidenceRecordClassification{
+		reasons:  evidenceReasonMasks[stateReason] | qualifierReasons,
+		positive: stateMatches && qualifierReasons == 0 || stateReason == truth.ReasonConflict,
+		negative: !stateMatches && (stateReason == 0 || stateReason == truth.ReasonConflict),
+	}
+}
+
 func evalEvidenceUnchecked(dst truth.Planes, reasons ReasonPlanes, batch Batch, states *EvidenceStateIndex, predicate EvidencePredicate) {
 	words := resetLeafOutputs(dst, reasons, batch.Rows)
-	evidence := batch.Evidence
+	evidence := &batch.Evidence
 	for row := uint32(0); row < batch.Rows; row++ {
 		start := batch.EvidenceOffsets[row]
 		end := batch.EvidenceOffsets[row+1]
@@ -166,37 +214,20 @@ func evalEvidenceUnchecked(dst truth.Planes, reasons ReasonPlanes, batch Batch, 
 			}
 			foundKind = true
 			state := evidence.States[evidenceRow]
-			stateMatches := state == predicate.State
-			if !stateMatches {
-				reason := states.reason(state)
-				switch reason {
-				case 0:
-					negative = true
-				case truth.ReasonConflict:
-					positive = true
-					negative = true
-					reasonMask = reasonMask.With(reason)
-				default:
-					reasonMask = reasonMask.With(reason)
-				}
-			}
-
-			attributesMatch := true
-			if predicate.Subject != 0 && evidence.Subjects[evidenceRow] != predicate.Subject {
-				attributesMatch = false
-				reasonMask = reasonMask.With(truth.ReasonWrongSubject)
-			}
-			if predicate.Scope != 0 && evidence.Scopes[evidenceRow] != predicate.Scope {
-				attributesMatch = false
-				reasonMask = reasonMask.With(truth.ReasonWrongScope)
-			}
-			if predicate.Timing != 0 && evidence.Timings[evidenceRow] != predicate.Timing {
-				attributesMatch = false
-				reasonMask = reasonMask.With(truth.ReasonWrongTiming)
-			}
-			if stateMatches && attributesMatch {
-				positive = true
-			}
+			classification := classifyEvidenceRecord(
+				state,
+				predicate.State,
+				states.reasons[state-1],
+				evidence.Subjects[evidenceRow],
+				predicate.Subject,
+				evidence.Scopes[evidenceRow],
+				predicate.Scope,
+				evidence.Timings[evidenceRow],
+				predicate.Timing,
+			)
+			positive = positive || classification.positive
+			negative = negative || classification.negative
+			reasonMask |= classification.reasons
 		}
 		if !foundKind {
 			reasonMask = reasonMask.With(truth.ReasonMissing)

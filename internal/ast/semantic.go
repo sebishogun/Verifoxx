@@ -29,6 +29,14 @@ type Resolution struct {
 	OnUnclear      schema.OutcomeID
 	OnUnverifiable schema.OutcomeID
 	OnConflict     schema.OutcomeID
+
+	OnSatisfiedExplanation    schema.ExplanationID
+	OnFalseExplanation        schema.ExplanationID
+	OnMissingExplanation      schema.ExplanationID
+	OnStaleExplanation        schema.ExplanationID
+	OnUnclearExplanation      schema.ExplanationID
+	OnUnverifiableExplanation schema.ExplanationID
+	OnConflictExplanation     schema.ExplanationID
 }
 
 // PolicyMetadata is fixed-size provenance for one source document.
@@ -277,6 +285,9 @@ func (b *Builder) AddClause(assertion schema.NodeID, evidence []schema.NodeID, r
 	if assertion == 0 {
 		return 0, ErrInvalidNode
 	}
+	if err := b.validateResolutionExplanations(resolution); err != nil {
+		return 0, err
+	}
 	if len(evidence) > math.MaxUint16 || len(remediations) > math.MaxUint16 {
 		return 0, ErrTooManySemanticEdges
 	}
@@ -316,6 +327,8 @@ func (b *Builder) AddClause(assertion schema.NodeID, evidence []schema.NodeID, r
 	b.doc.ClauseOnUnclear = append(b.doc.ClauseOnUnclear, resolution.OnUnclear)
 	b.doc.ClauseOnUnverifiable = append(b.doc.ClauseOnUnverifiable, resolution.OnUnverifiable)
 	b.doc.ClauseOnConflict = append(b.doc.ClauseOnConflict, resolution.OnConflict)
+	explanations := resolutionExplanationIDs(resolution)
+	b.doc.ClauseExplanationIDs = append(b.doc.ClauseExplanationIDs, explanations[:]...)
 	b.doc.ClauseSourceStarts = append(b.doc.ClauseSourceStarts, span.Start)
 	b.doc.ClauseSourceEnds = append(b.doc.ClauseSourceEnds, span.End)
 	return schema.ClauseID(len(b.doc.ClauseAssertionRoots)), nil
@@ -338,11 +351,21 @@ func (d *Document) Clause(id schema.ClauseID) (schema.NodeID, Resolution, bool) 
 	if !ok || i >= uint64(len(d.ClauseOnSatisfied)) || i >= uint64(len(d.ClauseOnFalse)) || i >= uint64(len(d.ClauseOnMissing)) || i >= uint64(len(d.ClauseOnStale)) || i >= uint64(len(d.ClauseOnUnclear)) || i >= uint64(len(d.ClauseOnUnverifiable)) || i >= uint64(len(d.ClauseOnConflict)) {
 		return 0, Resolution{}, false
 	}
+	explanationStart := i * ResolutionBranchCount
+	explanationEnd := explanationStart + ResolutionBranchCount
+	if explanationEnd > uint64(len(d.ClauseExplanationIDs)) {
+		return 0, Resolution{}, false
+	}
+	explanations := d.ClauseExplanationIDs[explanationStart:explanationEnd]
 	return d.ClauseAssertionRoots[i], Resolution{
 		OnSatisfied: d.ClauseOnSatisfied[i],
 		OnFalse:     d.ClauseOnFalse[i], OnMissing: d.ClauseOnMissing[i],
 		OnStale: d.ClauseOnStale[i], OnUnclear: d.ClauseOnUnclear[i],
 		OnUnverifiable: d.ClauseOnUnverifiable[i], OnConflict: d.ClauseOnConflict[i],
+		OnSatisfiedExplanation: explanations[0], OnFalseExplanation: explanations[1],
+		OnMissingExplanation: explanations[2], OnStaleExplanation: explanations[3],
+		OnUnclearExplanation: explanations[4], OnUnverifiableExplanation: explanations[5],
+		OnConflictExplanation: explanations[6],
 	}, true
 }
 

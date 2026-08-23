@@ -3,6 +3,7 @@ package compile
 import (
 	"errors"
 	"math"
+	"slices"
 
 	policyindex "github.com/sebishogun/verifoxx/internal/index"
 	"github.com/sebishogun/verifoxx/internal/program"
@@ -13,6 +14,10 @@ const (
 	indexFieldUnseen uint8 = iota
 	indexFieldSingle
 	indexFieldAmbiguous
+
+	// Reused full-column symbol masks beat direct comparison conservatively at
+	// 96 uses across measured 64-4096 row dense and sparse batches.
+	factIndexMinUses uint32 = 96
 )
 
 func validateApplicabilityProgram(p *program.Program) error {
@@ -51,6 +56,141 @@ func (l *Lowerer) lowerIndexes(p *program.Program) error {
 	}
 	if err := l.indexBuilder.Build(&p.ApplicabilityIndex, uint32(len(p.RequirementIDs)), constraints); err != nil {
 		return compileIndexError(err)
+	}
+	return l.lowerFactIndexSpec(p)
+}
+
+// lowerFactIndexSpec counts exact value comparisons in the final schedule,
+// then emits sorted, unique symbol values for fields above the measured reuse
+// threshold. The Program and Lowerer retain all capacities between calls.
+func (l *Lowerer) lowerFactIndexSpec(p *program.Program) error {
+	fieldCount := len(p.FieldKinds)
+	l.factUseCounts = resizeSlots(l.factUseCounts, fieldCount)
+	for row, opcode := range p.Opcodes {
+		var uses uint32
+		switch opcode {
+		case program.OpcodeEqual, program.OpcodeNotEqual:
+			uses = 1
+		case program.OpcodeIn:
+			uses = uint32(p.ListCounts[row])
+		default:
+			continue
+		}
+
+		field := p.Fields[row]
+		if field == 0 || uint64(field) > uint64(fieldCount) {
+			return ErrInvalidGeneratedProgram
+		}
+		if p.FieldKinds[field-1] != schema.ValueKindSymbol {
+			continue
+		}
+		if opcode == program.OpcodeIn {
+			start := int(p.ListStarts[row])
+			end := start + int(p.ListCounts[row])
+			for _, value := range p.ListValues[start:end] {
+				if _, err := selectorSymbol(p, value); err != nil {
+					return err
+				}
+			}
+		} else if _, err := selectorSymbol(p, p.Values[row]); err != nil {
+			return err
+		}
+		current := l.factUseCounts[field-1]
+		if uses > math.MaxUint32-current {
+			return ErrProgramTooLarge
+		}
+		l.factUseCounts[field-1] = current + uses
+	}
+
+	selectedFields := 0
+	totalValues := uint64(0)
+	for _, uses := range l.factUseCounts {
+		if uses < factIndexMinUses {
+			continue
+		}
+		selectedFields++
+		totalValues += uint64(uses)
+	}
+	if totalValues > math.MaxUint32 || totalValues > uint64(math.MaxInt) {
+		return ErrProgramTooLarge
+	}
+
+	spec := &p.FactIndexSpec
+	spec.FieldIDs = resizeSlots(spec.FieldIDs, selectedFields)
+	spec.Columns = resizeSlots(spec.Columns, selectedFields)
+	spec.ValueStarts = resizeSlots(spec.ValueStarts, selectedFields)
+	spec.ValueCounts = resizeSlots(spec.ValueCounts, selectedFields)
+	spec.UseCounts = resizeSlots(spec.UseCounts, selectedFields)
+	spec.Values = resizeSlots(spec.Values, int(totalValues))
+	l.factValueFill = resizeSlots(l.factValueFill, fieldCount)
+
+	fieldRow := 0
+	valueStart := uint32(0)
+	for fieldOffset, uses := range l.factUseCounts {
+		if uses < factIndexMinUses {
+			continue
+		}
+		field := schema.FieldID(fieldOffset + 1)
+		kind, column, ok := p.FieldIndex.Lookup(field)
+		if !ok || kind != schema.ValueKindSymbol {
+			return ErrInvalidGeneratedProgram
+		}
+		spec.FieldIDs[fieldRow] = field
+		spec.Columns[fieldRow] = column
+		spec.ValueStarts[fieldRow] = valueStart
+		spec.ValueCounts[fieldRow] = uses
+		spec.UseCounts[fieldRow] = uses
+		l.factValueFill[fieldOffset] = valueStart
+		valueStart += uses
+		fieldRow++
+	}
+
+	for row, opcode := range p.Opcodes {
+		if opcode != program.OpcodeEqual && opcode != program.OpcodeNotEqual && opcode != program.OpcodeIn {
+			continue
+		}
+		fieldOffset := int(p.Fields[row]) - 1
+		if l.factUseCounts[fieldOffset] < factIndexMinUses {
+			continue
+		}
+		if opcode == program.OpcodeIn {
+			start := int(p.ListStarts[row])
+			end := start + int(p.ListCounts[row])
+			for _, value := range p.ListValues[start:end] {
+				symbol, _ := selectorSymbol(p, value)
+				fill := l.factValueFill[fieldOffset]
+				spec.Values[fill] = symbol
+				l.factValueFill[fieldOffset] = fill + 1
+			}
+			continue
+		}
+		symbol, _ := selectorSymbol(p, p.Values[row])
+		fill := l.factValueFill[fieldOffset]
+		spec.Values[fill] = symbol
+		l.factValueFill[fieldOffset] = fill + 1
+	}
+
+	write := 0
+	for row := range spec.FieldIDs {
+		start := int(spec.ValueStarts[row])
+		end := start + int(spec.ValueCounts[row])
+		values := spec.Values[start:end]
+		slices.Sort(values)
+		spec.ValueStarts[row] = uint32(write)
+		var previous schema.SymbolID
+		for _, value := range values {
+			if value == previous {
+				continue
+			}
+			spec.Values[write] = value
+			write++
+			previous = value
+		}
+		spec.ValueCounts[row] = uint32(write) - spec.ValueStarts[row]
+	}
+	spec.Values = spec.Values[:write]
+	if !spec.Valid(p.FieldIndex, p.ProgramSymbolCount) {
+		return ErrInvalidGeneratedProgram
 	}
 	return nil
 }

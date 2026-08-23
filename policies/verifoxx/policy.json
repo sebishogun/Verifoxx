@@ -2,6 +2,9 @@
   "schema_version": 1,
   "name": "verifoxx",
   "version": "1.0.0",
+  "assumptions": [
+    "The supplied structured fields faithfully represent the underlying request and evidence records."
+  ],
   "evidence_kinds": [
     {"name": "approval_record"},
     {"name": "execution_environment_attestation"},
@@ -44,16 +47,67 @@
             ]
           },
           "evidence": [
-            {"op": "evidence_matches", "kind": "approval_record", "state": "valid", "timing": "before_execution"}
+            {
+              "op": "evidence_matches",
+              "kind": "approval_record",
+              "state": "valid",
+              "timing": "before_execution",
+              "explanation": {
+                "issue": "Required {evidence_kind} evidence is {reason} for request {request_id}.",
+                "conflict": "{evidence_id} {evidence_kind} has conflicting approval state."
+              }
+            }
           ],
           "resolution": {
-            "satisfied": "Approve",
-            "false": "Reject",
-            "missing": "Escalate",
-            "stale": "Escalate",
-            "unclear": "Escalate",
-            "unverifiable": "Escalate",
-            "conflict": "Escalate"
+            "satisfied": {
+              "outcome": "Approve",
+              "explanation": {
+                "rationale": "The external aggregate request has valid pre-execution approval and verified approved-local-environment evidence.",
+                "uncertainty": []
+              }
+            },
+            "false": {
+              "outcome": "Reject",
+              "explanation": {
+                "rationale": "The requested individual-record export violates R1's non-negotiable disclosure restriction.",
+                "uncertainty": []
+              }
+            },
+            "missing": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The required pre-execution approval record is missing, so the request cannot be approved automatically.",
+                "uncertainty": ["Whether a valid pre-execution approval can be supplied remains unresolved."]
+              }
+            },
+            "stale": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The pre-execution approval record is {reason}, so the request cannot be decided automatically.",
+                "uncertainty": []
+              }
+            },
+            "unclear": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The pre-execution approval record is {reason}, so the request cannot be decided automatically.",
+                "uncertainty": []
+              }
+            },
+            "unverifiable": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The pre-execution approval record is {reason}, so the request cannot be decided automatically.",
+                "uncertainty": []
+              }
+            },
+            "conflict": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The pre-execution approval record is conflicting, so the request cannot be decided automatically.",
+                "uncertainty": ["The valid pre-execution approval state cannot be established from conflicting evidence."]
+              }
+            }
           },
           "remediations": []
         }
@@ -67,16 +121,66 @@
         {
           "assert": {"op": "exists", "field": "environment.execution_env"},
           "evidence": [
-            {"op": "evidence_matches", "kind": "execution_environment_attestation", "state": "verified", "subject": "local_approved_env"}
+            {
+              "op": "evidence_matches",
+              "kind": "execution_environment_attestation",
+              "state": "verified",
+              "subject": "local_approved_env",
+              "explanation": {
+                "issue": "Required {evidence_kind} evidence is {reason} from the request."
+              }
+            }
           ],
           "resolution": {
-            "satisfied": "Approve",
-            "false": "Escalate",
-            "missing": "Escalate",
-            "stale": "Escalate",
-            "unclear": "Escalate",
-            "unverifiable": "Escalate",
-            "conflict": "Escalate"
+            "satisfied": {
+              "outcome": "Approve",
+              "explanation": {
+                "rationale": "The approved local execution environment is present and verified.",
+                "uncertainty": []
+              }
+            },
+            "false": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The execution environment is not available for verification.",
+                "uncertainty": ["The request's execution environment cannot be established from the supplied fields."]
+              }
+            },
+            "missing": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The approved local execution environment cannot be verified because the required attestation is missing.",
+                "uncertainty": ["The request's execution environment lacks a verified approved-local attestation."]
+              }
+            },
+            "stale": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The execution-environment attestation is {reason}, so the environment cannot be verified.",
+                "uncertainty": []
+              }
+            },
+            "unclear": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The execution-environment attestation is {reason}, so the environment cannot be verified.",
+                "uncertainty": []
+              }
+            },
+            "unverifiable": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The execution-environment attestation is {reason}, so the environment cannot be verified.",
+                "uncertainty": []
+              }
+            },
+            "conflict": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The execution-environment evidence conflicts, so the environment cannot be verified.",
+                "uncertainty": []
+              }
+            }
           },
           "remediations": []
         },
@@ -84,13 +188,55 @@
           "assert": {"op": "equal", "field": "environment.execution_env", "value": "local_approved_env"},
           "evidence": [],
           "resolution": {
-            "satisfied": "Approve",
-            "false": "Escalate",
-            "missing": "Escalate",
-            "stale": "Escalate",
-            "unclear": "Escalate",
-            "unverifiable": "Escalate",
-            "conflict": "Escalate"
+            "satisfied": {
+              "outcome": "Approve",
+              "explanation": {
+                "rationale": "The request specifies the approved local execution environment.",
+                "uncertainty": []
+              }
+            },
+            "false": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The request specifies an execution environment that is not approved for protected data.",
+                "uncertainty": []
+              }
+            },
+            "missing": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The execution environment is missing, so the request cannot be decided automatically.",
+                "uncertainty": []
+              }
+            },
+            "stale": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The execution environment is {reason}, so the request cannot be decided automatically.",
+                "uncertainty": []
+              }
+            },
+            "unclear": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The execution environment is {reason}, so the request cannot be decided automatically.",
+                "uncertainty": []
+              }
+            },
+            "unverifiable": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The execution environment is {reason}, so the request cannot be decided automatically.",
+                "uncertainty": []
+              }
+            },
+            "conflict": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The execution environment conflicts with the approved local setting.",
+                "uncertainty": []
+              }
+            }
           },
           "remediations": []
         }
@@ -117,32 +263,134 @@
             ]
           },
           "evidence": [
-            {"op": "evidence_matches", "kind": "approval_record", "state": "valid", "timing": "before_execution"}
+            {
+              "op": "evidence_matches",
+              "kind": "approval_record",
+              "state": "valid",
+              "timing": "before_execution",
+              "explanation": {
+                "issue": "Required {evidence_kind} evidence is {reason} for request {request_id}.",
+                "conflict": "{evidence_id} {evidence_kind} has conflicting approval state."
+              }
+            }
           ],
           "resolution": {
-            "satisfied": "Approve",
-            "false": "Reject",
-            "missing": "Escalate",
-            "stale": "Escalate",
-            "unclear": "Escalate",
-            "unverifiable": "Escalate",
-            "conflict": "Escalate"
+            "satisfied": {
+              "outcome": "Approve",
+              "explanation": {
+                "rationale": "The trusted internal request preserves disclosure and pre-execution approval restrictions.",
+                "uncertainty": []
+              }
+            },
+            "false": {
+              "outcome": "Reject",
+              "explanation": {
+                "rationale": "The request violates a non-negotiable disclosure restriction.",
+                "uncertainty": []
+              }
+            },
+            "missing": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The required pre-execution approval record is missing, so the request cannot be approved automatically.",
+                "uncertainty": []
+              }
+            },
+            "stale": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The pre-execution approval record is {reason}, so the request cannot be decided automatically.",
+                "uncertainty": []
+              }
+            },
+            "unclear": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The pre-execution approval record is {reason}, so the request cannot be decided automatically.",
+                "uncertainty": []
+              }
+            },
+            "unverifiable": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The pre-execution approval record is {reason}, so the request cannot be decided automatically.",
+                "uncertainty": []
+              }
+            },
+            "conflict": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The pre-execution approval record is conflicting, so the request cannot be decided automatically.",
+                "uncertainty": ["The valid pre-execution approval state cannot be established from conflicting evidence."]
+              }
+            }
           },
           "remediations": []
         },
         {
           "assert": {"op": "equal", "field": "environment.usage", "value": "above_standard_limit"},
           "evidence": [
-            {"op": "evidence_matches", "kind": "usage_limit_adjustment", "state": "approved", "subject": "above_standard_limit", "scope": "trusted_internal_only"}
+            {
+              "op": "evidence_matches",
+              "kind": "usage_limit_adjustment",
+              "state": "approved",
+              "subject": "above_standard_limit",
+              "scope": "trusted_internal_only",
+              "explanation": {
+                "issue": "Required {evidence_kind} evidence is {reason} from the request."
+              }
+            }
           ],
           "resolution": {
-            "satisfied": "Approve",
-            "false": "Revise",
-            "missing": "Revise",
-            "stale": "Escalate",
-            "unclear": "Escalate",
-            "unverifiable": "Escalate",
-            "conflict": "Escalate"
+            "satisfied": {
+              "outcome": "Approve",
+              "explanation": {
+                "rationale": "The above-standard usage request has the required scoped usage-adjustment approval.",
+                "uncertainty": []
+              }
+            },
+            "false": {
+              "outcome": "Revise",
+              "explanation": {
+                "rationale": "The request must be revised to stay within the standard usage limit.",
+                "uncertainty": []
+              }
+            },
+            "missing": {
+              "outcome": "Revise",
+              "explanation": {
+                "rationale": "The above-standard usage request can be corrected by providing the required scoped usage-adjustment approval.",
+                "uncertainty": ["Whether a qualifying usage adjustment will be approved remains unresolved."]
+              }
+            },
+            "stale": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The usage-adjustment approval is {reason}, so above-standard usage cannot be approved automatically.",
+                "uncertainty": []
+              }
+            },
+            "unclear": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The usage-adjustment approval is {reason}, so above-standard usage cannot be approved automatically.",
+                "uncertainty": []
+              }
+            },
+            "unverifiable": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The usage-adjustment approval is {reason}, so above-standard usage cannot be approved automatically.",
+                "uncertainty": []
+              }
+            },
+            "conflict": {
+              "outcome": "Escalate",
+              "explanation": {
+                "rationale": "The usage-adjustment approvals conflict, so above-standard usage cannot be approved automatically.",
+                "uncertainty": []
+              }
+            }
           },
           "remediations": [
             {"kind": "add_evidence", "evidence_kind": "usage_limit_adjustment"}

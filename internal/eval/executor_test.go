@@ -251,13 +251,24 @@ const (
 	executionSymbolReject
 	executionSymbolRevise
 	executionSymbolEscalate
+	executionSymbolUnclear
+	executionSymbolUnverifiable
+	executionSymbolInvalid
+	executionSymbolOtherState
+	executionSymbolSubjectA
+	executionSymbolSubjectB
+	executionSymbolScopeA
+	executionSymbolScopeB
+	executionSymbolTimingA
+	executionSymbolTimingB
 )
 
 func executionTestProgram(t testing.TB, requirementCount int) *program.Program {
 	t.Helper()
 	p := evidenceSymbolTestProgram(
 		"active", "inactive", "yes", "no", "approval", "valid", "stale", "conflicting",
-		"approve", "reject", "revise", "escalate",
+		"approve", "reject", "revise", "escalate", "unclear", "unverifiable", "invalid",
+		"other", "subject-a", "subject-b", "scope-a", "scope-b", "timing-a", "timing-b",
 	)
 	if err := policyindex.BuildSchema(&p.FieldIndex, []schema.ValueKind{
 		schema.ValueKindSymbol,
@@ -269,7 +280,15 @@ func executionTestProgram(t testing.TB, requirementCount int) *program.Program {
 	p.ValueKinds = []schema.ValueKind{schema.ValueKindSymbol, schema.ValueKindSymbol}
 	p.ValueRefs = []uint32{uint32(executionSymbolActive), uint32(executionSymbolYes)}
 	p.EvidenceKindNames = []schema.SymbolID{executionSymbolApproval}
-	p.EvidenceStateNames = []schema.SymbolID{executionSymbolValid, executionSymbolStale, executionSymbolConflicting}
+	p.EvidenceStateNames = []schema.SymbolID{
+		executionSymbolValid,
+		executionSymbolStale,
+		executionSymbolConflicting,
+		executionSymbolUnclear,
+		executionSymbolUnverifiable,
+		executionSymbolInvalid,
+		executionSymbolOtherState,
+	}
 
 	applicability := appendExecutorInstruction(p, program.OpcodeEqual, 1, 1, nil, 0, 0)
 	assertion := appendExecutorInstruction(p, program.OpcodeEqual, 2, 2, nil, 0, 0)
@@ -296,15 +315,19 @@ func executionTestProgram(t testing.TB, requirementCount int) *program.Program {
 
 	p.RequirementIDs = make([]schema.RequirementID, requirementCount)
 	p.RequirementRoots = make([]schema.InstructionID, requirementCount)
+	p.RequirementSourceNodeIDs = make([]schema.NodeID, requirementCount)
 	p.RequirementClauseStarts = make([]uint32, requirementCount)
 	p.RequirementClauseCounts = make([]uint16, requirementCount)
 	p.RequirementClauseIDs = make([]schema.ClauseID, requirementCount)
 	p.ClauseAssertionRoots = make([]schema.InstructionID, requirementCount)
+	p.ClauseAssertionSourceNodeIDs = make([]schema.NodeID, requirementCount)
 	p.ClauseEvidenceStarts = make([]uint32, requirementCount)
 	p.ClauseEvidenceCounts = make([]uint16, requirementCount)
 	p.ClauseEvidenceIDs = make([]schema.InstructionID, requirementCount)
+	p.ClauseEvidenceSourceNodeIDs = make([]schema.NodeID, requirementCount)
 	p.ClauseOnSatisfied = make([]schema.OutcomeID, requirementCount)
 	p.ClauseOnFalse = make([]schema.OutcomeID, requirementCount)
+	p.ClauseExplanationIDs = make([]schema.ExplanationID, requirementCount*astResolutionBranchCount)
 	p.ClauseRemediationStarts = make([]uint32, requirementCount)
 	p.ClauseRemediationCounts = make([]uint16, requirementCount)
 	p.ClauseRemediationIDs = []schema.RemediationID{1}
@@ -312,18 +335,25 @@ func executionTestProgram(t testing.TB, requirementCount int) *program.Program {
 		id := row + 1
 		p.RequirementIDs[row] = schema.RequirementID(id)
 		p.RequirementRoots[row] = applicability
+		p.RequirementSourceNodeIDs[row] = schema.NodeID(applicability)
 		p.RequirementClauseStarts[row] = uint32(row)
 		p.RequirementClauseCounts[row] = 1
 		p.RequirementClauseIDs[row] = schema.ClauseID(id)
 		p.ClauseAssertionRoots[row] = assertion
+		p.ClauseAssertionSourceNodeIDs[row] = schema.NodeID(assertion)
 		p.ClauseEvidenceStarts[row] = uint32(row)
 		p.ClauseEvidenceCounts[row] = 1
 		p.ClauseEvidenceIDs[row] = evidence
+		p.ClauseEvidenceSourceNodeIDs[row] = schema.NodeID(evidence)
 		p.ClauseOnSatisfied[row] = 1
 		p.ClauseOnFalse[row] = 2
 		p.ClauseRemediationCounts[row] = 1
+		for branch := range astResolutionBranchCount {
+			p.ClauseExplanationIDs[row*astResolutionBranchCount+branch] = schema.ExplanationID(branch + 1)
+		}
 	}
 
+	installExecutionExplanationCatalog(p, schema.NodeID(evidence))
 	setExecutionResolutionRows(t, p)
 	constraints := policyindex.Constraints{
 		Rows:        make([]uint32, requirementCount),
@@ -346,11 +376,33 @@ func executionTestProgram(t testing.TB, requirementCount int) *program.Program {
 	return p
 }
 
+const astResolutionBranchCount = 7
+
+func installExecutionExplanationCatalog(p *program.Program, evidenceNode schema.NodeID) {
+	p.TemplateOpStarts = []uint32{0}
+	p.TemplateOpCounts = []uint16{0}
+	p.TemplateLiteralStarts = []uint32{0}
+	p.TemplateMaxBytes = []uint32{0}
+	p.ExplanationRationaleTemplateIDs = make([]schema.TemplateID, astResolutionBranchCount)
+	p.ExplanationUncertaintyStarts = make([]uint32, astResolutionBranchCount)
+	p.ExplanationUncertaintyCounts = make([]uint16, astResolutionBranchCount)
+	for row := range p.ExplanationRationaleTemplateIDs {
+		p.ExplanationRationaleTemplateIDs[row] = 1
+	}
+	p.AssumptionTemplateIDs = []schema.TemplateID{1}
+	p.EvidenceIssueNodeIDs = []schema.NodeID{evidenceNode}
+	p.EvidenceIssueTemplateIDs = make([]schema.TemplateID, result.EvidenceIssueTemplateCount)
+	for row := range p.EvidenceIssueTemplateIDs {
+		p.EvidenceIssueTemplateIDs[row] = 1
+	}
+}
+
 func setExecutionResolutionRows(t testing.TB, p *program.Program) {
 	t.Helper()
 	rows := len(p.ClauseAssertionRoots) * truth.ReasonCount
 	p.Resolutions = result.ResolutionTable{
 		OutcomeIDs:        make([]schema.OutcomeID, rows),
+		ExplanationIDs:    make([]schema.ExplanationID, rows),
 		RemediationStarts: make([]uint32, rows),
 		RemediationCounts: make([]uint16, rows),
 		RemediationIDs:    p.ClauseRemediationIDs,
@@ -359,8 +411,13 @@ func setExecutionResolutionRows(t testing.TB, p *program.Program) {
 		base := clause * truth.ReasonCount
 		for reason := range truth.ReasonCount {
 			p.Resolutions.OutcomeIDs[base+reason] = 4
+			p.Resolutions.ExplanationIDs[base+reason] = 6
 		}
 		p.Resolutions.OutcomeIDs[base+int(truth.ReasonMissing-1)] = 3
+		p.Resolutions.ExplanationIDs[base+int(truth.ReasonMissing-1)] = 3
+		p.Resolutions.ExplanationIDs[base+int(truth.ReasonStale-1)] = 4
+		p.Resolutions.ExplanationIDs[base+int(truth.ReasonUnclear-1)] = 5
+		p.Resolutions.ExplanationIDs[base+int(truth.ReasonConflict-1)] = 7
 		p.Resolutions.RemediationCounts[base+int(truth.ReasonMissing-1)] = 1
 	}
 	if err := p.ValidateResultTables(); err != nil {
@@ -457,8 +514,9 @@ func TestExecutePaths(t *testing.T) {
 		!slices.Equal(got.RemediationIDs, []schema.RemediationID{1, 1}) {
 		t.Fatalf("remediations = %v/%v", got.RemediationOffsets, got.RemediationIDs)
 	}
-	if !slices.Equal(got.EvidenceOffsets, make([]uint32, batch.Rows+1)) || len(got.EvidenceIDs) != 0 {
-		t.Fatalf("evidence = %v/%v, want empty ranges", got.EvidenceOffsets, got.EvidenceIDs)
+	if !slices.Equal(got.EvidenceOffsets, []uint32{0, 1, 2, 3, 4, 5, 6, 7}) ||
+		!slices.Equal(got.EvidenceIDs, []schema.EvidenceID{1, 1, 1, 1, 2, 3, 1}) {
+		t.Fatalf("evidence = %v/%v", got.EvidenceOffsets, got.EvidenceIDs)
 	}
 }
 
@@ -615,10 +673,13 @@ func assertExecutionRows(t testing.TB, got *result.Batch, rows uint32) {
 			len(got.EvidenceOffsets), len(got.ReasonOffsets), len(got.RemediationOffsets), rows)
 	}
 	if len(got.RequirementIDs) != int(rows) || len(got.DriverNodes) != int(rows) ||
-		len(got.ReasonIDs) != int(rows) || len(got.RemediationIDs) != int(rows) || len(got.EvidenceIDs) != 0 {
-		t.Fatalf("edge lengths = requirements %d drivers %d reasons %d remediations %d evidence %d, want %d/%d/%d/%d/0",
-			len(got.RequirementIDs), len(got.DriverNodes), len(got.ReasonIDs),
-			len(got.RemediationIDs), len(got.EvidenceIDs), rows, rows, rows, rows)
+		len(got.DriverExplanations) != int(rows) || len(got.ReasonIDs) != int(rows) ||
+		len(got.ReasonNodes) != int(rows) || len(got.ReasonEvidenceIDs) != int(rows) ||
+		len(got.ReasonEvidenceStates) != int(rows) || len(got.RemediationIDs) != int(rows) || len(got.EvidenceIDs) != 0 {
+		t.Fatalf("edge lengths = requirements %d drivers %d explanations %d reasons %d/%d/%d/%d remediations %d evidence %d, want %d per populated column and 0 evidence",
+			len(got.RequirementIDs), len(got.DriverNodes), len(got.DriverExplanations), len(got.ReasonIDs),
+			len(got.ReasonNodes), len(got.ReasonEvidenceIDs), len(got.ReasonEvidenceStates),
+			len(got.RemediationIDs), len(got.EvidenceIDs), rows)
 	}
 	for row := uint32(0); row < rows; row++ {
 		if got.OutcomeIDs[row] != 3 || got.RequirementOffsets[row+1] != row+1 ||
@@ -626,7 +687,9 @@ func assertExecutionRows(t testing.TB, got *result.Batch, rows uint32) {
 			got.ReasonOffsets[row+1] != row+1 || got.RemediationOffsets[row+1] != row+1 ||
 			got.RequirementIDs[row] != 1 || got.DriverRequirements[row] != 1 ||
 			got.DriverClauses[row] != 1 || got.DriverNodes[row] != 3 ||
-			got.DriverReasons[row] != truth.ReasonMissing || got.ReasonIDs[row] != truth.ReasonMissing ||
+			got.DriverReasons[row] != truth.ReasonMissing || got.DriverExplanations[row] != 3 ||
+			got.ReasonIDs[row] != truth.ReasonMissing || got.ReasonNodes[row] != 3 ||
+			got.ReasonEvidenceIDs[row] != 0 || got.ReasonEvidenceStates[row] != 0 ||
 			got.RemediationIDs[row] != 1 {
 			t.Fatalf("row %d = outcome %d offsets %d/%d/%d/%d/%d requirement %d driver %d/%d/%d/%d reason %d remediation %d",
 				row, got.OutcomeIDs[row], got.RequirementOffsets[row+1], got.DriverOffsets[row+1],
@@ -702,10 +765,14 @@ func poisonResult(dst *result.Batch) {
 	poisonCapacity(dst.DriverClauses, schema.ClauseID(math.MaxUint32))
 	poisonCapacity(dst.DriverNodes, schema.NodeID(math.MaxUint32))
 	poisonCapacity(dst.DriverReasons, schema.ReasonID(math.MaxUint8))
+	poisonCapacity(dst.DriverExplanations, schema.ExplanationID(math.MaxUint32))
 	poisonCapacity(dst.EvidenceOffsets, uint32(math.MaxUint32))
 	poisonCapacity(dst.EvidenceIDs, schema.EvidenceID(math.MaxUint32))
 	poisonCapacity(dst.ReasonOffsets, uint32(math.MaxUint32))
 	poisonCapacity(dst.ReasonIDs, schema.ReasonID(math.MaxUint8))
+	poisonCapacity(dst.ReasonNodes, schema.NodeID(math.MaxUint32))
+	poisonCapacity(dst.ReasonEvidenceIDs, schema.EvidenceID(math.MaxUint32))
+	poisonCapacity(dst.ReasonEvidenceStates, schema.EvidenceStateID(math.MaxUint32))
 	poisonCapacity(dst.RemediationOffsets, uint32(math.MaxUint32))
 	poisonCapacity(dst.RemediationIDs, schema.RemediationID(math.MaxUint32))
 }
@@ -720,10 +787,14 @@ func cloneResultBatch(src result.Batch) result.Batch {
 	dst.DriverClauses = slices.Clone(src.DriverClauses)
 	dst.DriverNodes = slices.Clone(src.DriverNodes)
 	dst.DriverReasons = slices.Clone(src.DriverReasons)
+	dst.DriverExplanations = slices.Clone(src.DriverExplanations)
 	dst.EvidenceOffsets = slices.Clone(src.EvidenceOffsets)
 	dst.EvidenceIDs = slices.Clone(src.EvidenceIDs)
 	dst.ReasonOffsets = slices.Clone(src.ReasonOffsets)
 	dst.ReasonIDs = slices.Clone(src.ReasonIDs)
+	dst.ReasonNodes = slices.Clone(src.ReasonNodes)
+	dst.ReasonEvidenceIDs = slices.Clone(src.ReasonEvidenceIDs)
+	dst.ReasonEvidenceStates = slices.Clone(src.ReasonEvidenceStates)
 	dst.RemediationOffsets = slices.Clone(src.RemediationOffsets)
 	dst.RemediationIDs = slices.Clone(src.RemediationIDs)
 	return dst
@@ -827,6 +898,48 @@ func TestExecutorRejectsAtomically(t *testing.T) {
 			name: "evidence CSR",
 			mutate: func(_ *program.Program, batch *Batch) {
 				batch.EvidenceOffsets = batch.EvidenceOffsets[:len(batch.EvidenceOffsets)-1]
+			},
+		},
+		{
+			name: "requirement source nodes",
+			mutate: func(p *program.Program, _ *Batch) {
+				p.RequirementSourceNodeIDs = nil
+			},
+		},
+		{
+			name: "clause assertion source nodes",
+			mutate: func(p *program.Program, _ *Batch) {
+				p.ClauseAssertionSourceNodeIDs = nil
+			},
+		},
+		{
+			name: "clause evidence source nodes",
+			mutate: func(p *program.Program, _ *Batch) {
+				p.ClauseEvidenceSourceNodeIDs = nil
+			},
+		},
+		{
+			name: "clause explanation shape",
+			mutate: func(p *program.Program, _ *Batch) {
+				p.ClauseExplanationIDs = p.ClauseExplanationIDs[:len(p.ClauseExplanationIDs)-1]
+			},
+		},
+		{
+			name: "clause explanation reference",
+			mutate: func(p *program.Program, _ *Batch) {
+				p.ClauseExplanationIDs[0] = 0
+			},
+		},
+		{
+			name: "resolution explanation shape",
+			mutate: func(p *program.Program, _ *Batch) {
+				p.Resolutions.ExplanationIDs = nil
+			},
+		},
+		{
+			name: "resolution explanation reference",
+			mutate: func(p *program.Program, _ *Batch) {
+				p.Resolutions.ExplanationIDs[0] = 0
 			},
 		},
 	} {

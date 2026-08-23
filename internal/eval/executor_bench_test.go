@@ -76,18 +76,18 @@ func executorBenchmarkBatch(t testing.TB, p *program.Program, rows uint32) Batch
 	return batch
 }
 
-func BenchmarkExecuteScalar(b *testing.B) {
+func BenchmarkExecutorScalar(b *testing.B) {
 	p := executorBenchmarkProgram(b)
 	batch := executorBenchmarkBatch(b, p, 1024)
 	var executor Executor
 	var dst result.Batch
-	if err := executor.Execute(&dst, p, batch); err != nil {
+	if err := executor.executeMode(&dst, p, batch, executionScalar); err != nil {
 		b.Fatalf("prime Execute: %v", err)
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		if err := executor.Execute(&dst, p, batch); err != nil {
+		if err := executor.executeMode(&dst, p, batch, executionScalar); err != nil {
 			b.Fatal(err)
 		}
 	}

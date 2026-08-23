@@ -63,8 +63,9 @@ func Validate(dst []Diagnostic, doc *ast.Document, fields *schema.Schema) []Diag
 // column lengths, payload-table rows, node rows, catalog rows, clause rows,
 // and requirement rows. The semantic phase validates the Compare operation,
 // arity, and value-kind compatibility, ordered-field restrictions, nonempty
-// All/Any groups, the two clause rules (every evidence edge targets a node
-// whose declared kind is NodeKindEvidence, and every clause resolves all seven
+// All/Any groups, evidence-node placement exclusively through clause evidence
+// edges, the two clause rules (every evidence edge targets a node whose
+// declared kind is NodeKindEvidence, and every clause resolves all seven
 // outcome slots), symbol-typed and byte-unique catalog and outcome names,
 // remediation kind, shape, and set-field type compatibility, and nonzero
 // unique requirement IDs with nonempty clause ranges. The graph phase traverses
@@ -94,6 +95,8 @@ func (v *Validator) validateStructure(dst []Diagnostic, doc *ast.Document, field
 	v.clauseState = resizeBytes(v.clauseState, len(doc.ClauseAssertionRoots))
 	v.stack = v.stack[:0]
 	dst = v.checkColumnLengths(dst, doc)
+	dst = v.checkTemplateRows(dst, doc)
+	dst = v.checkExplanationRows(dst, doc)
 	dst = v.checkValueRows(dst, doc)
 	dst = v.checkCompareRows(dst, doc, fields)
 	dst = v.checkGroupRows(dst, doc)
@@ -116,24 +119,60 @@ func (v *Validator) validateStructure(dst []Diagnostic, doc *ast.Document, field
 // at-least-one-child arity of All and Any groups, the evidence-kind,
 // evidence-state, and outcome names, which must be symbols unique by bytes
 // within each table, the remediation kind, payload shape, and set-field
-// field/value type compatibility, the two clause rules, which require every
-// evidence edge to target a node whose declared kind is NodeKindEvidence and
-// every clause to resolve all seven outcome slots, and the requirement IDs
-// and clause ranges, which must be nonzero and unique with a nonempty clause
-// CSR per row. Applicability-reference and graph semantics belong to the
-// graph phase, which runs after this method returns.
+// field/value type compatibility, evidence-node placement exclusively through
+// clause evidence edges, the two clause rules, which require every evidence
+// edge to target a node whose declared kind is NodeKindEvidence and every
+// clause to resolve all seven outcome slots, and the requirement IDs and clause
+// ranges, which must be nonzero and unique with a nonempty clause CSR per row.
+// Applicability-reference and graph semantics belong to the graph phase, which
+// runs after this method returns.
 // Diagnostics are owned by the payload table row (Row = ref+1) with the node
 // owner and its exact valid source span, and unreferenced payload rows stay
 // inert. The scans are deterministic; per-row work and allocation behavior are
 // documented on each helper rather than claimed globally.
 func (v *Validator) validateSemantics(dst []Diagnostic, doc *ast.Document, fields *schema.Schema) []Diagnostic {
+	dst = v.checkExplanationSemantics(dst, doc)
 	dst = v.checkExpressionSemantics(dst, doc, fields)
+	dst = checkPolicyIdentitySemantics(dst, doc)
 	dst = v.checkEvidenceKindNameSemantics(dst, doc)
 	dst = v.checkEvidenceStateNameSemantics(dst, doc)
 	dst = v.checkOutcomeNameSemantics(dst, doc)
 	dst = v.checkRemediationSemantics(dst, doc, fields)
 	dst = v.checkClauseSemantics(dst, doc)
 	return v.checkRequirementSemantics(dst, doc)
+}
+
+// checkPolicyIdentitySemantics validates present policy identity values. Each
+// member must name a nonempty symbol; invalid literal payloads remain owned by
+// structural value validation and do not cascade here.
+func checkPolicyIdentitySemantics(dst []Diagnostic, doc *ast.Document) []Diagnostic {
+	checks := [...]struct {
+		member MemberKind
+		value  schema.ValueID
+	}{
+		{MemberMetadataName, doc.Metadata.Name},
+		{MemberMetadataVersion, doc.Metadata.Version},
+	}
+	if checks[0].value == 0 && checks[1].value == 0 {
+		return dst
+	}
+	for _, check := range checks {
+		kind, ok := structuralLiteralKind(doc, check.value)
+		if !ok {
+			if check.value == 0 || uint64(check.value) > uint64(len(doc.ValueKinds)) {
+				dst = append(dst, Diagnostic{Code: CodeInvalidValue, Table: TableDocument, Member: check.member, Value: check.value})
+			}
+			continue
+		}
+		if kind != schema.ValueKindSymbol {
+			dst = append(dst, Diagnostic{Code: CodeTypeMismatch, Table: TableDocument, Member: check.member, Value: check.value})
+			continue
+		}
+		if len(symbolBytes(doc, check.value)) == 0 {
+			dst = append(dst, Diagnostic{Code: CodeInvalidValue, Table: TableDocument, Member: check.member, Value: check.value})
+		}
+	}
+	return dst
 }
 
 // checkExpressionSemantics scans nodes in ascending NodeID order, skips rows
@@ -179,6 +218,12 @@ func (v *Validator) checkExpressionSemantics(dst []Diagnostic, doc *ast.Document
 				if count == 0 && validRange(start, count, len(doc.ChildNodeIDs)) {
 					dst = append(dst, Diagnostic{Code: CodeInvalidArity, Table: TableGroup, Member: MemberChildren, Row: r + 1, Node: id, Span: span})
 				}
+			}
+		}
+		for edge, count := uint32(0), graphEdgeCount(doc, id); edge < count; edge++ {
+			target := graphChild(doc, id, edge)
+			if target != 0 && uint64(target) <= uint64(len(doc.NodeKinds)) && doc.NodeKinds[target-1] == ast.NodeKindEvidence {
+				dst = append(dst, Diagnostic{Code: CodeInvalidEvidence, Table: TableNode, Member: MemberChild, Row: uint32(id), Node: target, Span: span})
 			}
 		}
 	}
@@ -292,13 +337,14 @@ func checkCompareRowSemantics(dst []Diagnostic, doc *ast.Document, fields *schem
 // catalog table (evidence kind, evidence state, or outcome) up to the safe
 // parallel row count of its name and source-span columns, scanning rows
 // ascending. A structurally valid symbol value row names the kind cleanly
-// unless it duplicates an earlier structurally valid symbol name: names are
-// unique by exact symbol bytes within the table, so the current row emits
-// exactly one CodeDuplicateName on MemberName at the first byte-equal
-// predecessor and the scan stops there; the first row is never diagnosed. A
-// structurally valid non-symbol literal (integer, boolean, or timestamp) emits
-// exactly one CodeTypeMismatch on MemberName instead and never participates in
-// the duplicate scan. Both diagnostics carry the valid owner span and the exact
+// unless its bytes are empty or it duplicates an earlier structurally valid
+// nonempty symbol name. An empty symbol emits CodeInvalidValue on MemberName.
+// Names are unique by exact symbol bytes within the table, so the current row
+// emits exactly one CodeDuplicateName at the first byte-equal predecessor and
+// the scan stops there; the first row is never diagnosed. A structurally valid
+// non-symbol literal (integer, boolean, or timestamp) emits exactly one
+// CodeTypeMismatch on MemberName instead and never participates in the
+// duplicate scan. All diagnostics carry the valid owner span and the exact
 // per-row strong owner ID selected by table. Zero or out-of-range names,
 // truncated value peer columns, invalid or non-literal stored kinds, and
 // invalid payload refs/ranges stay structural-only and never cascade, and such
@@ -327,6 +373,12 @@ func checkCatalogNameSemantics(dst []Diagnostic, doc *ast.Document, table TableK
 				continue
 			}
 			cur := symbolBytes(doc, name)
+			if len(cur) == 0 {
+				d := Diagnostic{Code: CodeInvalidValue, Table: table, Member: MemberName, Row: row, Span: attach, Value: name}
+				catalogNameOwner(&d, table, row)
+				dst = append(dst, d)
+				continue
+			}
 			for j := 0; j < i; j++ {
 				prev := names[j]
 				if prev == 0 {
@@ -338,7 +390,8 @@ func checkCatalogNameSemantics(dst []Diagnostic, doc *ast.Document, table TableK
 					// symbol, so no revalidation is needed.
 					equal = true
 				} else if pkind, pok := structuralLiteralKind(doc, prev); pok && pkind == schema.ValueKindSymbol {
-					equal = bytes.Equal(symbolBytes(doc, prev), cur)
+					previous := symbolBytes(doc, prev)
+					equal = len(previous) != 0 && bytes.Equal(previous, cur)
 				}
 				if equal {
 					d := Diagnostic{Code: CodeDuplicateName, Table: table, Member: MemberName, Row: row, Span: attach, Value: name}
@@ -525,6 +578,10 @@ func (v *Validator) checkClauseSemantics(dst []Diagnostic, doc *ast.Document) []
 		}
 		row := uint32(i + 1)
 		clause := schema.ClauseID(i + 1)
+		assertion := doc.ClauseAssertionRoots[i]
+		if assertion != 0 && uint64(assertion) <= uint64(nodeCount) && doc.NodeKinds[assertion-1] == ast.NodeKindEvidence {
+			dst = append(dst, Diagnostic{Code: CodeInvalidEvidence, Table: TableClause, Member: MemberAssertion, Row: row, Span: attach, Clause: clause, Node: assertion})
+		}
 		start := doc.ClauseEvidenceStarts[i]
 		count := uint32(doc.ClauseEvidenceCounts[i])
 		if validRange(start, count, len(doc.ClauseEvidenceNodeIDs)) {
@@ -606,6 +663,10 @@ func (v *Validator) checkRequirementSemantics(dst []Diagnostic, doc *ast.Documen
 			attach = ast.SourceSpan{}
 		}
 		id := doc.RequirementIDs[i]
+		applicability := doc.RequirementApplicabilityRoots[i]
+		if applicability != 0 && uint64(applicability) <= uint64(len(doc.NodeKinds)) && doc.NodeKinds[applicability-1] == ast.NodeKindEvidence {
+			dst = append(dst, Diagnostic{Code: CodeInvalidEvidence, Table: TableRequirement, Member: MemberApplicability, Row: row, Span: attach, Requirement: id, Node: applicability})
+		}
 		if id == 0 {
 			dst = append(dst, Diagnostic{Code: CodeInvalidID, Table: TableRequirement, Member: MemberID, Row: row, Span: attach})
 		} else {
@@ -688,7 +749,8 @@ func (v *Validator) checkColumnLengths(dst []Diagnostic, doc *ast.Document) []Di
 	if len(doc.EvidenceKinds) != len(doc.EvidenceStates) ||
 		(len(doc.EvidenceSubjects) != 0 && len(doc.EvidenceKinds) != len(doc.EvidenceSubjects)) ||
 		(len(doc.EvidenceScopes) != 0 && len(doc.EvidenceKinds) != len(doc.EvidenceScopes)) ||
-		(len(doc.EvidenceTimings) != 0 && len(doc.EvidenceKinds) != len(doc.EvidenceTimings)) {
+		(len(doc.EvidenceTimings) != 0 && len(doc.EvidenceKinds) != len(doc.EvidenceTimings)) ||
+		uint64(len(doc.EvidenceIssueTemplateIDs)) != uint64(len(doc.EvidenceKinds))*uint64(ast.EvidenceIssueReasonCount) {
 		dst = append(dst, Diagnostic{Code: CodeColumnLength, Table: TableEvidenceNode})
 	}
 	if len(doc.ValueKinds) != len(doc.ValueRefs) || len(doc.SymbolStarts) != len(doc.SymbolLengths) {
@@ -726,6 +788,7 @@ func (v *Validator) checkColumnLengths(dst []Diagnostic, doc *ast.Document) []Di
 		len(doc.ClauseOnUnclear) != len(doc.ClauseAssertionRoots) ||
 		len(doc.ClauseOnUnverifiable) != len(doc.ClauseAssertionRoots) ||
 		len(doc.ClauseOnConflict) != len(doc.ClauseAssertionRoots) ||
+		uint64(len(doc.ClauseExplanationIDs)) != uint64(len(doc.ClauseAssertionRoots))*uint64(ast.ResolutionBranchCount) ||
 		len(doc.ClauseSourceStarts) != len(doc.ClauseAssertionRoots) ||
 		len(doc.ClauseSourceEnds) != len(doc.ClauseAssertionRoots) {
 		dst = append(dst, Diagnostic{Code: CodeColumnLength, Table: TableClause})
@@ -736,6 +799,17 @@ func (v *Validator) checkColumnLengths(dst []Diagnostic, doc *ast.Document) []Di
 		len(doc.RequirementSourceStarts) != len(doc.RequirementIDs) ||
 		len(doc.RequirementSourceEnds) != len(doc.RequirementIDs) {
 		dst = append(dst, Diagnostic{Code: CodeColumnLength, Table: TableRequirement})
+	}
+	templates := len(doc.TemplateOpStarts)
+	if len(doc.TemplateOpCounts) != templates || len(doc.TemplateLiteralStarts) != templates ||
+		len(doc.TemplateMaxBytes) != templates || len(doc.TemplateContexts) != templates ||
+		len(doc.TemplateOps) != len(doc.TemplateArgs) {
+		dst = append(dst, Diagnostic{Code: CodeColumnLength, Table: TableTemplate})
+	}
+	explanations := len(doc.ExplanationRationaleIDs)
+	if len(doc.ExplanationUncertaintyStarts) != explanations ||
+		len(doc.ExplanationUncertaintyCounts) != explanations || len(doc.AssumptionsSet) > 1 {
+		dst = append(dst, Diagnostic{Code: CodeColumnLength, Table: TableExplanation})
 	}
 	return dst
 }
@@ -935,6 +1009,16 @@ func (v *Validator) checkEvidenceRows(dst []Diagnostic, doc *ast.Document) []Dia
 				kind, ok := structuralLiteralKind(doc, value)
 				if !ok || kind != schema.ValueKindSymbol {
 					dst = append(dst, Diagnostic{Code: CodeInvalidValue, Table: TableEvidenceNode, Row: row, Value: value})
+				}
+			}
+		}
+		issueStart := uint64(i) * uint64(ast.EvidenceIssueReasonCount)
+		issueEnd := issueStart + uint64(ast.EvidenceIssueReasonCount)
+		if issueEnd <= uint64(len(doc.EvidenceIssueTemplateIDs)) {
+			for _, template := range doc.EvidenceIssueTemplateIDs[int(issueStart):int(issueEnd)] {
+				if template != 0 && uint64(template) > uint64(len(doc.TemplateOpStarts)) {
+					dst = append(dst, Diagnostic{Code: CodeInvalidTemplate, Table: TableEvidenceNode, Member: MemberTemplate, Row: row})
+					break
 				}
 			}
 		}
@@ -1209,6 +1293,15 @@ func (v *Validator) checkClauseRows(dst []Diagnostic, doc *ast.Document) []Diagn
 		}
 		if o := uint64(doc.ClauseOnConflict[i]); o != 0 && o > outcomeMax {
 			dst = append(dst, Diagnostic{Code: CodeInvalidOutcome, Table: TableClause, Member: MemberOutcomeConflict, Row: row, Clause: id, Outcome: doc.ClauseOnConflict[i], Span: attach})
+		}
+		explanationStart := uint64(i) * uint64(ast.ResolutionBranchCount)
+		explanationEnd := explanationStart + uint64(ast.ResolutionBranchCount)
+		if explanationEnd <= uint64(len(doc.ClauseExplanationIDs)) {
+			for _, explanation := range doc.ClauseExplanationIDs[int(explanationStart):int(explanationEnd)] {
+				if explanation != 0 && uint64(explanation) > uint64(len(doc.ExplanationRationaleIDs)) {
+					dst = append(dst, Diagnostic{Code: CodeInvalidExplanation, Table: TableClause, Member: MemberTemplate, Row: row, Clause: id})
+				}
+			}
 		}
 
 		if !spanOK {

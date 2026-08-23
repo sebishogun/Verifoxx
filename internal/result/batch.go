@@ -23,11 +23,15 @@ type Batch struct {
 	DriverClauses      []schema.ClauseID
 	DriverNodes        []schema.NodeID
 	DriverReasons      []schema.ReasonID
+	DriverExplanations []schema.ExplanationID
 
-	EvidenceOffsets []uint32
-	EvidenceIDs     []schema.EvidenceID
-	ReasonOffsets   []uint32
-	ReasonIDs       []schema.ReasonID
+	EvidenceOffsets      []uint32
+	EvidenceIDs          []schema.EvidenceID
+	ReasonOffsets        []uint32
+	ReasonIDs            []schema.ReasonID
+	ReasonNodes          []schema.NodeID
+	ReasonEvidenceIDs    []schema.EvidenceID
+	ReasonEvidenceStates []schema.EvidenceStateID
 
 	RemediationOffsets []uint32
 	RemediationIDs     []schema.RemediationID
@@ -55,8 +59,12 @@ func (b *Batch) Reset(rows uint32) error {
 	b.DriverClauses = b.DriverClauses[:0]
 	b.DriverNodes = b.DriverNodes[:0]
 	b.DriverReasons = b.DriverReasons[:0]
+	b.DriverExplanations = b.DriverExplanations[:0]
 	b.EvidenceIDs = b.EvidenceIDs[:0]
 	b.ReasonIDs = b.ReasonIDs[:0]
+	b.ReasonNodes = b.ReasonNodes[:0]
+	b.ReasonEvidenceIDs = b.ReasonEvidenceIDs[:0]
+	b.ReasonEvidenceStates = b.ReasonEvidenceStates[:0]
 	b.RemediationIDs = b.RemediationIDs[:0]
 	b.Rows = rows
 	return nil

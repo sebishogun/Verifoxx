@@ -9,6 +9,53 @@ import (
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
 
+type validExplanationFixture struct {
+	resolution ast.Resolution
+	issues     [ast.EvidenceIssueReasonCount]schema.TemplateID
+}
+
+// installValidExplanations adds the smallest complete explanation catalog used
+// by validator fixtures. Call SetEvidenceIssueTemplates separately for each
+// evidence node after it is added.
+func installValidExplanations(tb testing.TB, ab *ast.Builder) validExplanationFixture {
+	tb.Helper()
+	addTemplate := func(text string, context ast.TemplateContext) schema.TemplateID {
+		id, err := ab.AddTemplate([]byte(text), context)
+		if err != nil {
+			tb.Fatal(err)
+		}
+		return id
+	}
+	assumption := addTemplate("policy assumption", ast.TemplateContextAssumption)
+	decisionTemplate := addTemplate("decision rationale", ast.TemplateContextDecision)
+	unresolvedTemplate := addTemplate("unresolved rationale", ast.TemplateContextUnresolved)
+	issueTemplate := addTemplate("evidence issue", ast.TemplateContextEvidenceMissing)
+	if err := ab.SetAssumptions([]schema.TemplateID{assumption}); err != nil {
+		tb.Fatal(err)
+	}
+	decision, err := ab.AddExplanation(decisionTemplate, nil)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	unresolved, err := ab.AddExplanation(unresolvedTemplate, nil)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	fixture := validExplanationFixture{resolution: ast.Resolution{
+		OnSatisfiedExplanation:    decision,
+		OnFalseExplanation:        decision,
+		OnMissingExplanation:      unresolved,
+		OnStaleExplanation:        unresolved,
+		OnUnclearExplanation:      unresolved,
+		OnUnverifiableExplanation: unresolved,
+		OnConflictExplanation:     unresolved,
+	}}
+	for i := range fixture.issues {
+		fixture.issues[i] = issueTemplate
+	}
+	return fixture
+}
+
 // buildMinimal returns a canonical minimal document covering every node kind
 // (compare/equal, not, all, any, evidence), every literal value kind, an
 // outcome catalog, a complete seven-field clause resolution, clause evidence
@@ -42,6 +89,7 @@ func buildMinimal(t *testing.T) (*ast.Document, *schema.Schema) {
 	if err := ab.SetSource(source); err != nil {
 		t.Fatal(err)
 	}
+	explanations := installValidExplanations(t, ab)
 	span := ast.SourceSpan{Start: 0, End: 1}
 
 	ekName, err := ab.AddSymbolValue([]byte("approval_record"))
@@ -130,11 +178,18 @@ func buildMinimal(t *testing.T) (*ast.Document, *schema.Schema) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	clause, err := ab.AddClause(a1, []schema.NodeID{ev1}, ast.Resolution{
-		OnSatisfied: approve, OnFalse: reject,
-		OnMissing: escalate, OnStale: escalate, OnUnclear: escalate,
-		OnUnverifiable: escalate, OnConflict: escalate,
-	}, nil, span)
+	if err := ab.SetEvidenceIssueTemplates(ev1, explanations.issues); err != nil {
+		t.Fatal(err)
+	}
+	resolution := explanations.resolution
+	resolution.OnSatisfied = approve
+	resolution.OnFalse = reject
+	resolution.OnMissing = escalate
+	resolution.OnStale = escalate
+	resolution.OnUnclear = escalate
+	resolution.OnUnverifiable = escalate
+	resolution.OnConflict = escalate
+	clause, err := ab.AddClause(a1, []schema.NodeID{ev1}, resolution, nil, span)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,6 +219,7 @@ func buildDoc(t *testing.T, nodes, clauses int) (*ast.Document, *schema.Schema) 
 	if err := ab.SetSource(source); err != nil {
 		t.Fatal(err)
 	}
+	explanations := installValidExplanations(t, ab)
 	span := ast.SourceSpan{Start: 0, End: 1}
 	var first schema.NodeID
 	for i := 0; i < nodes; i++ {
@@ -176,7 +232,7 @@ func buildDoc(t *testing.T, nodes, clauses int) (*ast.Document, *schema.Schema) 
 		}
 	}
 	for i := 0; i < clauses; i++ {
-		if _, err := ab.AddClause(first, nil, ast.Resolution{}, nil, span); err != nil {
+		if _, err := ab.AddClause(first, nil, explanations.resolution, nil, span); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -546,6 +602,7 @@ func buildInDoc(t *testing.T) (*ast.Document, *schema.Schema) {
 	if err := ab.SetSource(source); err != nil {
 		t.Fatal(err)
 	}
+	explanations := installValidExplanations(t, ab)
 	standard, err := ab.AddSymbolValue([]byte("standard"))
 	if err != nil {
 		t.Fatal(err)
@@ -590,11 +647,15 @@ func buildInDoc(t *testing.T) (*ast.Document, *schema.Schema) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	clause, err := ab.AddClause(in, nil, ast.Resolution{
-		OnSatisfied: approve, OnFalse: reject,
-		OnMissing: escalate, OnStale: escalate, OnUnclear: escalate,
-		OnUnverifiable: escalate, OnConflict: escalate,
-	}, nil, span)
+	resolution := explanations.resolution
+	resolution.OnSatisfied = approve
+	resolution.OnFalse = reject
+	resolution.OnMissing = escalate
+	resolution.OnStale = escalate
+	resolution.OnUnclear = escalate
+	resolution.OnUnverifiable = escalate
+	resolution.OnConflict = escalate
+	clause, err := ab.AddClause(in, nil, resolution, nil, span)
 	if err != nil {
 		t.Fatal(err)
 	}

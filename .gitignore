@@ -7,6 +7,9 @@
 # Project-local Git worktrees
 /.worktrees/
 
+# Local development secrets
+/.env
+
 # Test and coverage artifacts
 *.out
 coverage.html

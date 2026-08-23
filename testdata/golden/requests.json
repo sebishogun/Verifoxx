@@ -3,7 +3,7 @@
   "policy": {
     "name": "verifoxx",
     "version": "1.0.0",
-    "sha256": "93dba691b30d7b6920617b6b7b2036f4d4a5ce1da97bc44575b046fe207d474b"
+    "sha256": "a92ffd1c00e823652bed47acf3955f5559543eeba4f02ebf16965bc2966d0a22"
   },
   "engine_version": "devel",
   "results": [
@@ -73,7 +73,7 @@
         "E2"
       ],
       "missing_or_conflicting_evidence": [
-        "E3 usage_limit_adjustment is missing from the request."
+        "Required usage_limit_adjustment evidence is missing from the request."
       ],
       "assumptions": [
         "The supplied structured fields faithfully represent the underlying request and evidence records."
@@ -105,7 +105,7 @@
         "E1"
       ],
       "missing_or_conflicting_evidence": [
-        "E2 execution_environment_attestation is missing from the request."
+        "Required execution_environment_attestation evidence is missing from the request."
       ],
       "assumptions": [
         "The supplied structured fields faithfully represent the underlying request and evidence records."

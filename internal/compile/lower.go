@@ -18,7 +18,7 @@ var (
 	// that the private lowering stages cannot safely read.
 	ErrInvalidDocument = errors.New("compile: invalid policy document")
 	// ErrInvalidSymbols reports a schema field-name SymbolID that does not
-	// resolve in the supplied source Interner.
+	// resolve to a nonempty name in the supplied source Interner.
 	ErrInvalidSymbols = errors.New("compile: field symbol bytes missing from source interner")
 	// ErrEmptyPolicy reports a policy with no requirements or clauses. The
 	// public Lower orchestration owns this check; constant lowering itself
@@ -132,6 +132,8 @@ type Lowerer struct {
 	indexConstraintCount []uint32
 	indexCandidateValue  []schema.SymbolID
 	indexConstraintValue []schema.SymbolID
+	factUseCounts        []uint32
+	factValueFill        []uint32
 
 	// output owns reusable stage output. It follows every scratch slice so its
 	// scalar tail and the fixed scheduler arrays remain outside GC pointer scan.
@@ -316,9 +318,9 @@ func (l *Lowerer) resetScratch() {
 
 // lowerFieldSchema copies the field schema in FieldID order, interning each
 // field name through the source interner into the program symbol space. Every
-// schema field-name SymbolID must resolve in the supplied interner; a missing
-// ID fails with ErrInvalidSymbols because the interner is the caller's
-// documented identity contract for field-name bytes.
+// schema field-name SymbolID must resolve to nonempty bytes in the supplied
+// interner; a missing or empty name fails with ErrInvalidSymbols because the
+// interner is the caller's documented identity contract for field-name bytes.
 func (l *Lowerer) lowerFieldSchema(dst *program.Program, fields *schema.Schema, symbols *schema.Interner) error {
 	n := fields.Len()
 	dst.FieldNames = resizeSlots(dst.FieldNames, n)
@@ -331,7 +333,7 @@ func (l *Lowerer) lowerFieldSchema(dst *program.Program, fields *schema.Schema, 
 			return ErrInvalidDocument
 		}
 		b, ok := symbols.Bytes(name)
-		if !ok {
+		if !ok || len(b) == 0 {
 			return ErrInvalidSymbols
 		}
 		sym, err := l.internSymbol(dst, b)
@@ -499,6 +501,12 @@ func resetInstructionColumns(dst *program.Program) {
 	dst.ApplicabilityIndex.AllMask = dst.ApplicabilityIndex.AllMask[:0]
 	dst.ApplicabilityIndex.RequirementCount = 0
 	dst.ApplicabilityIndex.WordCount = 0
+	dst.FactIndexSpec.FieldIDs = dst.FactIndexSpec.FieldIDs[:0]
+	dst.FactIndexSpec.Columns = dst.FactIndexSpec.Columns[:0]
+	dst.FactIndexSpec.ValueStarts = dst.FactIndexSpec.ValueStarts[:0]
+	dst.FactIndexSpec.ValueCounts = dst.FactIndexSpec.ValueCounts[:0]
+	dst.FactIndexSpec.UseCounts = dst.FactIndexSpec.UseCounts[:0]
+	dst.FactIndexSpec.Values = dst.FactIndexSpec.Values[:0]
 }
 
 // resetInstructionScratch clears the instruction-stage Lowerer scratch so

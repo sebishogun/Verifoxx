@@ -11,23 +11,23 @@ import (
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
 
-const basePolicy = `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`
+const basePolicy = `{"schema_version":1,"name":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`
 
-const fullPolicy = `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[{"name":"approval_record"},{"name":"usage_adjustment"}],"evidence_states":[{"name":"current"},{"name":"stale"},{"name":"unclear"}],"outcomes":[{"terminal":true,"precedence":1,"name":"Approve"},{"name":"Reject","precedence":2,"terminal":true},{"name":"Revise","precedence":3,"terminal":false},{"name":"Escalate","precedence":4,"terminal":true}],"requirements":[]}`
+const fullPolicy = `{"schema_version":1,"name":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":[{"name":"approval_record"},{"name":"usage_adjustment"}],"evidence_states":[{"name":"current"},{"name":"stale"},{"name":"unclear"}],"outcomes":[{"terminal":true,"precedence":1,"name":"Approve"},{"name":"Reject","precedence":2,"terminal":true},{"name":"Revise","precedence":3,"terminal":false},{"name":"Escalate","precedence":4,"terminal":true}],"requirements":[]}`
 
 // policy assembles a root document with the given catalog array bodies.
 func policy(kinds, states, outcomes string) string {
-	return `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":` + kinds + `,"evidence_states":` + states + `,"outcomes":` + outcomes + `,"requirements":[]}`
+	return `{"schema_version":1,"name":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":` + kinds + `,"evidence_states":` + states + `,"outcomes":` + outcomes + `,"requirements":[]}`
 }
 
 // meta assembles a root document with the given identity slots.
 func meta(schemaVersion, name, version string) string {
-	return `{"schema_version":` + schemaVersion + `,"name":` + name + `,"version":` + version + `,"evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`
+	return `{"schema_version":` + schemaVersion + `,"name":` + name + `,"version":` + version + `,"assumptions":[],"evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`
 }
 
 // reqs assembles a root document with the given requirements value.
 func reqs(requirements string) string {
-	return `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":` + requirements + `}`
+	return `{"schema_version":1,"name":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":` + requirements + `}`
 }
 
 func mustDecode(t *testing.T, source []byte, limits Limits) *ast.Builder {
@@ -185,7 +185,7 @@ func TestDecodeFullPolicyRoundTrip(t *testing.T) {
 }
 
 func TestDecodeAcceptsAnyRootKeyOrder(t *testing.T) {
-	src := []byte(`{"requirements":[],"outcomes":[],"evidence_states":[],"evidence_kinds":[],"version":"1.0.0","name":"verifoxx","schema_version":1}`)
+	src := []byte(`{"requirements":[],"outcomes":[],"evidence_states":[],"evidence_kinds":[],"assumptions":[],"version":"1.0.0","name":"verifoxx","schema_version":1}`)
 	b := mustDecode(t, src, Limits{})
 	metadata, ok := b.Document().PolicyMetadata()
 	if !ok {
@@ -197,7 +197,7 @@ func TestDecodeAcceptsAnyRootKeyOrder(t *testing.T) {
 }
 
 func TestDecodeEscapedKeys(t *testing.T) {
-	src := []byte(`{"schema_version":1,"na\u006de":"verifoxx","version":"1.0.0","evidence_kinds":[{"\u006eame":"approval_record"}],"evidence_states":[],"outcomes":[{"name":"Approve","precedence":1,"term\u0069nal":true}],"requirements":[]}`)
+	src := []byte(`{"schema_version":1,"na\u006de":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":[{"\u006eame":"approval_record"}],"evidence_states":[],"outcomes":[{"name":"Approve","precedence":1,"term\u0069nal":true}],"requirements":[]}`)
 	b := mustDecode(t, src, Limits{})
 	d := b.Document()
 	kind, ok := d.EvidenceKindName(1)
@@ -211,7 +211,7 @@ func TestDecodeEscapedKeys(t *testing.T) {
 }
 
 func TestDecodeStringEscapesAndSurrogatePairs(t *testing.T) {
-	src := []byte(`{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[{"name":"caf\u00e9 \u4e2d\u6587 \ud83d\ude00 \t\n\"\\\/\b\f\r"}],"evidence_states":[],"outcomes":[],"requirements":[]}`)
+	src := []byte(`{"schema_version":1,"name":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":[{"name":"caf\u00e9 \u4e2d\u6587 \ud83d\ude00 \t\n\"\\\/\b\f\r"}],"evidence_states":[],"outcomes":[],"requirements":[]}`)
 	b := mustDecode(t, src, Limits{})
 	d := b.Document()
 	name, ok := d.EvidenceKindName(1)

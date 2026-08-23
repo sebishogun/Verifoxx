@@ -55,21 +55,23 @@ const (
 	exprKeySubject
 	exprKeyScope
 	exprKeyTiming
+	exprKeyExplanation
 	exprKeyCount
 )
 
 const (
-	exprBitOp      = uint16(1) << exprKeyOp
-	exprBitArgs    = uint16(1) << exprKeyArgs
-	exprBitArg     = uint16(1) << exprKeyArg
-	exprBitField   = uint16(1) << exprKeyField
-	exprBitValue   = uint16(1) << exprKeyValue
-	exprBitValues  = uint16(1) << exprKeyValues
-	exprBitKind    = uint16(1) << exprKeyKind
-	exprBitState   = uint16(1) << exprKeyState
-	exprBitSubject = uint16(1) << exprKeySubject
-	exprBitScope   = uint16(1) << exprKeyScope
-	exprBitTiming  = uint16(1) << exprKeyTiming
+	exprBitOp          = uint16(1) << exprKeyOp
+	exprBitArgs        = uint16(1) << exprKeyArgs
+	exprBitArg         = uint16(1) << exprKeyArg
+	exprBitField       = uint16(1) << exprKeyField
+	exprBitValue       = uint16(1) << exprKeyValue
+	exprBitValues      = uint16(1) << exprKeyValues
+	exprBitKind        = uint16(1) << exprKeyKind
+	exprBitState       = uint16(1) << exprKeyState
+	exprBitSubject     = uint16(1) << exprKeySubject
+	exprBitScope       = uint16(1) << exprKeyScope
+	exprBitTiming      = uint16(1) << exprKeyTiming
+	exprBitExplanation = uint16(1) << exprKeyExplanation
 )
 
 // exprKeyIndex maps a decoded expression-object key to its bit index, or -1
@@ -98,6 +100,8 @@ func exprKeyIndex(key []byte) int {
 		return exprKeyScope
 	case bytes.Equal(key, keyTiming):
 		return exprKeyTiming
+	case bytes.Equal(key, keyExplanation):
+		return exprKeyExplanation
 	}
 	return -1
 }
@@ -163,14 +167,14 @@ func exprKeyMask(op exprOp) uint16 {
 	case exprOpExists:
 		return exprBitOp | exprBitField
 	case exprOpEvidenceMatches:
-		return exprBitOp | exprBitKind | exprBitState | exprBitSubject | exprBitScope | exprBitTiming
+		return exprBitOp | exprBitKind | exprBitState | exprBitSubject | exprBitScope | exprBitTiming | exprBitExplanation
 	}
 	return exprBitOp | exprBitField | exprBitValue
 }
 
 func exprRequiredMask(op exprOp) uint16 {
 	if op == exprOpEvidenceMatches {
-		return exprBitOp | exprBitKind | exprBitState
+		return exprBitOp | exprBitKind | exprBitState | exprBitExplanation
 	}
 	return exprKeyMask(op)
 }
@@ -232,6 +236,7 @@ func (d *decoder) decodeExpression(dst *ast.Builder, depth int) (schema.NodeID, 
 	var subjectToken ast.SourceSpan
 	var scopeToken ast.SourceSpan
 	var timingToken ast.SourceSpan
+	var issueTemplates [ast.EvidenceIssueReasonCount]schema.TemplateID
 	var argsBase int
 	var notChild schema.NodeID
 
@@ -347,6 +352,11 @@ func (d *decoder) decodeExpression(dst *ast.Builder, depth int) (schema.NodeID, 
 			case exprKeyTiming:
 				timingToken = token
 			}
+		case exprKeyExplanation:
+			issueTemplates, err = d.decodeEvidenceExplanation(dst)
+			if err != nil {
+				return 0, err
+			}
 		}
 		d.skipWS()
 		if d.atEOF() {
@@ -455,6 +465,9 @@ func (d *decoder) decodeExpression(dst *ast.Builder, depth int) (schema.NodeID, 
 		}
 		node, err := dst.AddEvidenceMatch(kindID, stateID, subject, scope, timing, span)
 		if err != nil {
+			return 0, d.builderError(err)
+		}
+		if err := dst.SetEvidenceIssueTemplates(node, issueTemplates); err != nil {
 			return 0, d.builderError(err)
 		}
 		return node, nil

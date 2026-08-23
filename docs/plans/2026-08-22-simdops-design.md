@@ -45,17 +45,18 @@ the same contracts. `ops.go` holds shared types and scalar references.
 one-line description, whether this is a pure-Go build, and thresholds expressed
 in each wrapper's input units. Byte-kernel thresholds are converted to uint64
 word counts. Normal slice acceleration does not require `GOEXPERIMENT=simd`;
-the experiment remains in the verification matrix for the later evaluator
-integration.
+the pinned release's experiment-gated vector API uses obsolete Go 1.26
+`archsimd` names and remains outside the matrix until a Go 1.27-compatible
+release exists.
 
 ## Verification
 
 One differential acceptance test compares every wrapper with local scalar
 references over empty inputs, kernel boundaries, unaligned subslices, partial
 tails, exact aliases, and short compression destinations. The same test checks
-runtime metadata and runs under normal, `GOEXPERIMENT=simd`, and `purego`
-builds. `docs/performance.md` records operations, units, aliases, thresholds,
-and fallback behavior; performance claims wait for Task 19 benchmarks.
+runtime metadata and runs under normal, `purego`, and 386 scalar builds.
+`docs/performance.md` records operations, units, aliases, thresholds, and
+fallback behavior; performance claims wait for Task 19 benchmarks.
 
 ## Rejected Alternatives
 

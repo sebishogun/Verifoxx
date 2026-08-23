@@ -267,12 +267,38 @@ func TestApplicabilityIndexExtractRejectsMalformedProgram(t *testing.T) {
 
 func TestLowerIndexesWarmReuse(t *testing.T) {
 	p := applicabilityIndexProgram()
+	p.ListValues = p.ListValues[:0]
+	for i := 0; i < 96; i++ {
+		p.ListValues = append(p.ListValues, schema.ValueID(2+i&1))
+	}
+	p.ListCounts[1] = uint16(len(p.ListValues))
 	var lowerer Lowerer
 	if err := lowerer.lowerIndexes(&p); err != nil {
 		t.Fatalf("prime lowerIndexes: %v", err)
 	}
 	wantField := p.FieldIndex.Clone()
 	wantPolicy := p.ApplicabilityIndex.Clone()
+	wantFacts := policyindex.FactSpec{
+		FieldIDs:    []schema.FieldID{2},
+		Columns:     []uint32{1},
+		ValueStarts: []uint32{0},
+		ValueCounts: []uint32{2},
+		UseCounts:   []uint32{96},
+		Values:      []schema.SymbolID{30, 31},
+	}
+	if !reflect.DeepEqual(p.FactIndexSpec, wantFacts) {
+		t.Fatalf("fact spec = %+v, want %+v", p.FactIndexSpec, wantFacts)
+	}
+	frozenFacts := p.FactIndexSpec.Clone()
+	if !reflect.DeepEqual(frozenFacts, wantFacts) ||
+		cap(frozenFacts.FieldIDs) != len(frozenFacts.FieldIDs) ||
+		cap(frozenFacts.Columns) != len(frozenFacts.Columns) ||
+		cap(frozenFacts.ValueStarts) != len(frozenFacts.ValueStarts) ||
+		cap(frozenFacts.ValueCounts) != len(frozenFacts.ValueCounts) ||
+		cap(frozenFacts.UseCounts) != len(frozenFacts.UseCounts) ||
+		cap(frozenFacts.Values) != len(frozenFacts.Values) {
+		t.Fatalf("frozen fact spec = %+v, want exact %+v", frozenFacts, wantFacts)
+	}
 	var indexErr error
 	allocs := testing.AllocsPerRun(100, func() {
 		indexErr = lowerer.lowerIndexes(&p)
@@ -299,11 +325,54 @@ func TestLowerIndexesWarmReuse(t *testing.T) {
 	if err := lowerer.lowerIndexes(&small); err != nil {
 		t.Fatalf("small lowerIndexes: %v", err)
 	}
+	if len(small.FactIndexSpec.FieldIDs) != 0 || len(small.FactIndexSpec.Values) != 0 {
+		t.Fatalf("small fact spec was not cleared: %+v", small.FactIndexSpec)
+	}
+	for _, test := range []struct {
+		uses         int
+		wantSelected bool
+	}{
+		{95, false},
+		{96, true},
+		{97, true},
+	} {
+		candidate := applicabilityIndexProgram()
+		candidate.ListValues = candidate.ListValues[:0]
+		for i := 0; i < test.uses; i++ {
+			candidate.ListValues = append(candidate.ListValues, schema.ValueID(2+(i&1)))
+		}
+		candidate.ListCounts[1] = uint16(test.uses)
+		if err := lowerer.lowerIndexes(&candidate); err != nil {
+			t.Fatalf("%d-use lowerIndexes: %v", test.uses, err)
+		}
+		selected := len(candidate.FactIndexSpec.FieldIDs) != 0
+		if selected != test.wantSelected {
+			t.Fatalf("%d-use fact selection = %v, want %v", test.uses, selected, test.wantSelected)
+		}
+		if selected && candidate.FactIndexSpec.UseCounts[0] != uint32(test.uses) {
+			t.Fatalf("%d-use count = %d", test.uses, candidate.FactIndexSpec.UseCounts[0])
+		}
+	}
+
+	nonSymbol := applicabilityIndexProgram()
+	nonSymbol.Fields[1] = 4
+	nonSymbol.ListValues = nonSymbol.ListValues[:0]
+	for i := 0; i < 96; i++ {
+		nonSymbol.ListValues = append(nonSymbol.ListValues, 5)
+	}
+	nonSymbol.ListCounts[1] = uint16(len(nonSymbol.ListValues))
+	if err := lowerer.lowerIndexes(&nonSymbol); err != nil {
+		t.Fatalf("non-symbol lowerIndexes: %v", err)
+	}
+	if len(nonSymbol.FactIndexSpec.FieldIDs) != 0 {
+		t.Fatalf("non-symbol fact spec = %+v, want empty", nonSymbol.FactIndexSpec)
+	}
 	if err := lowerer.lowerIndexes(&p); err != nil {
 		t.Fatalf("re-plan lowerIndexes: %v", err)
 	}
-	if !reflect.DeepEqual(p.FieldIndex, wantField) || !reflect.DeepEqual(p.ApplicabilityIndex, wantPolicy) {
-		t.Fatalf("reused indexes differ:\n got  %+v / %+v\n want %+v / %+v",
-			p.FieldIndex, p.ApplicabilityIndex, wantField, wantPolicy)
+	if !reflect.DeepEqual(p.FieldIndex, wantField) || !reflect.DeepEqual(p.ApplicabilityIndex, wantPolicy) ||
+		!reflect.DeepEqual(p.FactIndexSpec, wantFacts) {
+		t.Fatalf("reused indexes differ:\n got  %+v / %+v / %+v\n want %+v / %+v / %+v",
+			p.FieldIndex, p.ApplicabilityIndex, p.FactIndexSpec, wantField, wantPolicy, wantFacts)
 	}
 }

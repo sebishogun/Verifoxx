@@ -58,6 +58,7 @@ func appendReachTestEvidence(doc *ast.Document, kind schema.EvidenceKindID, stat
 	doc.EvidenceSubjects = append(doc.EvidenceSubjects, 0)
 	doc.EvidenceScopes = append(doc.EvidenceScopes, 0)
 	doc.EvidenceTimings = append(doc.EvidenceTimings, 0)
+	doc.EvidenceIssueTemplateIDs = append(doc.EvidenceIssueTemplateIDs, doc.EvidenceIssueTemplateIDs[:ast.EvidenceIssueReasonCount]...)
 	return appendReachTestNode(doc, ast.NodeKindEvidence, ref, span)
 }
 
@@ -83,6 +84,15 @@ func appendReachTestClause(doc *ast.Document, assertion schema.NodeID, evidence 
 	doc.ClauseOnUnclear = append(doc.ClauseOnUnclear, resolution.OnUnclear)
 	doc.ClauseOnUnverifiable = append(doc.ClauseOnUnverifiable, resolution.OnUnverifiable)
 	doc.ClauseOnConflict = append(doc.ClauseOnConflict, resolution.OnConflict)
+	doc.ClauseExplanationIDs = append(doc.ClauseExplanationIDs,
+		resolution.OnSatisfiedExplanation,
+		resolution.OnFalseExplanation,
+		resolution.OnMissingExplanation,
+		resolution.OnStaleExplanation,
+		resolution.OnUnclearExplanation,
+		resolution.OnUnverifiableExplanation,
+		resolution.OnConflictExplanation,
+	)
 	doc.ClauseSourceStarts = append(doc.ClauseSourceStarts, span.Start)
 	doc.ClauseSourceEnds = append(doc.ClauseSourceEnds, span.End)
 	return id
@@ -105,13 +115,20 @@ func appendReachTestRequirement(doc *ast.Document, id schema.RequirementID, appl
 // by every appended clause: approve, reject, and escalate everywhere else.
 func appendReachTestResolution() ast.Resolution {
 	return ast.Resolution{
-		OnSatisfied:    1,
-		OnFalse:        2,
-		OnMissing:      4,
-		OnStale:        4,
-		OnUnclear:      4,
-		OnUnverifiable: 4,
-		OnConflict:     4,
+		OnSatisfied:               1,
+		OnFalse:                   2,
+		OnMissing:                 4,
+		OnStale:                   4,
+		OnUnclear:                 4,
+		OnUnverifiable:            4,
+		OnConflict:                4,
+		OnSatisfiedExplanation:    1,
+		OnFalseExplanation:        1,
+		OnMissingExplanation:      2,
+		OnStaleExplanation:        2,
+		OnUnclearExplanation:      2,
+		OnUnverifiableExplanation: 2,
+		OnConflictExplanation:     2,
 	}
 }
 
