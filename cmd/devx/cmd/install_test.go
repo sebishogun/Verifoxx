@@ -13,7 +13,75 @@ import (
 	"time"
 )
 
-func TestInstallerDryRunSelectsPrefixAndPlansSymlink(t *testing.T) {
+func TestGlobalDevxDispatcherSelectsNearestRepository(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	outer := filepath.Join(root, "outer repository")
+	inner := filepath.Join(outer, "projects", "inner repository")
+	workingDirectory := filepath.Join(inner, "nested", "working directory")
+	for _, directory := range []string{
+		filepath.Join(outer, "cli"), filepath.Join(inner, "cli"), workingDirectory,
+	} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatalf("MkdirAll(%s) error = %v", directory, err)
+		}
+	}
+	writeInstallTestExecutable(t, filepath.Join(outer, "cli", "devx"), []byte("#!/bin/sh\nprintf '%s\\n' outer\nexit 22\n"))
+	writeInstallTestExecutable(t, filepath.Join(inner, "cli", "devx"), []byte(`#!/bin/sh
+printf 'wrapper:%s\nargc:%s\narg1:<%s>\narg2:<%s>\narg3:<%s>\n' inner "$#" "$1" "$2" "$3"
+exit 23
+`))
+
+	output, exitCode := runGlobalDispatcherTest(t, workingDirectory, nil,
+		"two words", "$HOME;a", "")
+	if exitCode != 23 {
+		t.Fatalf("dispatcher exit = %d, want 23\n%s", exitCode, output)
+	}
+	want := "wrapper:inner\nargc:3\narg1:<two words>\narg2:<$HOME;a>\narg3:<>\n"
+	if output != want {
+		t.Fatalf("dispatcher output = %q, want %q", output, want)
+	}
+}
+
+func TestGlobalDevxDispatcherResolvesExplicitStartPhysically(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repository := filepath.Join(root, "repository")
+	workingDirectory := filepath.Join(repository, "nested")
+	if err := os.MkdirAll(filepath.Join(repository, "cli"), 0o700); err != nil {
+		t.Fatalf("MkdirAll(cli) error = %v", err)
+	}
+	if err := os.MkdirAll(workingDirectory, 0o700); err != nil {
+		t.Fatalf("MkdirAll(nested) error = %v", err)
+	}
+	wrapper := filepath.Join(repository, "cli", "devx")
+	writeInstallTestExecutable(t, wrapper, []byte("#!/bin/sh\nprintf '%s\\n' \"$0\"\n"))
+	linkedStart := filepath.Join(root, "linked start")
+	if err := os.Symlink(workingDirectory, linkedStart); err != nil {
+		t.Fatalf("Symlink(start) error = %v", err)
+	}
+	outside := t.TempDir()
+
+	output, exitCode := runGlobalDispatcherTest(t, outside,
+		[]string{"DEVX_START_DIRECTORY=" + linkedStart}, "status")
+	if exitCode != 0 || strings.TrimSpace(output) != wrapper {
+		t.Fatalf("dispatcher = exit:%d output:%q, want wrapper %q", exitCode, output, wrapper)
+	}
+}
+
+func TestGlobalDevxDispatcherRejectsDirectoryWithoutRepository(t *testing.T) {
+	t.Parallel()
+
+	start := t.TempDir()
+	output, exitCode := runGlobalDispatcherTest(t, start, nil, "status")
+	if exitCode != 1 || !strings.Contains(output, "devx: no devx-enabled repository found from "+start) {
+		t.Fatalf("dispatcher = exit:%d output:%q", exitCode, output)
+	}
+}
+
+func TestInstallerDryRunSelectsPrefixAndPlansDispatcherCopy(t *testing.T) {
 	t.Parallel()
 
 	repository := installTestRepository(t)
@@ -26,11 +94,11 @@ func TestInstallerDryRunSelectsPrefixAndPlansSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("install --dry-run error = %v\n%s", err, output)
 	}
-	wrapper := filepath.Join(repository, "cli", "devx")
+	dispatcher := filepath.Join(repository, "cli", "devx-dispatch")
 	for _, line := range []string{
 		"prefix: " + prefix,
 		"[dry-run] mkdir -p " + filepath.Join(prefix, "bin"),
-		"[dry-run] ln -s " + wrapper + " " + filepath.Join(prefix, "bin", "devx"),
+		"[dry-run] install -m 0755 " + dispatcher + " " + filepath.Join(prefix, "bin", "devx"),
 		"PATH: " + filepath.Join(prefix, "bin") + " is not present",
 		"Shell startup files were not modified.",
 	} {
@@ -82,7 +150,7 @@ func TestInstallerPrefixPrecedence(t *testing.T) {
 	}
 }
 
-func TestInstallerCreatesAndUninstallsOwnedLinkWithoutEditingShellFiles(t *testing.T) {
+func TestInstallerCreatesUpdatesAndUninstallsOwnedDispatcherWithoutEditingShellFiles(t *testing.T) {
 	t.Parallel()
 
 	repository := installTestRepository(t)
@@ -103,26 +171,73 @@ func TestInstallerCreatesAndUninstallsOwnedLinkWithoutEditingShellFiles(t *testi
 	if err != nil {
 		t.Fatalf("install error = %v\n%s", err, output)
 	}
-	link := filepath.Join(prefix, "bin", "devx")
-	target, err := os.Readlink(link)
+	destination := filepath.Join(prefix, "bin", "devx")
+	info, err := os.Lstat(destination)
 	if err != nil {
-		t.Fatalf("Readlink(devx) error = %v", err)
+		t.Fatalf("Lstat(devx) error = %v", err)
 	}
-	if target != filepath.Join(repository, "cli", "devx") {
-		t.Fatalf("devx target = %q", target)
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("installed devx mode = %v", info.Mode())
 	}
+	assertInstallTestFilesEqual(t, destination, filepath.Join(repository, "cli", "devx-dispatch"))
 	assertInstallTestFile(t, bashRC, "bash sentinel\n")
 	assertInstallTestFile(t, zshRC, "zsh sentinel\n")
+	if err := os.WriteFile(destination, []byte("#!/bin/sh\n# devx-repository-dispatch-v1\nprintf old\\n\n"), 0o700); err != nil {
+		t.Fatalf("WriteFile(old dispatcher) error = %v", err)
+	}
+	output, err = runInstallTestScript(t, script, []string{"--prefix", prefix}, environment)
+	if err != nil {
+		t.Fatalf("update error = %v\n%s", err, output)
+	}
+	assertInstallTestFilesEqual(t, destination, filepath.Join(repository, "cli", "devx-dispatch"))
 
 	output, err = runInstallTestScript(t, script, []string{"--uninstall", "--prefix", prefix}, environment)
 	if err != nil {
 		t.Fatalf("uninstall error = %v\n%s", err, output)
 	}
-	if _, err := os.Lstat(link); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Lstat(destination); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("uninstalled link stat error = %v", err)
 	}
 	assertInstallTestFile(t, bashRC, "bash sentinel\n")
 	assertInstallTestFile(t, zshRC, "zsh sentinel\n")
+}
+
+func TestInstallerMigratesAndUninstallsLegacyRepositoryLink(t *testing.T) {
+	t.Parallel()
+
+	repository := installTestRepository(t)
+	script := filepath.Join(repository, "cli", "install.sh")
+	home := t.TempDir()
+	prefix := filepath.Join(home, ".local")
+	bin := filepath.Join(prefix, "bin")
+	if err := os.MkdirAll(bin, 0o700); err != nil {
+		t.Fatalf("MkdirAll(bin) error = %v", err)
+	}
+	destination := filepath.Join(bin, "devx")
+	legacyTarget := "/some/legacy/repository/cli/devx"
+	environment := []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
+	if err := os.Symlink(legacyTarget, destination); err != nil {
+		t.Fatalf("Symlink(legacy) error = %v", err)
+	}
+	output, err := runInstallTestScript(t, script, []string{"--uninstall", "--prefix", prefix}, environment)
+	if err != nil {
+		t.Fatalf("uninstall legacy error = %v\n%s", err, output)
+	}
+	if _, err := os.Lstat(destination); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("legacy link after uninstall error = %v", err)
+	}
+	if err := os.Symlink(legacyTarget, destination); err != nil {
+		t.Fatalf("Symlink(legacy second) error = %v", err)
+	}
+	output, err = runInstallTestScript(t, script, []string{"--prefix", prefix}, environment)
+	if err != nil {
+		t.Fatalf("migrate legacy error = %v\n%s", err, output)
+	}
+	info, err := os.Lstat(destination)
+	if err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("migrated devx = info:%v error:%v", info, err)
+	}
+	assertInstallTestFilesEqual(t, destination, filepath.Join(repository, "cli", "devx-dispatch"))
 }
 
 func TestInstallerRefusesToReplaceOrRemoveUnownedDestination(t *testing.T) {
@@ -151,6 +266,38 @@ func TestInstallerRefusesToReplaceOrRemoveUnownedDestination(t *testing.T) {
 		t.Fatalf("uninstall removed unowned destination:\n%s", output)
 	}
 	assertInstallTestFile(t, destination, "user file\n")
+}
+
+func TestInstallerRefusesToReplaceOrRemoveUnownedSymlink(t *testing.T) {
+	t.Parallel()
+
+	repository := installTestRepository(t)
+	script := filepath.Join(repository, "cli", "install.sh")
+	home := t.TempDir()
+	prefix := filepath.Join(home, ".local")
+	bin := filepath.Join(prefix, "bin")
+	if err := os.MkdirAll(bin, 0o700); err != nil {
+		t.Fatalf("MkdirAll(bin) error = %v", err)
+	}
+	destination := filepath.Join(bin, "devx")
+	target := filepath.Join(home, "unrelated")
+	if err := os.WriteFile(target, []byte("sentinel\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(target) error = %v", err)
+	}
+	if err := os.Symlink(target, destination); err != nil {
+		t.Fatalf("Symlink(unowned) error = %v", err)
+	}
+	environment := []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
+	if output, err := runInstallTestScript(t, script, []string{"--prefix", prefix}, environment); err == nil {
+		t.Fatalf("install replaced unowned symlink:\n%s", output)
+	}
+	if output, err := runInstallTestScript(t, script, []string{"--uninstall", "--prefix", prefix}, environment); err == nil {
+		t.Fatalf("uninstall removed unowned symlink:\n%s", output)
+	}
+	got, err := os.Readlink(destination)
+	if err != nil || got != target {
+		t.Fatalf("unowned symlink = %q, %v", got, err)
+	}
 }
 
 func TestDevxWrapperSelectsOSAndArchitecture(t *testing.T) {
@@ -296,6 +443,28 @@ func runInstallTestScript(t *testing.T, script string, arguments, environment []
 	return string(output), err
 }
 
+func runGlobalDispatcherTest(t *testing.T, directory string, environment []string, arguments ...string) (string, int) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	dispatcher := filepath.Join(installTestRepository(t), "cli", "devx-dispatch")
+	command := exec.CommandContext(ctx, dispatcher, arguments...)
+	command.Dir = directory
+	command.Env = append(slices.Clone(environment), "PATH=/usr/bin:/bin")
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("dispatcher timed out: %v\n%s", ctx.Err(), output)
+	}
+	if err == nil {
+		return string(output), 0
+	}
+	var exitError *exec.ExitError
+	if !errors.As(err, &exitError) {
+		t.Fatalf("dispatcher execution error = %v\n%s", err, output)
+	}
+	return string(output), exitError.ExitCode()
+}
+
 func assertInstallTestFile(t *testing.T, path, want string) {
 	t.Helper()
 	contents, err := os.ReadFile(path)
@@ -304,6 +473,21 @@ func assertInstallTestFile(t *testing.T, path, want string) {
 	}
 	if string(contents) != want {
 		t.Fatalf("%s contents = %q, want %q", path, contents, want)
+	}
+}
+
+func assertInstallTestFilesEqual(t *testing.T, gotPath, wantPath string) {
+	t.Helper()
+	got, err := os.ReadFile(gotPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) error = %v", gotPath, err)
+	}
+	want, err := os.ReadFile(wantPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) error = %v", wantPath, err)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("%s differs from %s", gotPath, wantPath)
 	}
 }
 

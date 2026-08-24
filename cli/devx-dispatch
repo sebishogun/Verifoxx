@@ -1,0 +1,29 @@
+#!/bin/sh
+# devx-repository-dispatch-v1
+set -eu
+
+start_directory=${DEVX_START_DIRECTORY:-${PWD:-}}
+if [ -z "$start_directory" ] || [ ! -d "$start_directory" ]; then
+	printf 'devx: start directory is unavailable: %s\n' "$start_directory" >&2
+	exit 1
+fi
+if ! search_directory=$(CDPATH= cd -P "$start_directory" 2>/dev/null && pwd); then
+	printf 'devx: start directory is unavailable: %s\n' "$start_directory" >&2
+	exit 1
+fi
+resolved_start=$search_directory
+
+while :; do
+	candidate=$search_directory/cli/devx
+	if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+		exec "$candidate" "$@"
+	fi
+	parent_directory=$(dirname "$search_directory")
+	if [ "$parent_directory" = "$search_directory" ]; then
+		break
+	fi
+	search_directory=$parent_directory
+done
+
+printf 'devx: no devx-enabled repository found from %s\n' "$resolved_start" >&2
+exit 1

@@ -1176,7 +1176,7 @@ cli/install.sh
 cli/build.sh
 ```
 
-The wrapper selects a host binary when prebuilt binaries are available. The installer creates a symlink in `~/.local/bin`, verifies `PATH`, and never edits shell startup files.
+The repository wrapper selects a host binary when prebuilt binaries are available. The installer copies a repository-neutral dispatcher into `~/.local/bin`; that command runs the nearest ancestor repository with an executable `cli/devx` and fails outside a devx-enabled tree. Installation verifies `PATH` and never edits shell startup files.
 
 `devx install` detects available package managers, checks versions, shows exact commands, marks commands requiring elevated privileges, asks for confirmation, and supports dry-run. `devx doctor` is read-only. `devx status` reports which workflows are runnable and which prerequisite blocks each unavailable workflow.
 
