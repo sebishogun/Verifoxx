@@ -1,0 +1,24 @@
++---------------------+ +---------------------------------------------------------+ +----------------------------------+
+| REQUESTS            | | AST GRAPH                                               | | RUNTIME STATE                    |
+| > R1 Approve        | | - #1 all                                                | | Request: R1 (#1)                 |
+|   R2 Reject         | |   * #2 protected                                        | | local review                     |
+|                     | |   - #3 local                                            | | Status: Paused / Instruction     |
+|                     | |                                                         | | I: 2 -> 3  Cursor: 2             |
+|                     | |                                                         | | Node: 2  Source: [120,164)       |
+|                     | |                                                         | | Row: 1/2  Truth: True            |
+|                     | |                                                         | | Outcome: #1                      |
+|                     | |                                                         | | Reasons: none                    |
+|                     | |                                                         | | Worker: 0  Shard: 0              |
+|                     | |                                                         | | Slab: T=64 R=320                 |
+|                     | |                                                         | | Breakpoints: 0                   |
+|                     | |                                                         | | Watches: 0                       |
+|                     | |                                                         | |                                  |
+|                     | |                                                         | |                                  |
+|                     | |                                                         | |                                  |
+|                     | |                                                         | |                                  |
+|                     | |                                                         | |                                  |
+|                     | |                                                         | |                                  |
++---------------------+ +---------------------------------------------------------+ +----------------------------------+
+------------------------------------------------------------------------------------------------------------------------
+[s] step  [n] node  [o] over  [c] continue  [space] pause  [r] restart  [u] replay
+[b] break  [w] watch  [h] history  [a] ast  [p] program  [x] refs  [q] quit
