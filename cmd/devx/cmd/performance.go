@@ -7,12 +7,15 @@ func performanceCommandPlan(name string) ([]commandSpec, bool) {
 	case "bench":
 		return []commandSpec{{
 			executable: "go",
-			arguments:  []string{"test", "-run", "^$", "-bench", ".", "-benchmem", "-timeout", "120s", "./..."},
-			timeout:    3 * time.Minute,
+			arguments: []string{
+				"test", "-run", "^$", "-bench", "^BenchmarkEvaluate$", "-benchmem",
+				"-benchtime", "200ms", "-count", "6", "-timeout", "120s", "./internal/eval",
+			},
+			timeout: 3 * time.Minute,
 		}}, true
 	case "bench:compare":
 		return []commandSpec{{
-			executable: "benchstat", arguments: []string{"bench/baseline.txt", "bench/current.txt"}, timeout: time.Minute,
+			executable: "sh", arguments: []string{"scripts/bench-compare.sh"}, timeout: 15 * time.Minute,
 		}}, true
 	case "profile":
 		return []commandSpec{{
@@ -33,12 +36,12 @@ func performanceCommandPlan(name string) ([]commandSpec, bool) {
 		}}, true
 	case "load":
 		return []commandSpec{{
-			executable: "ghz",
+			executable: "go",
 			arguments: []string{
-				"--insecure", "--proto", "api/proto/verifoxx/v1/verifoxx.proto",
-				"--call", "verifoxx.v1.PolicyService/EvaluateBatch", "127.0.0.1:9090",
+				"run", "./cmd/loadgen", "-protocol", "http", "-target", "127.0.0.1:8080",
+				"-requests", "1000", "-concurrency", "4", "-timeout", "30s",
 			},
-			timeout: 5 * time.Minute,
+			timeout: 2 * time.Minute,
 		}}, true
 	default:
 		return nil, false

@@ -342,6 +342,48 @@ func TestWorkflowPrerequisitesMatchGeneratedCodePlans(t *testing.T) {
 	}
 }
 
+func TestPerformanceWorkflowPlansAndRequirements(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		executable  string
+		arguments   []string
+		requirement []string
+		assets      []string
+	}{
+		{
+			name: "bench", executable: "go",
+			arguments:   []string{"test", "-run", "^$", "-bench", "^BenchmarkEvaluate$", "-benchmem", "-benchtime", "200ms", "-count", "6", "-timeout", "120s", "./internal/eval"},
+			requirement: []string{"go"},
+		},
+		{
+			name: "bench:compare", executable: "sh", arguments: []string{"scripts/bench-compare.sh"},
+			requirement: []string{"sh", "timeout", "benchstat"}, assets: []string{"scripts/bench-compare.sh"},
+		},
+		{
+			name: "load", executable: "go",
+			arguments:   []string{"run", "./cmd/loadgen", "-protocol", "http", "-target", "127.0.0.1:8080", "-requests", "1000", "-concurrency", "4", "-timeout", "30s"},
+			requirement: []string{"go"}, assets: []string{"cmd/loadgen/main.go"},
+		},
+	}
+	for _, test := range tests {
+		plan, ok := namedCommandPlan(test.name)
+		if !ok || len(plan) != 1 || plan[0].executable != test.executable || !slices.Equal(plan[0].arguments, test.arguments) {
+			t.Errorf("workflow %q plan = %+v, want %s %v", test.name, plan, test.executable, test.arguments)
+		}
+		if got := workflowExecutables(test.name); !slices.Equal(got, test.requirement) {
+			t.Errorf("workflow %q executables = %v, want %v", test.name, got, test.requirement)
+		}
+		if got := workflowRepositoryAssets(test.name); !slices.Equal(got, test.assets) {
+			t.Errorf("workflow %q assets = %v, want %v", test.name, got, test.assets)
+		}
+		if reason := workflowStaticBlocker(test.name); reason != "" {
+			t.Errorf("workflow %q static blocker = %q", test.name, reason)
+		}
+	}
+}
+
 func TestStatusBlocksInstallWithoutSupportedPackageManager(t *testing.T) {
 	t.Parallel()
 
@@ -389,7 +431,7 @@ func TestDoctorRunsReadOnlyBoundedProbesAndReportsMissingTools(t *testing.T) {
 	if !errors.Is(err, ErrDoctorFailed) {
 		t.Fatalf("Execute(doctor) error = %v", err)
 	}
-	wantLookups := []string{"go", "docker", "docker", "dlv", "buf", "protoc", "ghz", "benchstat", "psql"}
+	wantLookups := []string{"go", "docker", "docker", "dlv", "buf", "protoc", "benchstat", "psql"}
 	if !slices.Equal(lookedUp, wantLookups) {
 		t.Fatalf("looked-up tools = %v, want %v", lookedUp, wantLookups)
 	}
@@ -405,7 +447,6 @@ func TestDoctorRunsReadOnlyBoundedProbesAndReportsMissingTools(t *testing.T) {
 		{executable: "docker", arguments: []string{"compose", "version"}},
 		{executable: "buf", arguments: []string{"--version"}},
 		{executable: "protoc", arguments: []string{"--version"}},
-		{executable: "ghz", arguments: []string{"--version"}},
 		{executable: "benchstat", arguments: []string{"-h"}},
 		{executable: "psql", arguments: []string{"--version"}},
 	}
@@ -444,7 +485,6 @@ func TestInstallDryRunPrintsExactPlanWithoutExecuting(t *testing.T) {
 		"[elevated] sudo apt-get install -y golang-go docker.io docker-compose-plugin protobuf-compiler postgresql-client",
 		"[user] go install github.com/go-delve/delve/cmd/dlv@v1.27.1",
 		"[user] go install github.com/bufbuild/buf/cmd/buf@v1.72.0",
-		"[user] go install github.com/bojand/ghz/cmd/ghz@v0.121.0",
 		"[user] go install golang.org/x/perf/cmd/benchstat@v0.0.0-20260819171926-ebcb4798430d",
 		"",
 	}, "\n")
@@ -493,7 +533,7 @@ func TestInstallConfirmationAndNonInteractiveExecution(t *testing.T) {
 	if err := ci.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("Execute(install --yes) error = %v", err)
 	}
-	if ciPrompt.calls != 0 || len(ciRunner.runs) != 5 {
+	if ciPrompt.calls != 0 || len(ciRunner.runs) != 4 {
 		t.Fatalf("CI install = prompt calls:%d runner calls:%d", ciPrompt.calls, len(ciRunner.runs))
 	}
 	for index, run := range ciRunner.runs {
@@ -538,7 +578,8 @@ func TestRepresentativeWorkflowPlansUseExactArguments(t *testing.T) {
 		{name: "demo", executable: "go", arguments: []string{"run", "./cmd/verifoxx", "demo"}},
 		{name: "proto:gen", executable: "buf", arguments: []string{"generate"}},
 		{name: "test", executable: "go", arguments: []string{"test", "-count=1", "-timeout", "60s", "./..."}},
-		{name: "bench", executable: "go", arguments: []string{"test", "-run", "^$", "-bench", ".", "-benchmem", "-timeout", "120s", "./..."}},
+		{name: "bench", executable: "go", arguments: []string{"test", "-run", "^$", "-bench", "^BenchmarkEvaluate$", "-benchmem", "-benchtime", "200ms", "-count", "6", "-timeout", "120s", "./internal/eval"}},
+		{name: "load", executable: "go", arguments: []string{"run", "./cmd/loadgen", "-protocol", "http", "-target", "127.0.0.1:8080", "-requests", "1000", "-concurrency", "4", "-timeout", "30s"}},
 		{name: "debug:dap", executable: "dlv", arguments: []string{"dap", "--listen", "127.0.0.1:38697", "--log"}},
 		{name: "docker:build", executable: "docker", arguments: []string{"build", "-t", "verifoxx:dev", "."}},
 	}

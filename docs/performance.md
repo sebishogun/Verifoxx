@@ -75,6 +75,94 @@ All operations process the shortest input. Compression preserves source order,
 stops at destination capacity, and returns the number written. Invalid
 comparison modes panic before mutating output.
 
+## Controlled Evaluation Harness
+
+`BenchmarkEvaluate` measures complete evaluator execution over deterministic,
+exact-size typed columns generated before the timer starts. Every benchmark name
+records the runtime SIMD tier, rows, policy nodes, evidence percentage, match
+percentage, worker count, and forced mode. The reported `rows`, `nodes`,
+`evidence_pct`, `match_pct`, and `workers` metrics repeat those dimensions in
+machine-readable benchmark output.
+
+The three forced modes isolate scalar leaf execution, SIMD leaf execution, and
+fact-index execution without exposing a production tuning API. Each case is
+primed before timing, reuses executor and result storage, and is checked against
+the scalar result. Data generation, Program construction, batch construction,
+and the equality checks are excluded from the timed region. The evaluator loop
+must report `0 B/op` and `0 allocs/op`:
+
+```bash
+timeout 180s go test -run='^$' -bench='^BenchmarkEvaluate$' -benchmem -benchtime=200ms -count=6 -timeout=120s ./internal/eval
+./cli/devx bench
+```
+
+Parallel scheduling is intentionally a separate measurement. Its names carry
+the active SIMD tier plus rows and workers, and distinguish direct,
+scheduled-serial, and scheduled-parallel execution:
+
+```bash
+timeout 180s go test -run='^$' -bench='^BenchmarkScheduler$' -benchmem -benchtime=300ms -count=6 -timeout=120s ./internal/scheduler
+```
+
+### Interleaved A/B Comparison
+
+Build one evaluator test binary from each source tree before measuring. Use
+separate worktrees so the comparison never switches or modifies a checkout:
+
+```bash
+timeout 120s env GOWORK=off go test -mod=readonly -c -o /tmp/verifoxx-baseline.test ./internal/eval  # run in baseline worktree
+timeout 120s env GOWORK=off go test -mod=readonly -c -o /tmp/verifoxx-current.test ./internal/eval   # run in current worktree
+timeout 300s scripts/bench-compare.sh /tmp/verifoxx-baseline.test /tmp/verifoxx-current.test '^BenchmarkEvaluate$' 6 200ms
+```
+
+The script validates both prebuilt binaries, alternates A/B then B/A by round,
+bounds every invocation, keeps samples in separate temporary files, and calls
+`benchstat` once. It does not build, edit, or switch either source tree. Six
+rounds is the minimum accepted sample count. The devx wrapper accepts the same
+inputs through environment variables:
+
+```bash
+BENCH_BASELINE_BINARY=/tmp/verifoxx-baseline.test \
+BENCH_CURRENT_BINARY=/tmp/verifoxx-current.test \
+BENCH_COMPARE_REGEX='^BenchmarkEvaluate$' \
+BENCH_COMPARE_ROUNDS=6 BENCH_COMPARE_TIME=200ms \
+./cli/devx bench:compare
+```
+
+Record both commit IDs, Go version, host CPU, runtime tier, benchmark regex, and
+benchtime with retained results. Run on a quiet host and inspect distributions
+from `benchstat`; do not select one favorable sample. For hardware-counter work,
+run one prebuilt binary directly so compilation remains outside the measurement:
+
+```bash
+timeout 180s perf stat -r 6 -- /tmp/verifoxx-current.test -test.run='^$' -test.bench='^BenchmarkEvaluate$' -test.benchtime=1s -test.count=1 -test.cpu=1 -test.timeout=120s
+```
+
+### Public Transport Load
+
+`cmd/loadgen` sends the embedded canonical request and evidence payload through
+the public HTTP or gRPC evaluation API. It divides one fixed request budget
+across private worker loops, uses one bounded run context, cancels on the first
+transport, status, size, or JSON validation failure, and closes every response
+body and client connection. Its single JSON report contains the protocol,
+target, requested and completed requests, concurrency, elapsed nanoseconds, and
+requests per second. This is adapter and service load, not a private benchmark
+endpoint.
+
+Start the Compose environment, then exercise either transport:
+
+```bash
+timeout 300s docker compose up -d --build --wait
+timeout 60s go run ./cmd/loadgen -protocol http -target 127.0.0.1:8080 -requests 1000 -concurrency 4 -timeout 30s
+timeout 60s go run ./cmd/loadgen -protocol grpc -target 127.0.0.1:9090 -requests 1000 -concurrency 4 -timeout 30s
+timeout 120s ./cli/devx load
+timeout 60s docker compose down -v
+```
+
+The devx load command uses the HTTP values shown above. Increase request count,
+concurrency, or timeout only within the command's enforced bounds; a partial
+report and non-zero exit identify an incomplete run.
+
 ## Evaluator Crossovers
 
 Measured on 2026-08-22 with Go 1.27.0 on Linux/amd64, an AMD Ryzen AI MAX+

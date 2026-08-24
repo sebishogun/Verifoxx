@@ -66,8 +66,6 @@ func workflowStaticBlocker(name string) string {
 		return "pinned SIMD dependency is incompatible with the Go 1.27 experiment API"
 	case "tui", "debug:tui":
 		return "tui product command is unavailable"
-	case "load":
-		return "load generator is unavailable"
 	default:
 		return ""
 	}
@@ -86,11 +84,9 @@ func workflowExecutables(name string) []string {
 	case "proto:check":
 		return []string{"buf", "docker"}
 	case "bench:compare":
-		return []string{"benchstat"}
+		return []string{"sh", "timeout", "benchstat"}
 	case "perf":
 		return []string{"perf"}
-	case "load":
-		return []string{"ghz"}
 	case "debug", "debug:dap":
 		return []string{"go", "dlv"}
 	default:
@@ -111,7 +107,9 @@ func workflowRepositoryAssets(name string) []string {
 	case "proto:gen", "proto:check":
 		return []string{"buf.yaml", "buf.gen.yaml", "api/proto/verifoxx/v1/verifoxx.proto"}
 	case "bench:compare":
-		return []string{"bench/baseline.txt", "bench/current.txt"}
+		return []string{"scripts/bench-compare.sh"}
+	case "load":
+		return []string{"cmd/loadgen/main.go"}
 	default:
 		return nil
 	}

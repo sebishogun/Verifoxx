@@ -1180,7 +1180,7 @@ The wrapper selects a host binary when prebuilt binaries are available. The inst
 
 `devx install` detects available package managers, checks versions, shows exact commands, marks commands requiring elevated privileges, asks for confirmation, and supports dry-run. `devx doctor` is read-only. `devx status` reports which workflows are runnable and which prerequisite blocks each unavailable workflow.
 
-Expected tools include Go 1.27, Docker and Compose, Delve, Buf, protoc, ghz, benchstat, and PostgreSQL client tools. The SIMD library does not require a C toolchain for consumption.
+Expected tools include Go 1.27, Docker and Compose, Delve, Buf, protoc, `timeout`, benchstat, and PostgreSQL client tools. Load generation uses the repository's Go client. The SIMD library does not require a C toolchain for consumption.
 
 ### 26.4 Makefile
 
