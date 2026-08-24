@@ -1,0 +1,135 @@
+# Development
+
+Verifoxx targets Go 1.27.0. The repository developer surface is `devx`, a Cobra
+command whose no-argument mode opens a fuzzy menu and whose named workflows are
+scriptable. The [`Makefile`](../Makefile) is a one-to-one facade over the same
+commands; workflow logic stays in Go.
+
+## Bootstrap
+
+From the repository root, inspect prerequisites and per-workflow availability:
+
+```bash
+./cli/devx doctor
+./cli/devx status
+```
+
+`doctor` probes Go 1.27, Docker and Compose, Delve, Buf, protoc, benchstat, and
+the PostgreSQL client. It exits nonzero if any probe is missing, including tools
+needed only by optional workflows. `status` instead reports `runnable` or the
+specific blocker for every workflow.
+
+The repository wrapper uses a matching executable `bin/devx-$GOOS-$GOARCH`
+when present and otherwise falls back to `go run ./cmd/devx`. It always runs
+from the repository root. An installed dispatcher searches parent directories
+for the nearest repository with `cli/devx`.
+
+## Build And Run
+
+Build the product binary at `bin/verifoxx`:
+
+```bash
+timeout 180s ./cli/devx build
+```
+
+Other useful paths are:
+
+```bash
+./cli/devx demo
+./cli/devx build:purego
+./cli/devx clean
+```
+
+`build:purego` selects portable scalar wrappers. `build:exp` is intentionally
+blocked while the pinned SIMD dependency's experiment-gated vector API is
+incompatible with Go 1.27; normal builds still use its runtime-dispatched
+whole-slice kernels.
+
+## Test Matrix
+
+Run the default fresh suite:
+
+```bash
+timeout 180s ./cli/devx test
+```
+
+Additional lanes are:
+
+```bash
+timeout 180s ./cli/devx test:unit
+timeout 420s ./cli/devx test:integration
+timeout 720s ./cli/devx test:e2e
+timeout 300s ./cli/devx test:race
+```
+
+Every `go test` command has both an outer process timeout and Go's `-timeout`.
+Integration and end-to-end lanes require Docker. Do not run tests in a watch or
+repeat loop. Use `-count=1` when fresh evidence matters.
+
+Normal, `purego`, and `GOARCH=386` scalar-fallback builds must remain
+semantically equivalent. Hot-path changes also require `-benchmem`, escape
+analysis where relevant, and review of the pinned `fieldalignment` analyzer's
+recommendations rather than blind field reordering.
+
+## Generated And Canonical Files
+
+Check policy, result, and protobuf drift with:
+
+```bash
+./cli/devx policy:check
+./cli/devx results:check
+./cli/devx proto:check
+```
+
+Regeneration commands are explicit:
+
+```bash
+./cli/devx results:gen
+./cli/devx proto:gen
+```
+
+Review generated diffs before committing. The policy is authored JSON and is
+validated or compiled rather than generated.
+
+## Database Work
+
+Use the workflows documented in [database](database.md):
+
+```bash
+./cli/devx db:up
+./cli/devx migrate:check
+./cli/devx graph:check
+```
+
+`migrate:create --name lower_snake_case` creates an exclusive up/down pair with
+mode `0600`. Integration migration checks use isolated containers.
+
+## Code Boundaries
+
+- `internal/ast`, `compile`, `program`, `eval`, `truth`, `result`, and `index`
+  are the transport-independent core.
+- JSON, CLI, TUI, HTTP, gRPC, and PostgreSQL are adapters.
+- Per-row, per-node, and per-record paths must not allocate.
+- Use struct-of-arrays columns and CSR edges for bulk scans and variable-degree
+  relationships.
+- Pre-size storage, reuse caller-owned destinations, and keep mutable lifetime
+  groups under one explicit owner.
+- Do not introduce `map[string]any`, reflection, string conversion, database
+  access, or callbacks into evaluator kernels.
+- Parallelize on existing row/word boundaries only when measured work exceeds
+  coordination cost.
+
+## Documentation And Review
+
+Technical Markdown contracts and local links are tested by
+[`internal/doccheck`](../internal/doccheck). Run:
+
+```bash
+timeout 90s go test -count=1 -timeout 60s ./internal/doccheck
+git diff --check
+```
+
+The source-of-truth design and ordered roadmap are under
+[`docs/plans`](plans). Performance claims must follow the
+[benchmark methodology](performance.md#methodology), and concurrency changes
+must preserve the [lock table](concurrency.md#lock-table).

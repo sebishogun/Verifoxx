@@ -166,3 +166,21 @@ optional tools are available.
 
 See the one-page [design note](docs/design-note.md) for the semantic model and
 [AI usage disclosure](docs/ai-usage.md) for tool assistance.
+
+## Technical Guides
+
+- [Architecture](docs/architecture.md): boundaries, ownership, and data layout.
+- [Policy language](docs/policy-language.md): expressions, four-state truth,
+  resolution, and remediation.
+- [Concurrency](docs/concurrency.md): worker ownership, lock table,
+  backpressure, cancellation, and shutdown.
+- [Database](docs/database.md): PostgreSQL 19 beta, migrations, publication,
+  audit storage, graph projection, and recovery.
+- [API](docs/api.md): HTTP and gRPC contracts and examples.
+- [Development](docs/development.md): setup, build, test, and generation
+  workflows.
+- [Operations](docs/operations.md): configuration, health, metrics, capacity,
+  and service runbooks.
+- [Debugging](docs/debugging.md): Neovim DAP and semantic TUI setup.
+- [Performance](docs/performance.md): SIMD boundaries, benchmarks, measurements,
+  and methodology.

@@ -1,5 +1,49 @@
 # Performance
 
+## Methodology
+
+Performance claims use bounded, reproducible commands and retain the machine
+context needed to interpret them:
+
+1. Record both commit IDs, Go version, `GOOS/GOARCH`, CPU, `GOMAXPROCS`, runtime
+   SIMD tier, build tags, benchmark regex, benchtime, and sample count.
+2. Generate fixtures, construct Programs and batches, allocate destinations,
+   and prime reusable storage before the timer unless setup cost is the stated
+   subject.
+3. Use `-benchmem`; steady-state evaluator, scheduler, explanation, and encoder
+   kernels must report `0 B/op` and `0 allocs/op`.
+4. Collect at least six samples on a quiet host. Use all samples with `benchstat`
+   for a comparison; do not select one favorable run. Tables in this document
+   that report a minimum say so explicitly.
+5. Build baseline and candidate test binaries before measurement and alternate
+   A/B then B/A execution order. Do not switch or rebuild a checkout between
+   samples.
+6. Confirm the selected runtime backend through `simdops.Runtime` and, for
+   kernel claims, through disassembly or hardware counters.
+7. Never use `-tags=debug` or `-gcflags=all='-N -l'` for a performance result.
+
+The standard evaluator run is:
+
+```bash
+./cli/devx bench
+```
+
+Interleaved comparison requires prebuilt baseline and current binaries plus the
+environment variables documented below:
+
+```bash
+./cli/devx bench:compare
+```
+
+Linux hardware-counter inspection of the cold product path is available as:
+
+```bash
+./cli/devx perf
+```
+
+Use the explicit prebuilt-binary `perf stat` command later in this guide for a
+kernel comparison so compilation remains outside the measured process.
+
 ## SIMD Boundary
 
 Verifoxx pins `github.com/sebishogun/simd` v1.21.0 and reaches it only through

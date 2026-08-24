@@ -24,6 +24,21 @@ timeout 10s dlv version
 The DAP launcher always binds IPv4 loopback. Delve's same-user check remains
 enabled. Do not expose the DAP listener outside the host.
 
+## Developer Workflows
+
+The developer command registry provides separate DAP and semantic-TUI clients:
+
+```bash
+./cli/devx debug:dap
+./cli/devx debug:tui
+```
+
+`debug:dap` starts `dlv dap` on `127.0.0.1:38697`; the DAP client must then send
+the launch request. `debug:tui` connects to `.verifoxx/debug.sock` and therefore
+requires a running `debug-worker`. At this revision `devx status` still marks
+`debug:tui` as unavailable even though the product TUI is implemented. Until
+that status gate is removed, use the direct TUI command shown below.
+
 ## Debug Build
 
 Build with the `debug` tag and disable optimization and inlining:
@@ -74,6 +89,24 @@ at semantic instruction boundaries, set a breakpoint inside
 or continue command. The current node and instruction IDs are the function
 arguments.
 
+To use the fixed server started by `./cli/devx debug:dap` instead of having
+nvim-dap launch an ephemeral Delve process, register it as:
+
+```lua
+local dap = require("dap")
+
+dap.adapters.go = {
+  type = "server",
+  host = "127.0.0.1",
+  port = 38697,
+}
+
+require("dap.ext.vscode").load_launchjs(nil, { go = { "go" } })
+```
+
+Start the devx command in one terminal before `:DapContinue`. Use only one of
+the fixed-server and executable-adapter configurations at a time.
+
 ## Programmatic Launcher
 
 `internal/adapters/dap.Launcher` is the context-bound launcher used by local
@@ -108,3 +141,24 @@ started worker's endpoint.
 Keep the Unix socket in a user-owned directory with owner-only permissions.
 Closing a TUI connection does not destroy the retained session; a later local
 client may reconnect. Cancel the session host when the debug run is complete.
+
+Start both semantic-debug processes directly when diagnosing the devx status
+gate:
+
+```bash
+mkdir -p .verifoxx && chmod 700 .verifoxx
+timeout 30m go run -tags=debug ./cmd/verifoxx debug-worker \
+  --socket "$PWD/.verifoxx/debug.sock"
+```
+
+In another terminal:
+
+```bash
+timeout 30m go run -tags=debug ./cmd/verifoxx tui \
+  --socket "$PWD/.verifoxx/debug.sock"
+```
+
+If the client reports connection refused, confirm that both commands use the
+same absolute socket path and that the worker still owns the socket. If a
+native breakpoint is active, resume it in Neovim before treating an unanswered
+semantic request as a transport failure.
