@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -14,9 +15,35 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/sebishogun/verifoxx/internal/debug"
+	"github.com/sebishogun/verifoxx/internal/graphview"
 	"github.com/sebishogun/verifoxx/internal/schema"
 	"github.com/sebishogun/verifoxx/internal/truth"
 )
+
+func TestModelAcceptsEdgeAwareSemanticGraphs(t *testing.T) {
+	graph := Graph{
+		Labels:       []string{"policy", "requirement"},
+		Details:      []string{"policy source", "requirement R1"},
+		Kinds:        []graphview.NodeKind{graphview.NodePolicy, graphview.NodeRequirement},
+		SourceStarts: []uint32{0, 1},
+		SourceEnds:   []uint32{2, 2},
+		EdgeStarts:   []uint32{0, 1},
+		EdgeCounts:   []uint16{1, 0},
+		Edges:        []uint32{2},
+		EdgeKinds:    []graphview.EdgeKind{graphview.EdgeContains},
+		EdgeLabels:   []string{"contains"},
+		Roots:        []uint32{1},
+		SourceLength: 2,
+	}
+	data := Data{
+		Requests: []RequestItem{{ID: 1, Name: "R1", Decision: "Approve", Text: "request"}},
+		AST:      graph,
+		Program:  graph,
+	}
+	if _, err := NewModel(&stubTarget{}, nil, data); err != nil {
+		t.Fatalf("NewModel(edge-aware graph) error = %v", err)
+	}
+}
 
 func TestModelSelectsRequestAndTogglesGraph(t *testing.T) {
 	t.Parallel()
@@ -36,6 +63,17 @@ func TestModelSelectsRequestAndTogglesGraph(t *testing.T) {
 	}
 	if got := model.View(); !containsAll(got, "PROGRAM GRAPH", "and", "field:eq") {
 		t.Fatalf("program view:\n%s", got)
+	}
+	if model.status != "Program graph active" {
+		t.Fatalf("program mode status = %q", model.status)
+	}
+	model = updateModel(t, model, runeKey('p'))
+	if model.status != "Program graph active" {
+		t.Fatalf("repeated program mode status = %q", model.status)
+	}
+	model = updateModel(t, model, runeKey('a'))
+	if model.graphMode != graphAST || model.status != "AST graph active" {
+		t.Fatalf("AST mode = %v status=%q", model.graphMode, model.status)
 	}
 }
 
@@ -160,27 +198,26 @@ func TestModelShowsDisconnectedTargetAndSuppressesCommands(t *testing.T) {
 	}
 }
 
-func TestModelRendersSharedDAGReferencesAndExpansion(t *testing.T) {
+func TestModelRendersOneSharedDAGNodeWithConvergingEdges(t *testing.T) {
 	t.Parallel()
 
 	model := newTestModel(t, &stubTarget{}, nil)
-	model.data.AST = Graph{
-		Labels:      []string{"root", "left", "right", "shared"},
-		ChildStarts: []uint32{0, 2, 3, 4},
-		ChildCounts: []uint16{2, 1, 1, 0},
-		Children:    []uint32{2, 3, 4, 4},
-		Roots:       []uint32{1},
-	}
+	model.data.AST = testGraph(
+		[]string{"root", "left", "right", "shared"},
+		[]uint32{0, 2, 3, 4}, []uint16{2, 1, 1, 0}, []uint32{2, 3, 4, 4},
+		[]graphview.NodeKind{graphview.NodeAll, graphview.NodeAll, graphview.NodeAll, graphview.NodeCompare},
+		graphview.EdgeArgument,
+	)
 	model.state.Node = 4
 	view := model.View()
-	if !containsAll(view, "* #4 shared", "-> #4 [ref]") || strings.Count(view, "#4 shared") != 1 {
-		t.Fatalf("reference view:\n%s", view)
+	if !containsAll(view, "▶? #4 shared", "arg 1", "arg 2") || strings.Count(view, "#4 shared") != 1 || strings.Contains(view, "[ref]") {
+		t.Fatalf("shared DAG view:\n%s", view)
 	}
 
 	model = updateModel(t, model, runeKey('x'))
 	view = model.View()
-	if strings.Contains(view, "[ref]") || strings.Count(view, "* #4 shared") != 2 {
-		t.Fatalf("expanded view:\n%s", view)
+	if strings.Contains(view, "[ref]") || strings.Count(view, "#4 shared") != 1 {
+		t.Fatalf("shared DAG changed after fallback toggle:\n%s", view)
 	}
 }
 
@@ -213,6 +250,27 @@ func TestModelResizeRendersBoundedResponsivePanes(t *testing.T) {
 	}
 	if !containsAll(narrow, "REQUESTS", "AST GRAPH", "RUNTIME STATE") {
 		t.Fatalf("narrow panes:\n%s", narrow)
+	}
+}
+
+func TestModelCachesUnchangedViewWithoutAllocating(t *testing.T) {
+	model := newTestModel(t, &stubTarget{}, nil)
+	first := model.View()
+	var repeated string
+	if allocations := testing.AllocsPerRun(100, func() { repeated = model.View() }); allocations != 0 {
+		t.Fatalf("unchanged View = %.2f allocs/run, want 0", allocations)
+	}
+	if repeated != first {
+		t.Fatal("unchanged View returned a different frame")
+	}
+
+	model = updateModel(t, model, runeKey('p'))
+	programView := model.View()
+	if programView == first || !strings.Contains(programView, "PROGRAM GRAPH") {
+		t.Fatal("graph mode change did not invalidate the cached frame")
+	}
+	if allocations := testing.AllocsPerRun(100, func() { repeated = model.View() }); allocations != 0 {
+		t.Fatalf("unchanged Program View = %.2f allocs/run, want 0", allocations)
 	}
 }
 
@@ -434,6 +492,7 @@ func newTestModel(t *testing.T, target Target, history HistoryLoader) *Model {
 	}
 	model.width = 120
 	model.height = 24
+	model.graphColor = false
 	return model
 }
 
@@ -443,20 +502,45 @@ func testData() Data {
 			{ID: 1, Name: "R1", Decision: "Approve", Text: "local review"},
 			{ID: 2, Name: "R2", Decision: "Reject", Text: "remote disclosure"},
 		},
-		AST: Graph{
-			Labels:      []string{"all", "protected", "local"},
-			ChildStarts: []uint32{0, 2, 2},
-			ChildCounts: []uint16{2, 0, 0},
-			Children:    []uint32{2, 3},
-			Roots:       []uint32{1},
-		},
-		Program: Graph{
-			Labels:      []string{"and", "field:eq", "field:eq"},
-			ChildStarts: []uint32{0, 2, 2},
-			ChildCounts: []uint16{2, 0, 0},
-			Children:    []uint32{2, 3},
-			Roots:       []uint32{1},
-		},
+		AST: testGraph(
+			[]string{"all", "protected", "local"},
+			[]uint32{0, 2, 2}, []uint16{2, 0, 0}, []uint32{2, 3},
+			[]graphview.NodeKind{graphview.NodeAll, graphview.NodeCompare, graphview.NodeCompare},
+			graphview.EdgeArgument,
+		),
+		Program: testGraph(
+			[]string{"and", "field:eq", "field:eq"},
+			[]uint32{0, 2, 2}, []uint16{2, 0, 0}, []uint32{2, 3},
+			[]graphview.NodeKind{graphview.NodeInstruction, graphview.NodeInstruction, graphview.NodeInstruction},
+			graphview.EdgeOperand,
+		),
+	}
+}
+
+func testGraph(labels []string, starts []uint32, counts []uint16, edges []uint32, kinds []graphview.NodeKind, edgeKind graphview.EdgeKind) Graph {
+	details := make([]string, len(labels))
+	sourceStarts := make([]uint32, len(labels))
+	sourceEnds := make([]uint32, len(labels))
+	edgeKinds := make([]graphview.EdgeKind, len(edges))
+	edgeLabels := make([]string, len(edges))
+	for source := range starts {
+		start := starts[source]
+		end := start + uint32(counts[source])
+		for edge := start; edge < end; edge++ {
+			edgeKinds[edge] = edgeKind
+			position := edge - start + 1
+			if edgeKind == graphview.EdgeOperand {
+				edgeLabels[edge] = "operand " + strconv.FormatUint(uint64(position), 10)
+			} else {
+				edgeLabels[edge] = "arg " + strconv.FormatUint(uint64(position), 10)
+			}
+		}
+	}
+	return Graph{
+		Labels: labels, Details: details, Kinds: kinds,
+		SourceStarts: sourceStarts, SourceEnds: sourceEnds,
+		EdgeStarts: starts, EdgeCounts: counts, Edges: edges,
+		EdgeKinds: edgeKinds, EdgeLabels: edgeLabels, Roots: []uint32{1},
 	}
 }
 

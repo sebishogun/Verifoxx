@@ -28,6 +28,9 @@ func (model *Model) View() string {
 	if model == nil || len(model.data.Requests) == 0 {
 		return ""
 	}
+	if !model.viewDirty {
+		return model.viewCache
+	}
 	width, height := model.width, model.height
 	if width <= 0 {
 		width = defaultWidth
@@ -36,11 +39,15 @@ func (model *Model) View() string {
 		height = defaultHeight
 	}
 	if width < 1 || height < 1 {
-		return ""
+		return model.cacheView("")
 	}
-	footerRows := min(footerHeight, height)
+	footerRows := footerHeight
+	if model.browserStatus != "" {
+		footerRows++
+	}
+	footerRows = min(footerRows, height)
 	if height <= footerRows {
-		return renderFooter(width, footerRows)
+		return model.cacheView(model.renderFooter(width, footerRows))
 	}
 	mainHeight := height - footerRows
 	requests := model.requestsView()
@@ -61,7 +68,7 @@ func (model *Model) View() string {
 		main = lipgloss.JoinHorizontal(lipgloss.Top,
 			renderPane("REQUESTS", requests, requestWidth, mainHeight),
 			" ",
-			renderPane(graphTitle, renderGraph(graph, model.expandShared, current, mainHeight-3), graphWidth, mainHeight),
+			renderPane(graphTitle, model.renderGraph(graph, current, graphWidth-4, mainHeight-3), graphWidth, mainHeight),
 			" ",
 			renderPane("RUNTIME STATE", runtime, stateWidth, mainHeight),
 		)
@@ -72,11 +79,17 @@ func (model *Model) View() string {
 		stateHeight := remaining - graphHeight
 		main = lipgloss.JoinVertical(lipgloss.Left,
 			renderPane("REQUESTS", requests, width, requestHeight),
-			renderPane(graphTitle, renderGraph(graph, model.expandShared, current, graphHeight-3), width, graphHeight),
+			renderPane(graphTitle, model.renderGraph(graph, current, width-4, graphHeight-3), width, graphHeight),
 			renderPane("RUNTIME STATE", runtime, width, stateHeight),
 		)
 	}
-	return main + "\n" + renderFooter(width, footerRows)
+	return model.cacheView(main + "\n" + model.renderFooter(width, footerRows))
+}
+
+func (model *Model) cacheView(view string) string {
+	model.viewCache = view
+	model.viewDirty = false
+	return view
 }
 
 func (model *Model) requestsView() string {
@@ -100,6 +113,40 @@ func (model *Model) graphView() (string, Graph, uint32) {
 		return "PROGRAM GRAPH", model.data.Program, uint32(model.state.Instruction)
 	}
 	return "AST GRAPH", model.data.AST, uint32(model.state.Node)
+}
+
+func (model *Model) renderGraph(graph Graph, current uint32, width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	truth := debug.TruthNeither
+	row := uint32(model.selectedRequest)
+	positive := rowMaskBit(model.state.Positive, row)
+	negative := rowMaskBit(model.state.Negative, row)
+	switch {
+	case positive && negative:
+		truth = debug.TruthBoth
+	case positive:
+		truth = debug.TruthTrue
+	case negative:
+		truth = debug.TruthFalse
+	}
+	output, err := model.graphRenderer.Append(model.graphBuffer[:0], &graph, graphRenderOptions{
+		Breakpoints:  model.breakpoints,
+		Watches:      model.watches,
+		Width:        width,
+		Height:       height,
+		Current:      current,
+		Truth:        truth,
+		Program:      model.graphMode == graphProgram,
+		ExpandShared: model.expandShared,
+		Color:        model.graphColor,
+	})
+	if err != nil {
+		return "graph unavailable"
+	}
+	model.graphBuffer = output
+	return string(output)
 }
 
 func (model *Model) runtimeView() string {
@@ -289,6 +336,16 @@ func renderFooter(width, height int) string {
 		return strings.Repeat("-", width) + "\n" + fitLine(footerActions, width)
 	}
 	return strings.Repeat("-", width) + "\n" + fitLine(footerActions, width) + "\n" + fitLine(footerTools, width)
+}
+
+func (model *Model) renderFooter(width, height int) string {
+	if model.browserStatus == "" {
+		return renderFooter(width, height)
+	}
+	if height <= 1 {
+		return fitLine(model.browserStatus, width)
+	}
+	return fitLine(model.browserStatus, width) + "\n" + renderFooter(width, height-1)
 }
 
 func fitLine(value string, width int) string {

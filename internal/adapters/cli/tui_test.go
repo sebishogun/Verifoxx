@@ -3,8 +3,10 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
+	"net/http"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -13,6 +15,7 @@ import (
 
 	tuiadapter "github.com/sebishogun/verifoxx/internal/adapters/tui"
 	"github.com/sebishogun/verifoxx/internal/debug"
+	"github.com/sebishogun/verifoxx/internal/graphview"
 )
 
 func TestRootExposesSemanticTUICommand(t *testing.T) {
@@ -20,7 +23,7 @@ func TestRootExposesSemanticTUICommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("tui --help = %d, want 0; stderr=%q", code, stderr)
 	}
-	for _, required := range []string{"--socket", "--policy", "--requests", "--evidence"} {
+	for _, required := range []string{"--socket", "--browser", "--policy", "--requests", "--evidence"} {
 		if !strings.Contains(stdout, required) {
 			t.Errorf("tui help does not contain %q: %q", required, stdout)
 		}
@@ -54,11 +57,11 @@ func TestBuildTUIDataRepresentsEmbeddedEvaluation(t *testing.T) {
 			t.Fatalf("tuiRequestText() rejected row %d", row)
 		}
 	}
-	if _, err := tuiASTGraph(decoded.document); err != nil {
-		t.Fatalf("tuiASTGraph() error = %v", err)
+	if _, err := buildASTGraph(decoded.document, compiled); err != nil {
+		t.Fatalf("buildASTGraph() error = %v", err)
 	}
-	if _, err := tuiProgramGraph(compiled); err != nil {
-		t.Fatalf("tuiProgramGraph() error = %v; instructions=%d operand starts=%d counts=%d operands=%d", err,
+	if _, err := buildProgramGraph(compiled); err != nil {
+		t.Fatalf("buildProgramGraph() error = %v; instructions=%d operand starts=%d counts=%d operands=%d", err,
 			compiled.InstructionCount(), len(compiled.OperandStarts), len(compiled.OperandCounts), len(compiled.Operands))
 	}
 
@@ -80,10 +83,15 @@ func TestBuildTUIDataRepresentsEmbeddedEvaluation(t *testing.T) {
 	if want := []string{"Approve", "Reject", "Revise", "Escalate", "Escalate"}; !reflect.DeepEqual(outcomes, want) {
 		t.Fatalf("request decisions = %v, want %v", outcomes, want)
 	}
-	assertTUIDataGraph(t, "AST", data.AST.Labels, data.AST.ChildStarts, data.AST.ChildCounts, data.AST.Children, data.AST.Roots)
-	assertTUIDataGraph(t, "program", data.Program.Labels, data.Program.ChildStarts, data.Program.ChildCounts, data.Program.Children, data.Program.Roots)
-	if len(data.AST.Labels) != decoded.document.Len() || len(data.Program.Labels) != compiled.InstructionCount() {
-		t.Fatalf("graph nodes = (%d, %d), want (%d, %d)", len(data.AST.Labels), len(data.Program.Labels), decoded.document.Len(), compiled.InstructionCount())
+	if err := graphview.Validate(&data.AST, graphview.DefaultLimits()); err != nil {
+		t.Fatalf("AST graph validation error = %v", err)
+	}
+	if err := graphview.Validate(&data.Program, graphview.DefaultLimits()); err != nil {
+		t.Fatalf("program graph validation error = %v", err)
+	}
+	if len(data.AST.Labels) <= decoded.document.Len() || len(data.Program.Labels) <= compiled.InstructionCount() {
+		t.Fatalf("semantic graph nodes = (%d, %d), want more than source rows (%d, %d)",
+			len(data.AST.Labels), len(data.Program.Labels), decoded.document.Len(), compiled.InstructionCount())
 	}
 }
 
@@ -127,28 +135,16 @@ func TestBuildTUIDataBoundsAndEscapesRequestText(t *testing.T) {
 	}
 }
 
-func assertTUIDataGraph(t *testing.T, name string, labels []string, starts []uint32, counts []uint16, children, roots []uint32) {
-	t.Helper()
-	if len(labels) == 0 || len(starts) != len(labels) || len(counts) != len(labels) || len(roots) == 0 {
-		t.Fatalf("%s graph has invalid column lengths", name)
-	}
-	for row, label := range labels {
-		if label == "" || uint64(starts[row])+uint64(counts[row]) > uint64(len(children)) {
-			t.Fatalf("%s graph row %d is invalid", name, row)
-		}
-	}
-}
-
 func TestTUIRunsWithEmbeddedSourcesAndDefaultSocket(t *testing.T) {
 	deps := productTestDependencies()
 	called := false
-	deps.runTUI = func(ctx context.Context, socket string, input sources, stdin io.Reader, stdout io.Writer) error {
+	deps.runTUI = func(ctx context.Context, options tuiRunOptions, input sources, stdin io.Reader, stdout io.Writer) error {
 		called = true
 		if ctx == nil || stdin == nil || stdout == nil {
 			t.Fatal("TUI runner received a nil dependency")
 		}
-		if socket != ".verifoxx/debug.sock" {
-			t.Fatalf("socket = %q, want default", socket)
+		if options.socketPath != ".verifoxx/debug.sock" || options.browser {
+			t.Fatalf("options = %+v, want default socket without browser", options)
 		}
 		if string(input.policy) != deps.policy || string(input.requests) != deps.requests || string(input.evidence) != deps.evidence {
 			t.Fatal("TUI runner did not receive embedded sources")
@@ -165,10 +161,31 @@ func TestTUIRunsWithEmbeddedSourcesAndDefaultSocket(t *testing.T) {
 	}
 }
 
+func TestTUIBrowserFlagReachesRunner(t *testing.T) {
+	deps := productTestDependencies()
+	opened := false
+	deps.openBrowser = func(context.Context, string) error {
+		opened = true
+		return nil
+	}
+	called := false
+	deps.runTUI = func(ctx context.Context, options tuiRunOptions, _ sources, _ io.Reader, _ io.Writer) error {
+		called = true
+		if !options.browser || options.openBrowser == nil {
+			t.Fatalf("browser options = %+v", options)
+		}
+		return options.openBrowser(ctx, "http://127.0.0.1:1234")
+	}
+	code, stdout, stderr := runCLIWithDependencies(t, deps, "tui", "--browser")
+	if code != 0 || stdout != "" || stderr != "" || !called || !opened {
+		t.Fatalf("tui --browser = (%d,%q,%q,called=%v,opened=%v)", code, stdout, stderr, called, opened)
+	}
+}
+
 func TestTUIRejectsSourceFromInteractiveStdin(t *testing.T) {
 	deps := productTestDependencies()
 	called := false
-	deps.runTUI = func(context.Context, string, sources, io.Reader, io.Writer) error {
+	deps.runTUI = func(context.Context, tuiRunOptions, sources, io.Reader, io.Writer) error {
 		called = true
 		return nil
 	}
@@ -186,7 +203,7 @@ func TestTUIRejectsSourceFromInteractiveStdin(t *testing.T) {
 func TestSemanticTUIRejectsMalformedPolicyBeforeDial(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	err := runSemanticTUI(ctx, filepath.Join(t.TempDir(), "missing.sock"), sources{
+	err := runSemanticTUI(ctx, tuiRunOptions{socketPath: filepath.Join(t.TempDir(), "missing.sock")}, sources{
 		policy: []byte("{"), requests: []byte("{}"), evidence: []byte("{}"),
 	}, strings.NewReader("q"), io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "decode policy") {
@@ -197,6 +214,58 @@ func TestSemanticTUIRejectsMalformedPolicyBeforeDial(t *testing.T) {
 func TestSemanticTUIRunsAgainstDebugSocket(t *testing.T) {
 	deps := productTestDependencies()
 	inputs := sources{policy: []byte(deps.policy), requests: []byte(deps.requests), evidence: []byte(deps.evidence)}
+	socket := startSemanticTestServer(t, inputs)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var output bytes.Buffer
+	if err := runSemanticTUI(ctx, tuiRunOptions{socketPath: socket}, inputs, strings.NewReader("q"), &output); err != nil {
+		t.Fatalf("runSemanticTUI() error = %v", err)
+	}
+	if !strings.Contains(output.String(), "REQUESTS") || !strings.Contains(output.String(), "R1 Approve") {
+		t.Fatalf("TUI output does not contain request pane: %q", output.String())
+	}
+}
+
+func TestSemanticTUIBrowserOpenerFailureKeepsDebuggerRunning(t *testing.T) {
+	deps := productTestDependencies()
+	inputs := sources{policy: []byte(deps.policy), requests: []byte(deps.requests), evidence: []byte(deps.evidence)}
+	socket := startSemanticTestServer(t, inputs)
+	var openedURL string
+	options := tuiRunOptions{
+		socketPath: socket,
+		browser:    true,
+		openBrowser: func(_ context.Context, address string) error {
+			openedURL = address
+			response, err := (&http.Client{Timeout: time.Second}).Get(address)
+			if err != nil {
+				t.Fatalf("browser was not available to opener: %v", err)
+			}
+			body, readErr := io.ReadAll(response.Body)
+			closeErr := response.Body.Close()
+			if response.StatusCode != http.StatusOK || readErr != nil || closeErr != nil ||
+				!bytes.Contains(body, []byte(`id="ast-graph"`)) {
+				t.Fatalf("browser opener response = status %d read=%v close=%v bytes=%d",
+					response.StatusCode, readErr, closeErr, len(body))
+			}
+			return errors.New("desktop unavailable")
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var output bytes.Buffer
+	if err := runSemanticTUI(ctx, options, inputs, strings.NewReader("q"), &output); err != nil {
+		t.Fatalf("runSemanticTUI(browser) error = %v", err)
+	}
+	if !strings.HasPrefix(openedURL, "http://127.0.0.1:") ||
+		!strings.Contains(output.String(), "Browser open failed; URL: http://127.0.0.1:") ||
+		!strings.Contains(output.String(), "R1 Approve") {
+		t.Fatalf("browser fallback URL=%q output=%q", openedURL, output.String())
+	}
+}
+
+func startSemanticTestServer(t *testing.T, inputs sources) string {
+	t.Helper()
 	var worker engine
 	compiled, err := worker.compilePolicy(inputs.policy)
 	if err != nil {
@@ -233,14 +302,5 @@ func TestSemanticTUIRunsAgainstDebugSocket(t *testing.T) {
 			t.Errorf("debug session close error = %v", err)
 		}
 	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	var output bytes.Buffer
-	if err := runSemanticTUI(ctx, socket, inputs, strings.NewReader("q"), &output); err != nil {
-		t.Fatalf("runSemanticTUI() error = %v", err)
-	}
-	if !strings.Contains(output.String(), "REQUESTS") || !strings.Contains(output.String(), "R1 Approve") {
-		t.Fatalf("TUI output does not contain request pane: %q", output.String())
-	}
+	return socket
 }

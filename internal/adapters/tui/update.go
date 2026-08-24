@@ -23,6 +23,8 @@ const (
 
 // Update implements tea.Model.
 func (model *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	model.viewDirty = true
+	defer model.publishBrowserState()
 	switch message := message.(type) {
 	case tea.WindowSizeMsg:
 		model.width = message.Width
@@ -56,8 +58,10 @@ func (model *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "a":
 			model.graphMode = graphAST
+			model.status = "AST graph active"
 		case "p":
 			model.graphMode = graphProgram
+			model.status = "Program graph active"
 		case "x":
 			model.expandShared = !model.expandShared
 		case "s":

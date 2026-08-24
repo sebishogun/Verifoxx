@@ -9,8 +9,11 @@ import (
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/sebishogun/verifoxx/internal/debug"
+	"github.com/sebishogun/verifoxx/internal/graphview"
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
 
@@ -65,14 +68,8 @@ type RequestItem struct {
 	ID       schema.RequestID
 }
 
-// Graph stores one display-ready DAG in one-based CSR form.
-type Graph struct {
-	Labels      []string
-	ChildStarts []uint32
-	ChildCounts []uint16
-	Children    []uint32
-	Roots       []uint32
-}
+// Graph is the shared immutable semantic graph consumed by every renderer.
+type Graph = graphview.Graph
 
 // Data is immutable presentation data borrowed for the model lifetime.
 type Data struct {
@@ -93,9 +90,14 @@ const (
 type Model struct {
 	target             Target
 	history            HistoryLoader
+	browser            *Browser
 	continueCancel     context.CancelFunc
+	browserStatus      string
 	status             string
+	viewCache          string
 	data               Data
+	graphRenderer      graphRenderer
+	graphBuffer        []byte
 	breakpoints        []breakpointBinding
 	watches            []watchBinding
 	historyEntries     []HistoryEntry
@@ -113,6 +115,26 @@ type Model struct {
 	historyQueued      bool
 	commandPending     bool
 	pauseAfterContinue bool
+	graphColor         bool
+	viewDirty          bool
+}
+
+// AttachBrowser connects the model to one pre-rendered loopback viewer.
+func (model *Model) AttachBrowser(browser *Browser, status string) error {
+	if model == nil || browser == nil || status == "" || !validDisplayText(status, false) {
+		return ErrInvalidModel
+	}
+	model.browser = browser
+	model.browserStatus = boundedText(status, maxStatusText)
+	model.viewDirty = true
+	model.publishBrowserState()
+	return nil
+}
+
+func (model *Model) publishBrowserState() {
+	if model != nil && model.browser != nil {
+		model.browser.publish(model)
+	}
 }
 
 var (
@@ -139,40 +161,15 @@ func NewModel(target Target, history HistoryLoader, data Data) (*Model, error) {
 		}
 		requestIDs[request.ID] = struct{}{}
 	}
-	return &Model{target: target, history: history, data: data}, nil
+	return &Model{
+		target: target, history: history, data: data,
+		graphColor: lipgloss.ColorProfile() != termenv.Ascii,
+		viewDirty:  true,
+	}, nil
 }
 
 func validGraph(graph Graph) bool {
-	if len(graph.Labels) == 0 || len(graph.ChildStarts) != len(graph.Labels) ||
-		len(graph.ChildCounts) != len(graph.Labels) || len(graph.Roots) == 0 ||
-		len(graph.Labels) > MaxGraphNodes || len(graph.Children) > MaxGraphEdges || len(graph.Roots) > MaxGraphNodes {
-		return false
-	}
-	nodes := uint64(len(graph.Labels))
-	var edge uint64
-	for row := range graph.Labels {
-		start := uint64(graph.ChildStarts[row])
-		end := start + uint64(graph.ChildCounts[row])
-		if graph.Labels[row] == "" || len(graph.Labels[row]) > MaxGraphLabel ||
-			!validDisplayText(graph.Labels[row], false) || start != edge || end > uint64(len(graph.Children)) {
-			return false
-		}
-		edge = end
-	}
-	if edge != uint64(len(graph.Children)) {
-		return false
-	}
-	for _, id := range graph.Roots {
-		if id == 0 || uint64(id) > nodes {
-			return false
-		}
-	}
-	for _, id := range graph.Children {
-		if id == 0 || uint64(id) > nodes {
-			return false
-		}
-	}
-	return true
+	return graphview.Validate(&graph, graphview.DefaultLimits()) == nil
 }
 
 func validDisplayText(value string, multiline bool) bool {

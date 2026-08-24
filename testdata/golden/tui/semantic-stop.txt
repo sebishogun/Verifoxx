@@ -1,24 +1,24 @@
-+---------------------+ +---------------------------------------------------------+ +----------------------------------+
-| REQUESTS            | | AST GRAPH                                               | | RUNTIME STATE                    |
-| > R1 Approve        | | - #1 all                                                | | Request: R1 (#1)                 |
-|   R2 Reject         | |   * #2 protected                                        | | local review                     |
-|                     | |   - #3 local                                            | | Status: Paused / Instruction     |
-|                     | |                                                         | | I: 2 -> 3  Cursor: 2             |
-|                     | |                                                         | | Node: 2  Source: [120,164)       |
-|                     | |                                                         | | Row: 1/2  Truth: True            |
-|                     | |                                                         | | Outcome: #1                      |
-|                     | |                                                         | | Reasons: none                    |
-|                     | |                                                         | | Worker: 0  Shard: 0              |
-|                     | |                                                         | | Slab: T=64 R=320                 |
-|                     | |                                                         | | Breakpoints: 0                   |
-|                     | |                                                         | | Watches: 0                       |
-|                     | |                                                         | |                                  |
-|                     | |                                                         | |                                  |
-|                     | |                                                         | |                                  |
-|                     | |                                                         | |                                  |
-|                     | |                                                         | |                                  |
-|                     | |                                                         | |                                  |
-+---------------------+ +---------------------------------------------------------+ +----------------------------------+
+┌─────────────────────┐ ┌─────────────────────────────────────────────────────────┐ ┌──────────────────────────────────┐
+│ REQUESTS            │ │ AST GRAPH                                               │ │ RUNTIME STATE                    │
+│ > R1 Approve        │ │              ┌──────────────────┐                       │ │ Request: R1 (#1)                 │
+│   R2 Reject         │ │              │• #1 all          │                       │ │ local review                     │
+│                     │ │              └──────────────────┘                       │ │ Status: Paused / Instruction     │
+│                     │ │                        │                                │ │ I: 2 -> 3  Cursor: 2             │
+│                     │ │           ┼───arg 1────┼───arg 2────┼                   │ │ Node: 2  Source: [120,164)       │
+│                     │ │           │                         │                   │ │ Row: 1/2  Truth: True            │
+│                     │ │           ▼                         ▼                   │ │ Outcome: #1                      │
+│                     │ │ ┌──────────────────┐      ┌──────────────────┐          │ │ Reasons: none                    │
+│                     │ │ │▶✓ #2 protected   │      │· #3 local        │          │ │ Worker: 0  Shard: 0              │
+│                     │ │ └──────────────────┘      └──────────────────┘          │ │ Slab: T=64 R=320                 │
+│                     │ │                                                         │ │ Breakpoints: 0                   │
+│                     │ │                                                         │ │ Watches: 0                       │
+│                     │ │                                                         │ │                                  │
+│                     │ │                                                         │ │                                  │
+│                     │ │                                                         │ │                                  │
+│                     │ │                                                         │ │                                  │
+│                     │ │ ▶ current  ✓ true  ✗ false  ! both  ? unknown           │ │                                  │
+│                     │ │ • path  · dim  B break  W watch                         │ │                                  │
+└─────────────────────┘ └─────────────────────────────────────────────────────────┘ └──────────────────────────────────┘
 ------------------------------------------------------------------------------------------------------------------------
 [s] step  [n] node  [o] over  [c] continue  [space] pause  [r] restart  [u] replay
 [b] break  [w] watch  [h] history  [a] ast  [p] program  [x] refs  [q] quit

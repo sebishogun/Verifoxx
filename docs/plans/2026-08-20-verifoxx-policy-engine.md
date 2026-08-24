@@ -1467,3 +1467,144 @@ policy source, database credentials, or other protected payloads.
 9. Run native, purego, 386, race, integration, redaction, cardinality,
    field-alignment, and benchmark gates with explicit timeouts.
 10. Commit when requested: `feat: add production telemetry`.
+
+## Phase 20: Semantic Debugger Visualization Completion
+
+### Task 58: Draw Production Semantic Debugger Graphs
+
+**Scope:**
+
+Replace the Bubble Tea debugger's indented expression traversal with a
+color-coded node-edge graph that carries semantic information on both nodes and
+edges. Reuse one bounded graph model for terminal rendering, deterministic
+DOT/SVG/HTML export, and a loopback-only live browser synchronized with debugger
+stepping. Keep graph construction and rendering outside evaluator kernels.
+
+**Files:**
+- Create: `internal/graphview/`
+- Create: `internal/adapters/cli/graph.go`
+- Create: `internal/adapters/cli/graph_data.go`
+- Create: `internal/adapters/tui/graph.go`
+- Create: `internal/adapters/tui/browser.go`
+- Modify: `internal/adapters/tui/model.go`
+- Modify: `internal/adapters/tui/update.go`
+- Modify: `internal/adapters/tui/view.go`
+- Modify: `internal/adapters/tui/styles.go`
+- Modify: `internal/adapters/cli/root.go`
+- Modify: `internal/adapters/cli/tui.go`
+- Modify: `README.md`
+- Modify: `docs/debugging.md`
+- Modify: `docs/performance.md`
+- Design: `docs/plans/2026-08-24-debugger-graph-visualization-design.md`
+- Plan: `docs/plans/2026-08-24-debugger-graph-visualization.md`
+
+**Steps:**
+
+1. Define and test a bounded immutable CSR graph with typed node and edge
+   metadata, exact source spans, deterministic validation, and reusable layout
+   scratch.
+2. Build complete AST and Program semantic graphs containing policy,
+   requirement, clause, expression/instruction, evidence, remediation, and
+   outcome nodes. Label applicability, assertion, evidence, remediation,
+   resolution, argument, and operand edges.
+3. Draw boxed nodes, orthogonal arrowed edges, edge labels, an accessibility
+   legend, active dependency paths, truth state, breakpoints, and watches in the
+   Bubble Tea graph pane. Make `a` and `p` visibly switch and recenter modes.
+4. Add deterministic append-based DOT, SVG, and dependency-free interactive
+   HTML renderers with semantic colors, edge labels, source spans, pan, zoom,
+   fit, and node inspection.
+5. Add `verifoxx graph --view ast|program --format dot|svg|html --output PATH`
+   with atomic mode-`0600` output and explicit overwrite protection.
+6. Add `verifoxx tui --browser` using an ephemeral IPv4-loopback server and
+   fixed-size published state. Never serve protected input payloads or bind a
+   non-loopback address.
+7. Add malformed-graph, cycle, shared-DAG, narrow-terminal, color/monochrome,
+   exporter escaping, browser security, cancellation, deterministic-output,
+   fuzz, and golden tests.
+8. Require `0 B/op` and `0 allocs/op` after priming for graph layout,
+   active-path calculation, caller-buffer terminal rendering, warmed exporters,
+   and live-state publication. Compare prebuilt linked evaluator binaries,
+   reject statistically significant regressions, and preserve zero steady-state
+   evaluator allocations.
+9. Run native, purego, 386, race/checkptr, vet, field-alignment, generated-code,
+   integration, and full release gates with explicit timeouts.
+10. Commit: `feat: draw semantic debugger graphs`.
+
+## Phase 21: Production Audit Gap Closure
+
+### Task 59: Close Production Scheduler, Benchmark CLI, And Field-Alignment Gaps
+
+**Scope:**
+
+Close the medium and low findings from the completed Tasks 1-51 audit before
+resuming Task 52. Wire the measured fixed-worker scheduler into ordinary
+production batch evaluation without adding nested oversubscription, expose a
+bounded product benchmark command backed by deterministic fixtures rather than
+a production endpoint, and make the pinned field-alignment analyzer an
+automated repository and CI gate.
+
+**Files:**
+- Modify: `internal/server/engine.go`
+- Modify: `internal/server/runtime.go`
+- Modify: `internal/adapters/cli/evaluate.go`
+- Modify: `internal/adapters/cli/root.go`
+- Create: `internal/adapters/cli/bench.go`
+- Modify: `internal/scheduler/`
+- Create: `scripts/check-fieldalignment.sh`
+- Modify: `.github/workflows/ci.yml`
+- Modify: `README.md`
+- Modify: `docs/performance.md`
+
+**Steps:**
+
+1. Write failing integration tests proving that ordinary CLI and service batch
+   evaluation reach the scheduler, preserve deterministic results, propagate
+   cancellation, and close scheduler workers during graceful shutdown. Keep
+   deterministic debugger execution explicitly serial.
+2. Construct one bounded scheduler per production runtime from validated worker,
+   queue, capacity, and measured parallel-crossover settings. Route large
+   batches through it while retaining its measured serial path below the
+   crossover; do not layer scheduler shards beneath another unbounded worker
+   pool.
+3. Add `verifoxx bench` as a bounded offline command using reusable deterministic
+   benchmark fixtures. Report workload shape, execution mode, SIMD tier,
+   workers, elapsed time, throughput, bytes, and allocations without exposing a
+   production benchmark endpoint or accepting protected row payloads.
+4. Pin `fieldalignment` to the reviewed analyzer version in one repository
+   script, run it over production packages, and invoke the same script from CI
+   and documented local verification. Review suggestions individually; never
+   apply automatic field reordering.
+5. Add scheduler lifecycle, queue saturation, cancellation, serial/parallel
+   crossover, benchmark-command output, analyzer-version, and gate-failure
+   tests. Preserve zero steady-state evaluator allocations and bounded
+   scheduler ownership.
+6. Run native, purego, 386, race/checkptr, vet, pinned field-alignment,
+   integration, scheduler benchmark, CLI benchmark-command, and full release
+   gates with explicit timeouts.
+7. Record the production scheduler crossover and benchmark-command contract in
+   `docs/performance.md`, and document the new command and field-alignment gate
+   in `README.md`.
+8. Commit: `feat: close production audit gaps`.
+
+## Phase 22: OpenCode Agent Configuration
+
+### Task 60: Configure OpenCode Subagent And Reviewer Models
+
+**Scope:**
+
+Configure OpenCode so spawned general-purpose and exploration subagents use
+`openai/gpt-5.6-sol` with maximum reasoning effort, while the reviewer uses the
+same model as the primary session. Keep the change limited to OpenCode's own
+configuration and preserve all unrelated user settings.
+
+**Steps:**
+
+1. Inspect the effective project and user OpenCode configuration without
+   changing application source or existing unrelated settings.
+2. Validate the exact agent and reasoning fields against
+   `https://opencode.ai/config.json`; do not guess unsupported keys.
+3. Add the smallest configuration override for general/explore subagents and
+   the reviewer. Do not write provider credentials or other secrets.
+4. Validate the resulting configuration, restart OpenCode because configuration
+   is loaded once, and smoke-test one general, one explore, and one reviewer
+   invocation to confirm the effective model and reasoning level.

@@ -49,7 +49,22 @@ evaluate                 evaluate a request batch as JSON
 explain R1               explain one request
 simulate R1 --set K=V    evaluate one bounded field override
 demo                     run evaluation and revision scenarios
+graph --output PATH      export the AST or Program semantic graph
 ```
+
+### Semantic Graph Export
+
+Export a deterministic standalone SVG:
+
+```bash
+timeout 120s go run ./cmd/verifoxx graph \
+  --view ast --format svg --output /tmp/verifoxx-ast.svg --force
+```
+
+`--view` accepts `ast` or `program`; `--format` accepts `dot`, `svg`, or `html`.
+DOT is suitable for Graphviz, SVG is directly viewable, and HTML embeds both
+graphs with pan, zoom, fit, graph switching, and node details. Files are created
+with mode `0600`; an existing destination is rejected unless `--force` is set.
 
 ### Semantic TUI
 
@@ -66,6 +81,11 @@ Connect from a second terminal:
 ```bash
 timeout 30m go run ./cmd/verifoxx tui --socket "$PWD/.verifoxx/debug.sock"
 ```
+
+Add `--browser` to start a synchronized viewer on an ephemeral
+`127.0.0.1` port. The browser shows the same AST and Program graphs while the
+terminal remains the debugger controller. If the desktop opener fails, the TUI
+prints the loopback URL and continues running.
 
 Use `s`, `n`, and `o` to step; `c` to continue; `a` and `p` to switch between
 the source AST and compiled program; and `q` to quit. Supply the same custom
@@ -103,7 +123,7 @@ timeout 120s docker compose down -v
 
 ## Input Format
 
-`evaluate`, `demo`, `tui`, and `debug-worker` accept three JSON documents:
+`evaluate`, `demo`, `graph`, `tui`, and `debug-worker` accept three JSON documents:
 
 - `--policy PATH`: semantic policy; default
   [`policies/verifoxx/policy.json`](policies/verifoxx/policy.json).
@@ -181,6 +201,6 @@ See the one-page [design note](docs/design-note.md) for the semantic model and
   workflows.
 - [Operations](docs/operations.md): configuration, health, metrics, capacity,
   and service runbooks.
-- [Debugging](docs/debugging.md): Neovim DAP and semantic TUI setup.
+- [Debugging](docs/debugging.md): Neovim DAP, semantic TUI, and graph viewer setup.
 - [Performance](docs/performance.md): SIMD boundaries, benchmarks, measurements,
   and methodology.

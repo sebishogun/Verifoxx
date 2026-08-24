@@ -19,11 +19,13 @@ import (
 
 type dependencies struct {
 	readFile        func(string) ([]byte, error)
+	writeGraphFile  func(string, []byte, bool) error
 	migrate         func(context.Context) error
 	migrationHealth func(context.Context) error
 	serve           func(context.Context) error
 	healthcheck     func(context.Context) error
-	runTUI          func(context.Context, string, sources, io.Reader, io.Writer) error
+	runTUI          func(context.Context, tuiRunOptions, sources, io.Reader, io.Writer) error
+	openBrowser     func(context.Context, string) error
 	policy          string
 	requests        string
 	evidence        string
@@ -32,7 +34,8 @@ type dependencies struct {
 
 func productionDependencies() dependencies {
 	return dependencies{
-		readFile: os.ReadFile,
+		readFile:       os.ReadFile,
+		writeGraphFile: writeAtomicGraphFile,
 		migrate: func(ctx context.Context) error {
 			cfg, err := config.LoadOS(nil)
 			if err != nil {
@@ -61,11 +64,12 @@ func productionDependencies() dependencies {
 			}
 			return server.Healthcheck(ctx, cfg)
 		},
-		runTUI:   runSemanticTUI,
-		policy:   verifoxx.Source(),
-		requests: fixtures.RequestsJSON(),
-		evidence: fixtures.EvidenceJSON(),
-		version:  buildinfo.Version(),
+		runTUI:      runSemanticTUI,
+		openBrowser: openBrowserURL,
+		policy:      verifoxx.Source(),
+		requests:    fixtures.RequestsJSON(),
+		evidence:    fixtures.EvidenceJSON(),
+		version:     buildinfo.Version(),
 	}
 }
 
@@ -237,6 +241,7 @@ func newRoot(stdout, stderr io.Writer, deps dependencies) *cobra.Command {
 		newExplainCommand(deps),
 		newSimulateCommand(deps),
 		newDemoCommand(deps),
+		newGraphCommand(deps),
 		newTUICommand(deps),
 		newDebugWorkerCommand(deps),
 		newMigrationCommand(deps),

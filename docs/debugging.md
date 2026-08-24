@@ -160,3 +160,46 @@ If the client reports connection refused, confirm that both commands use the
 same absolute socket path and that the worker still owns the socket. If a
 native breakpoint is active, resume it in Neovim before treating an unanswered
 semantic request as a transport failure.
+
+### Live Browser Graph
+
+Start the synchronized browser graph from the TUI command:
+
+```bash
+timeout 30m go run -tags=debug ./cmd/verifoxx tui \
+  --socket "$PWD/.verifoxx/debug.sock" --browser
+```
+
+The command pre-renders the AST and Program graphs once, binds an ephemeral
+IPv4-loopback address, and invokes `xdg-open` on Linux or `open` on macOS
+without a shell. Opener failure does not stop the debugger; the TUI displays
+the usable `http://127.0.0.1:PORT` URL.
+
+The page polls only a bounded `/state` document containing graph mode, current
+node and instruction IDs, selected request row, four-state truth, breakpoint
+IDs/nodes, and watch IDs/instructions. It does not expose request text, evidence
+payloads, or policy source bytes. The server accepts only `GET` and `HEAD` for
+`/` and `/state`, sends restrictive browser headers, and stops with the TUI.
+
+## Semantic Graph Export
+
+Export the same bounded AST or compiled Program graph without starting a debug
+session:
+
+```bash
+timeout 120s go run ./cmd/verifoxx graph \
+  --view ast --format svg --output /tmp/verifoxx-ast.svg --force
+timeout 120s go run ./cmd/verifoxx graph \
+  --view program --format html --output /tmp/verifoxx-program.html --force
+```
+
+The command accepts the same `--policy`, `--requests`, and `--evidence` sources
+as evaluation. It validates and compiles all inputs before rendering. `dot` is a
+deterministic Graphviz document, `svg` is standalone, and `html` embeds both
+graphs with pan, zoom, fit, view switching, node details, and source spans. HTML
+opens on the requested view.
+
+Output is written through a mode-`0600` temporary sibling and installed only
+after it is synced and closed. Existing files require `--force`; input, render,
+and write failures do not replace the requested destination. Graph labels carry
+policy semantics but never protected request or evidence payload values.

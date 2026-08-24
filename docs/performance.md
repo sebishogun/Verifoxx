@@ -108,6 +108,44 @@ Hot refactors must consequently compare prebuilt linked consumers, not only the
 edited helper. Source equivalence, zero allocations, equal call counts, and an
 unchanged non-NOP instruction count do not establish performance parity.
 
+## Semantic Graph Visualization
+
+The debugger graph path is outside evaluator kernels. Graph construction is
+cold; the reusable layouter, active-path calculation, caller-buffer terminal
+renderer, DOT/SVG/HTML exporters, and fixed-capacity browser-state publication
+must allocate zero after priming. Browser listener, HTTP, opener, and file I/O
+remain cold adapter boundaries.
+
+Measured on 2026-08-24 with Go 1.27.0 on Linux/amd64 and the AMD Ryzen AI MAX+
+395. Values are the minimum of six 300 ms samples:
+
+| Operation | Shape | Minimum ns/op | B/op | allocs/op |
+|---|---:|---:|---:|---:|
+| deterministic layout | 64 nodes | 3,146 | 0 | 0 |
+| deterministic layout | 256 nodes | 12,472 | 0 | 0 |
+| deterministic layout | 1,024 nodes | 51,344 | 0 | 0 |
+| colored terminal graph | 256 nodes, 255 edges, 120x40 | 65,012 | 0 | 0 |
+
+Allocation tests separately prime and repeat DOT, SVG, interactive HTML, live
+HTML, terminal rendering with active-path calculation, and browser-state
+publication 100 times. Every path reports `0 allocs/run` with caller-owned
+capacity or fixed storage.
+
+```bash
+timeout 180s go test -run='^$' -bench='^(BenchmarkLayout|BenchmarkGraphRenderer)$' -benchmem -benchtime=300ms -count=6 -timeout=120s ./internal/graphview ./internal/adapters/tui
+timeout 180s go test -run='^$' -bench='^BenchmarkEvaluate$' -benchmem -benchtime=300ms -count=6 -timeout=120s ./internal/eval
+```
+
+The linked evaluator comparison used prebuilt binaries from `08bd81f` and the
+graph candidate, alternated A/B then B/A for six 200 ms rounds. Evaluator
+geomean changed from 91.21 to 91.11 microseconds (`-0.10%`). No individual case
+was statistically significant (`p>=0.132`), and every baseline and candidate
+case retained `0 B/op` and `0 allocs/op`.
+
+```bash
+timeout 300s scripts/bench-compare.sh /tmp/verifoxx-baseline.test /tmp/verifoxx-current.test '^BenchmarkEvaluate$' 6 200ms
+```
+
 ## SIMD Boundary
 
 Verifoxx pins `github.com/sebishogun/simd` v1.21.0 and reaches it only through

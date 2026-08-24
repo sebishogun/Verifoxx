@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -21,9 +24,16 @@ import (
 
 var errInvalidTUIData = errors.New("tui: invalid semantic display data")
 
+type tuiRunOptions struct {
+	openBrowser func(context.Context, string) error
+	socketPath  string
+	browser     bool
+}
+
 func newTUICommand(deps dependencies) *cobra.Command {
 	var flags sourceFlags
 	var socketPath string
+	var browser bool
 	cmd := &cobra.Command{
 		Use:   "tui",
 		Short: "Open the semantic debugger TUI",
@@ -39,16 +49,21 @@ func newTUICommand(deps dependencies) *cobra.Command {
 			if deps.runTUI == nil {
 				return operationalError(errors.New("semantic TUI runner unavailable"))
 			}
-			return operationalError(deps.runTUI(cmd.Context(), socketPath, inputs, cmd.InOrStdin(), cmd.OutOrStdout()))
+			return operationalError(deps.runTUI(cmd.Context(), tuiRunOptions{
+				openBrowser: deps.openBrowser,
+				socketPath:  socketPath,
+				browser:     browser,
+			}, inputs, cmd.InOrStdin(), cmd.OutOrStdout()))
 		},
 	}
 	cmd.Flags().StringVar(&socketPath, "socket", ".verifoxx/debug.sock", "semantic debug Unix socket path")
+	cmd.Flags().BoolVar(&browser, "browser", false, "open a synchronized IPv4-loopback graph viewer")
 	bindSourceFlags(cmd, &flags, sourceAll)
 	return cmd
 }
 
-func runSemanticTUI(ctx context.Context, socketPath string, inputs sources, stdin io.Reader, stdout io.Writer) error {
-	if ctx == nil || socketPath == "" || stdin == nil || stdout == nil {
+func runSemanticTUI(ctx context.Context, options tuiRunOptions, inputs sources, stdin io.Reader, stdout io.Writer) error {
+	if ctx == nil || options.socketPath == "" || stdin == nil || stdout == nil {
 		return errInvalidTUIData
 	}
 	var pipeline engine
@@ -72,7 +87,7 @@ func runSemanticTUI(ctx context.Context, socketPath string, inputs sources, stdi
 	if err != nil {
 		return pipelineFailure("prepare tui", err)
 	}
-	client, err := debug.DialClient(ctx, socketPath, debug.DefaultTransportConfig())
+	client, err := debug.DialClient(ctx, options.socketPath, debug.DefaultTransportConfig())
 	if err != nil {
 		return pipelineFailure("connect semantic debugger", err)
 	}
@@ -81,11 +96,53 @@ func runSemanticTUI(ctx context.Context, socketPath string, inputs sources, stdi
 	if err != nil {
 		return pipelineFailure("prepare tui", err)
 	}
+	var browser *tuiadapter.Browser
+	if options.browser {
+		browser, err = tuiadapter.StartBrowser(ctx, tuiadapter.DefaultBrowserConfig(), data)
+		if err != nil {
+			return pipelineFailure("start browser viewer", err)
+		}
+		status := "Browser: " + browser.URL()
+		if options.openBrowser == nil || options.openBrowser(ctx, browser.URL()) != nil {
+			status = "Browser open failed; URL: " + browser.URL()
+		}
+		if err := model.AttachBrowser(browser, status); err != nil {
+			_ = browser.Close()
+			return pipelineFailure("prepare browser viewer", err)
+		}
+	}
 	program := tea.NewProgram(model, tea.WithContext(ctx), tea.WithInput(stdin), tea.WithOutput(stdout))
-	if _, err := program.Run(); err != nil {
-		return pipelineFailure("run tui", err)
+	_, runErr := program.Run()
+	if browser != nil {
+		if closeErr := browser.Close(); runErr == nil && closeErr != nil {
+			return pipelineFailure("stop browser viewer", closeErr)
+		}
+	}
+	if runErr != nil {
+		return pipelineFailure("run tui", runErr)
 	}
 	return nil
+}
+
+func openBrowserURL(ctx context.Context, address string) error {
+	if ctx == nil || address == "" {
+		return errInvalidTUIData
+	}
+	var executable string
+	switch runtime.GOOS {
+	case "linux":
+		executable = "xdg-open"
+	case "darwin":
+		executable = "open"
+	default:
+		return errors.New("browser launch is unsupported on this platform")
+	}
+	openCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(openCtx, executable, address)
+	command.Stdout = io.Discard
+	command.Stderr = io.Discard
+	return command.Run()
 }
 
 func buildTUIData(
@@ -123,11 +180,11 @@ func buildTUIData(
 		}
 	}
 
-	astGraph, err := tuiASTGraph(document)
+	astGraph, err := buildASTGraph(document, compiled)
 	if err != nil {
 		return tuiadapter.Data{}, err
 	}
-	programGraph, err := tuiProgramGraph(compiled)
+	programGraph, err := buildProgramGraph(compiled)
 	if err != nil {
 		return tuiadapter.Data{}, err
 	}
@@ -195,125 +252,6 @@ func tuiRequestText(
 		value = value[:tuiadapter.MaxRequestText-3] + "..."
 	}
 	return value, true
-}
-
-func tuiASTGraph(document *ast.Document) (tuiadapter.Graph, error) {
-	nodes := document.Len()
-	if nodes == 0 {
-		return tuiadapter.Graph{}, errInvalidTUIData
-	}
-	graph := tuiadapter.Graph{
-		Labels:      make([]string, nodes),
-		ChildStarts: make([]uint32, nodes),
-		ChildCounts: make([]uint16, nodes),
-		Children:    make([]uint32, 0, len(document.ChildNodeIDs)+len(document.NotChildren)),
-	}
-	for row, kind := range document.NodeKinds {
-		id := schema.NodeID(row + 1)
-		graph.ChildStarts[row] = uint32(len(graph.Children))
-		graph.Labels[row] = astNodeLabel(document, id, kind)
-		switch kind {
-		case ast.NodeKindAll, ast.NodeKindAny:
-			children, ok := document.GroupChildren(id)
-			if !ok {
-				return tuiadapter.Graph{}, errInvalidTUIData
-			}
-			graph.ChildCounts[row] = uint16(len(children))
-			for _, child := range children {
-				graph.Children = append(graph.Children, uint32(child))
-			}
-		case ast.NodeKindNot:
-			child, ok := document.NotChild(id)
-			if !ok {
-				return tuiadapter.Graph{}, errInvalidTUIData
-			}
-			graph.ChildCounts[row] = 1
-			graph.Children = append(graph.Children, uint32(child))
-		}
-	}
-	seen := make([]bool, nodes)
-	for _, id := range document.RequirementApplicabilityRoots {
-		graph.Roots = appendTUIRoot(graph.Roots, seen, uint32(id))
-	}
-	for _, id := range document.ClauseAssertionRoots {
-		graph.Roots = appendTUIRoot(graph.Roots, seen, uint32(id))
-	}
-	for _, id := range document.ClauseEvidenceNodeIDs {
-		graph.Roots = appendTUIRoot(graph.Roots, seen, uint32(id))
-	}
-	if len(graph.Roots) == 0 {
-		return tuiadapter.Graph{}, errInvalidTUIData
-	}
-	return graph, nil
-}
-
-func tuiProgramGraph(compiled *program.Program) (tuiadapter.Graph, error) {
-	nodes := compiled.InstructionCount()
-	if nodes == 0 || len(compiled.OperandStarts) != nodes || len(compiled.OperandCounts) != nodes {
-		return tuiadapter.Graph{}, errInvalidTUIData
-	}
-	graph := tuiadapter.Graph{
-		Labels:      make([]string, nodes),
-		ChildStarts: make([]uint32, nodes),
-		ChildCounts: make([]uint16, nodes),
-		Children:    make([]uint32, 0, len(compiled.Operands)),
-	}
-	for row, opcode := range compiled.Opcodes {
-		start := uint64(compiled.OperandStarts[row])
-		count := uint64(compiled.OperandCounts[row])
-		if start+count > uint64(len(compiled.Operands)) {
-			return tuiadapter.Graph{}, errInvalidTUIData
-		}
-		graph.Labels[row] = programOpcodeName(opcode)
-		graph.ChildStarts[row] = uint32(len(graph.Children))
-		graph.ChildCounts[row] = uint16(count)
-		for _, child := range compiled.Operands[int(start):int(start+count)] {
-			graph.Children = append(graph.Children, uint32(child))
-		}
-	}
-	seen := make([]bool, nodes)
-	for _, id := range compiled.RequirementRoots {
-		graph.Roots = appendTUIRoot(graph.Roots, seen, uint32(id))
-	}
-	for _, id := range compiled.ClauseAssertionRoots {
-		graph.Roots = appendTUIRoot(graph.Roots, seen, uint32(id))
-	}
-	for _, id := range compiled.ClauseEvidenceIDs {
-		graph.Roots = appendTUIRoot(graph.Roots, seen, uint32(id))
-	}
-	if len(graph.Roots) == 0 {
-		return tuiadapter.Graph{}, errInvalidTUIData
-	}
-	return graph, nil
-}
-
-func appendTUIRoot(roots []uint32, seen []bool, id uint32) []uint32 {
-	if id == 0 || uint64(id) > uint64(len(seen)) || seen[id-1] {
-		return roots
-	}
-	seen[id-1] = true
-	return append(roots, id)
-}
-
-func astNodeLabel(document *ast.Document, id schema.NodeID, kind ast.NodeKind) string {
-	switch kind {
-	case ast.NodeKindCompare:
-		_, op, _, ok := document.Compare(id)
-		if !ok {
-			return "invalid"
-		}
-		return "compare:" + compareOpName(op)
-	case ast.NodeKindAll:
-		return "all"
-	case ast.NodeKindAny:
-		return "any"
-	case ast.NodeKindNot:
-		return "not"
-	case ast.NodeKindEvidence:
-		return "evidence"
-	default:
-		return "invalid"
-	}
 }
 
 func compareOpName(op ast.CompareOp) string {
