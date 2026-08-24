@@ -115,13 +115,14 @@ func Serve(ctx context.Context, cfg config.Config) error {
 	engine, err := NewEngine(EngineConfig{
 		Registry: registry, Publisher: publisher, Journal: journal, Metrics: metrics, Health: pool.Ping,
 		EngineVersion: buildinfo.Version(), AuditCapacity: auditCapacity, AuditMode: cfg.AuditMode, Workers: cfg.Workers,
-		Limits: limits,
+		QueueDepth: cfg.QueueDepth, Limits: limits,
 	})
 	if err != nil {
 		_ = journal.Close(context.Background())
 		pool.Close()
 		return err
 	}
+	defer func() { _ = engine.Close(context.Background()) }()
 	if _, err := engine.CompilePolicy(ctx, []byte(verifoxx.Source())); err != nil {
 		_ = journal.Close(context.Background())
 		pool.Close()
@@ -162,6 +163,7 @@ func Serve(ctx context.Context, cfg config.Config) error {
 		WriteTimeout: cfg.RequestTimeout, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 1 << 20,
 	}
 	shutdownHooks := service.ShutdownHooks{
+		JoinWorkers: engine.Close,
 		StopSessions: func(shutdownCtx context.Context) error {
 			return errors.Join(httpServer.Shutdown(shutdownCtx), stopGRPC(shutdownCtx, grpcServer))
 		},

@@ -235,6 +235,7 @@ func newRoot(stdout, stderr io.Writer, deps dependencies) *cobra.Command {
 	root.SetErr(stderr)
 	root.Flags().BoolVar(&version, "version", false, "print the build version")
 	root.AddCommand(
+		newBenchCommand(deps),
 		newEvaluateCommand(deps),
 		newValidateCommand(deps),
 		newCompileCommand(deps),

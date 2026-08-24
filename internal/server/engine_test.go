@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -39,11 +40,16 @@ func TestEngineEvaluatesGoldenAndSubmitsRequiredAudit(t *testing.T) {
 	engine, err := NewEngine(EngineConfig{
 		Registry: registry, Publisher: publisher, Journal: journal, Metrics: metrics,
 		Health: func(context.Context) error { return nil }, EngineVersion: buildinfo.Version(),
-		AuditMode: persistence.AuditRequired, AuditCapacity: capacity, Limits: security.DefaultLimits(), Workers: 1,
+		AuditMode: persistence.AuditRequired, AuditCapacity: capacity, Limits: security.DefaultLimits(), Workers: 1, QueueDepth: 1,
 	})
 	if err != nil {
 		t.Fatalf("NewEngine() error = %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Errorf("Engine.Close() error = %v", err)
+		}
+	})
 	metadata, err := engine.CompilePolicy(context.Background(), []byte(verifoxx.Source()))
 	if err != nil {
 		t.Fatalf("CompilePolicy() error = %v", err)
@@ -74,6 +80,58 @@ func TestEngineEvaluatesGoldenAndSubmitsRequiredAudit(t *testing.T) {
 	if err := engine.Health(context.Background()); err != nil {
 		t.Fatalf("Health() error = %v", err)
 	}
+	if stats := engine.scheduler.Stats(); stats.Executions != 1 || stats.Serial != 1 || stats.Parallel != 0 {
+		t.Fatalf("scheduler stats = %+v, want one serial execution", stats)
+	}
+}
+
+func TestEngineUsesParallelSchedulerAndCloses(t *testing.T) {
+	engine := newSecurityTestEngineWithWorkers(t, security.DefaultLimits(), 2)
+	request := service.EvaluationRequest{
+		Requests: schedulerTestRequests(256),
+		Evidence: []byte(fixtures.EvidenceJSON()),
+	}
+	output, err := engine.EvaluateBatch(context.Background(), request, nil)
+	if err != nil {
+		t.Fatalf("EvaluateBatch() error = %v", err)
+	}
+	if len(output) == 0 {
+		t.Fatal("EvaluateBatch() output is empty")
+	}
+	if stats := engine.scheduler.Stats(); stats.Executions != 1 || stats.Serial != 0 || stats.Parallel != 1 {
+		t.Fatalf("scheduler stats = %+v, want one parallel execution", stats)
+	}
+
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := engine.Close(canceled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Close(canceled) error = %v, want context cancellation", err)
+	}
+	if err := engine.Close(context.Background()); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := engine.Close(context.Background()); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+	if _, err := engine.EvaluateBatch(context.Background(), request, nil); !errors.Is(err, service.ErrUnavailable) {
+		t.Fatalf("EvaluateBatch() after close error = %v, want %v", err, service.ErrUnavailable)
+	}
+}
+
+func schedulerTestRequests(rows int) []byte {
+	request := []byte(`{"requester":{"team":"external_partner","trust":"external"},"action":{"type":"aggregate_analysis","output":"aggregate_counts","dataset":"protected_dataset"},"environment":{"execution_env":"local_approved_env","usage":"standard"},"evidence_refs":["E1","E2"]}`)
+	dst := make([]byte, 0, rows*(len(request)+16))
+	dst = append(dst, `{"schema_version":1,"pack":"verifoxx","requests":[`...)
+	for row := 1; row <= rows; row++ {
+		if row != 1 {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, `{"id":"R`...)
+		dst = strconv.AppendInt(dst, int64(row), 10)
+		dst = append(dst, `",`...)
+		dst = append(dst, request[1:]...)
+	}
+	return append(dst, "]}"...)
 }
 
 type memoryPolicyStore struct {

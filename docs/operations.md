@@ -38,10 +38,11 @@ export VERIFOXX_QUEUE_DEPTH=8
 timeout 30m ./cli/devx serve
 ```
 
-On startup the service connects to PostgreSQL, allocates all fixed worker and
-journal storage, publishes the embedded policy, binds both listeners, and then
-accepts traffic. Startup fails rather than serving without its configured
-database, active policy, valid limits, journal, or listener.
+On startup the service connects to PostgreSQL, allocates fixed request
+workspaces, scheduler workers, and journal storage, publishes the embedded
+policy, binds both listeners, and then accepts traffic. Startup fails rather
+than serving without its configured database, active policy, valid limits,
+journal, scheduler, or listener.
 
 ## Configuration
 
@@ -82,6 +83,9 @@ auditing is enabled. Hard ceilings are 256 workers, 4,096 admissions, 64 MiB
 body/output, 1,048,576 rows, 262,144 evidence records, and a 30-minute request
 timeout. The admission setting creates up to 4,096 active slots and allows the
 same number of callers to wait for a slot before returning `service busy`.
+One process-wide scheduler also limits admitted evaluator batches to
+`min(queue depth, workers)` and shares exactly `workers` shard tokens across all
+requests. Increasing admission depth does not create more evaluator goroutines.
 
 `VERIFOXX_POLICY_NAME` is validated configuration for durable reload and
 multi-instance listener use. The current `server.Serve` startup publishes the
@@ -132,7 +136,7 @@ names and labels and update once per batch, not once per node:
 | `verifoxx_evaluation_outcomes_total{outcome}` | four bounded decision labels |
 | `verifoxx_service_queue_depth` | callers waiting for admission |
 | `verifoxx_audit_journal_failures_total` | failed audit batches |
-| `verifoxx_evaluation_workers` | configured engine worker count |
+| `verifoxx_evaluation_workers` | configured scheduler and request-workspace count |
 | `verifoxx_simd_tier_info{tier}` | selected runtime SIMD tier |
 
 Best-effort queue drops are retained in `Journal.Stats` but are not currently a
@@ -153,9 +157,16 @@ capacity or dependency incidents. Diagnose in this order:
 6. use the [performance methodology](performance.md#methodology) before changing
    worker or crossover settings.
 
-Increasing queue depth increases retained admission and audit storage and may
-only hide a slow database. Worker count is bounded at construction; it is not a
-runtime autoscaling control.
+Increasing queue depth increases retained admission and scheduler bookkeeping
+and may only hide a slow database. Worker count is bounded at construction; it
+is not a runtime autoscaling control.
+
+Use the offline benchmark rather than a production endpoint when checking local
+evaluation capacity:
+
+```bash
+timeout 120s go run ./cmd/verifoxx bench --rows 4096 --iterations 100 --workers 4
+```
 
 ## Graceful Shutdown
 
@@ -167,11 +178,24 @@ SIGINT or SIGTERM cancels the root command context. One process-owned lifecycle:
 3. drains required or best-effort journal slots;
 4. gracefully stops HTTP and gRPC, forcing gRPC stop at deadline;
 5. closes PostgreSQL; and
-6. reports joined shutdown errors.
+6. closes and joins scheduler workers;
+7. reports joined shutdown errors.
 
 Set the container stop grace period at least as long as
 `VERIFOXX_SHUTDOWN_TIMEOUT`. The checked-in Compose file uses 30 seconds, which
 matches its service default.
+
+## Production Layout Gate
+
+Run the same pinned field-alignment analysis used by CI:
+
+```bash
+timeout 300s ./scripts/check-fieldalignment.sh
+```
+
+The script checks production packages only and reports candidate struct
+reorderings. Review each diagnostic against access locality and pointer-scan
+cost; do not apply analyzer fixes automatically.
 
 ## Recovery And Upgrade
 

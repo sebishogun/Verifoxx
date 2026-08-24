@@ -63,28 +63,34 @@ HTTP or gRPC request
 bounded admission slot
        |
        v
-fixed engine-worker channel -> decoder + builder + executor + encoder + audit slab
-       |                                                        |
-       v                                                        v
-canonical JSON response                              bounded journal slot
-                                                               |
-                                                               v
-                                                    PostgreSQL transaction
+fixed engine workspace -> decoder + builder
+       |
+       v
+process-wide scheduler -> fixed evaluator workers -> deterministic merge
+       |
+       v
+same engine workspace -> result + encoder + audit slab
+       |                                      |
+       v
+canonical JSON response
+                                              bounded journal slot
+                                                      |
+                                                      v
+                                           PostgreSQL transaction
 ```
 
 Admission covers decoding, evaluation, encoding, and required audit
-acknowledgment. `server.Engine` preallocates a fixed set of serial worker
-workspaces. A worker is returned only after result encoding, metrics
-observation, and audit submission have finished using its mutable slices.
+acknowledgment. `server.Engine` preallocates fixed request workspaces and one
+fixed-worker scheduler. A workspace is returned only after result encoding,
+metrics observation, and audit submission have finished using its mutable slices.
 Network request concurrency therefore cannot create an unbounded number of
 decoders or evaluator slabs.
 
-[`internal/scheduler`](../internal/scheduler) also provides measured row-shard
-execution for bulk callers. It partitions large batches at 64-row bitmap
-boundaries, gives each shard private scratch and results, then merges once in
-row order. The current database-backed `serve` path uses the fixed
-`server.Engine` worker channel rather than nesting that scheduler inside a
-request.
+[`internal/scheduler`](../internal/scheduler) partitions batches of 256 rows or
+more at 64-row bitmap boundaries, gives each shard private scratch and results,
+then merges once in row order. Every service request shares the process-wide
+worker-token budget; no request creates a nested scheduler or unbounded worker
+pool. Smaller batches use its measured serial path.
 
 ## Ownership
 
@@ -94,8 +100,8 @@ Ownership follows lifetime, not object type:
 |---|---|---|---|
 | Policy decode | `ast.Builder` | source bytes and typed builder columns | after compilation |
 | Policy version | `program.Program` | immutable instructions, symbols, catalogs, indexes | registry lifetime |
-| Service process | `server.Engine` | fixed `engineWorker` slab and worker channel | process shutdown |
-| Evaluation | one `engineWorker` | batch columns, evaluator scratch, result and encoder state | encoding, metrics, and audit submission complete |
+| Service process | `server.Engine` | fixed `engineWorker` slab, channel, and scheduler | process shutdown |
+| Evaluation | one `engineWorker` | batch columns, merged result, encoder, and audit state | encoding, metrics, and audit submission complete |
 | Row shard | one scheduler worker | private executor and result columns | deterministic merge complete |
 | Audit submission | one journal slot | copied immutable audit batch | commit or recorded failure |
 | Debug session | one actor goroutine | retained scalar execution and checkpoints | session close |

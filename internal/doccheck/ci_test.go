@@ -1,9 +1,14 @@
 package doccheck_test
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+const fieldAlignmentVersion = "v0.47.1-0.20260707181000-a299dadba899"
 
 func TestCIAndReleaseConfigurationCoversRequiredLanes(t *testing.T) {
 	t.Parallel()
@@ -76,5 +81,60 @@ func TestCICommandsAndJobsHaveExplicitTimeouts(t *testing.T) {
 				t.Errorf("%s:%d command has no process timeout: %s", path, lineNumber+1, command)
 			}
 		}
+	}
+}
+
+func TestFieldAlignmentGateIsPinnedAndSharedWithCI(t *testing.T) {
+	scriptPath := "scripts/check-fieldalignment.sh"
+	script := readDocument(t, scriptPath)
+	for _, required := range []string{
+		"set -eu",
+		"timeout 240s",
+		"fieldalignment@" + fieldAlignmentVersion,
+		"-test=false",
+		"./internal/...",
+		"./cmd/...",
+		"./policies/...",
+	} {
+		if !strings.Contains(script, required) {
+			t.Errorf("%s does not contain %q", scriptPath, required)
+		}
+	}
+	info, err := os.Stat(filepath.Join(repositoryRoot, scriptPath))
+	if err != nil {
+		t.Fatalf("stat %s: %v", scriptPath, err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Errorf("%s is not executable", scriptPath)
+	}
+
+	ci := readDocument(t, ".github/workflows/ci.yml")
+	for _, required := range []string{
+		"name: Check production field alignment",
+		"run: timeout 300s ./scripts/check-fieldalignment.sh",
+	} {
+		if !strings.Contains(ci, required) {
+			t.Errorf("CI does not contain %q", required)
+		}
+	}
+}
+
+func TestFieldAlignmentGatePropagatesTimeoutFailure(t *testing.T) {
+	tools := t.TempDir()
+	fakeTimeout := filepath.Join(tools, "timeout")
+	if err := os.WriteFile(fakeTimeout, []byte("#!/bin/sh\nexit 37\n"), 0o700); err != nil {
+		t.Fatalf("write fake timeout: %v", err)
+	}
+	repository, err := filepath.Abs(repositoryRoot)
+	if err != nil {
+		t.Fatalf("resolve repository root: %v", err)
+	}
+	command := exec.Command(filepath.Join(repository, "scripts/check-fieldalignment.sh"))
+	command.Dir = repository
+	command.Env = append(os.Environ(), "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"))
+	err = command.Run()
+	exitError, ok := err.(*exec.ExitError)
+	if !ok || exitError.ExitCode() != 37 {
+		t.Fatalf("field-alignment gate error = %v, want exit code 37", err)
 	}
 }

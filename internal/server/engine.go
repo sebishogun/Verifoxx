@@ -16,6 +16,7 @@ import (
 	"github.com/sebishogun/verifoxx/internal/persistence"
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/result"
+	"github.com/sebishogun/verifoxx/internal/scheduler"
 	"github.com/sebishogun/verifoxx/internal/security"
 	"github.com/sebishogun/verifoxx/internal/service"
 )
@@ -47,8 +48,7 @@ type auditJournal interface {
 	Submit(context.Context, *persistence.AuditBatch) error
 }
 
-// EngineConfig binds immutable publication dependencies and preallocated
-// sequential evaluator workspaces.
+// EngineConfig binds immutable publication dependencies and bounded workspaces.
 type EngineConfig struct {
 	Registry      *program.Registry
 	Publisher     *persistence.Publisher
@@ -60,15 +60,15 @@ type EngineConfig struct {
 	AuditMode     persistence.AuditMode
 	Limits        security.Limits
 	Workers       int
+	QueueDepth    int
 }
 
 type engineWorker struct {
-	results  result.Batch
-	executor eval.Executor
-	encoder  jsonresult.Encoder
-	builder  eval.Builder
-	audit    persistence.AuditBatch
-	decoder  jsonbatch.Decoder
+	results result.Batch
+	encoder jsonresult.Encoder
+	builder eval.Builder
+	audit   persistence.AuditBatch
+	decoder jsonbatch.Decoder
 }
 
 // Engine implements the transport-independent PolicyAPI with a fixed worker
@@ -79,6 +79,7 @@ type Engine struct {
 	journal        auditJournal
 	metrics        *observability.Metrics
 	health         func(context.Context) error
+	scheduler      *scheduler.Scheduler
 	workers        chan *engineWorker
 	versions       map[[32]byte]persistence.PolicyVersionID
 	engineVersion  string
@@ -95,7 +96,7 @@ type Engine struct {
 func NewEngine(config EngineConfig) (*Engine, error) {
 	if config.Registry == nil || config.Publisher == nil || config.Journal == nil || config.Metrics == nil ||
 		config.Health == nil || config.EngineVersion == "" || !config.AuditMode.Valid() ||
-		config.Workers <= 0 || config.Workers > maxEngineWorkers || config.Limits.Validate() != nil {
+		config.Workers <= 0 || config.Workers > maxEngineWorkers || config.QueueDepth <= 0 || config.Limits.Validate() != nil {
 		return nil, ErrInvalidRuntime
 	}
 	engine := &Engine{
@@ -116,6 +117,16 @@ func NewEngine(config EngineConfig) (*Engine, error) {
 		}
 		engine.workers <- worker
 	}
+	queueDepth := min(config.QueueDepth, config.Workers)
+	evaluationScheduler, err := scheduler.NewScheduler(scheduler.Config{
+		Capacity:   scheduler.Capacity{Rows: config.Limits.MaxBatchRows},
+		Workers:    config.Workers,
+		QueueDepth: queueDepth,
+	})
+	if err != nil {
+		return nil, ErrInvalidRuntime
+	}
+	engine.scheduler = evaluationScheduler
 	return engine, nil
 }
 
@@ -207,7 +218,10 @@ func (engine *Engine) EvaluateBatch(
 	if err != nil {
 		return nil, fmt.Errorf("%w: decode batch: %v", service.ErrInvalidRequest, err)
 	}
-	if err := worker.executor.Execute(&worker.results, compiled, batch); err != nil {
+	if err := engine.scheduler.Execute(ctx, &worker.results, compiled, batch); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("%w: evaluate batch: %v", service.ErrUnavailable, err)
 	}
 	if err := worker.encoder.Bind(compiled); err != nil {
@@ -258,9 +272,17 @@ func (engine *Engine) Health(ctx context.Context) error {
 	return nil
 }
 
+// Close rejects new evaluation work and joins the fixed scheduler workers.
+func (engine *Engine) Close(ctx context.Context) error {
+	if engine == nil || engine.scheduler == nil {
+		return ErrInvalidRuntime
+	}
+	return engine.scheduler.CloseContext(ctx)
+}
+
 func (engine *Engine) valid() bool {
 	return engine != nil && engine.publisher != nil && engine.registry != nil && engine.journal != nil &&
-		engine.metrics != nil && engine.health != nil && engine.workers != nil && cap(engine.workers) > 0 &&
+		engine.metrics != nil && engine.health != nil && engine.scheduler != nil && engine.workers != nil && cap(engine.workers) > 0 &&
 		engine.engineVersion != "" && engine.maxPolicyBytes > 0 && engine.maxOutputBytes > 0 && engine.auditMode.Valid()
 }
 

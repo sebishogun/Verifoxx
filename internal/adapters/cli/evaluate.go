@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"context"
 	"errors"
+	"runtime"
 
 	"github.com/spf13/cobra"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/sebishogun/verifoxx/internal/eval"
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/result"
+	"github.com/sebishogun/verifoxx/internal/scheduler"
 	"github.com/sebishogun/verifoxx/internal/schema"
 	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
 )
@@ -70,6 +73,7 @@ type decodedPolicy struct {
 
 type engine struct {
 	policyBuilder *ast.Builder
+	scheduler     *scheduler.Scheduler
 	policyDecoder jsonpolicy.Decoder
 	validator     compile.Validator
 	diagnostics   []compile.Diagnostic
@@ -101,9 +105,16 @@ func newEvaluateCommand(deps dependencies) *cobra.Command {
 			if err != nil {
 				return operationalError(err)
 			}
-			decisions, err := engine.evaluate(compiled, batch)
+			decisions, err := engine.evaluateScheduled(cmd.Context(), compiled, batch)
+			closeErr := engine.closeScheduler()
 			if err != nil {
+				if closeErr != nil {
+					err = errors.Join(err, pipelineFailure("close scheduler", closeErr))
+				}
 				return operationalError(err)
+			}
+			if closeErr != nil {
+				return operationalError(pipelineFailure("close scheduler", closeErr))
 			}
 			var encoder jsonresult.Encoder
 			if err := encoder.Bind(compiled); err != nil {
@@ -168,4 +179,56 @@ func (e *engine) evaluate(p *program.Program, batch eval.Batch) (*result.Batch, 
 		return nil, pipelineFailure("evaluate", err)
 	}
 	return &e.results, nil
+}
+
+func (e *engine) evaluateScheduled(ctx context.Context, p *program.Program, batch eval.Batch) (*result.Batch, error) {
+	if ctx == nil {
+		return nil, pipelineFailure("evaluate", scheduler.ErrInvalidContext)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if e.scheduler == nil {
+		workers := cliSchedulerWorkers(batch.Rows, runtime.GOMAXPROCS(0))
+		created, err := scheduler.NewScheduler(scheduler.Config{
+			Capacity:   scheduler.Capacity{Rows: batch.Rows},
+			Workers:    workers,
+			QueueDepth: 1,
+		})
+		if err != nil {
+			return nil, pipelineFailure("evaluate", err)
+		}
+		e.scheduler = created
+	}
+	if err := e.scheduler.Execute(ctx, &e.results, p, batch); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		return nil, pipelineFailure("evaluate", err)
+	}
+	return &e.results, nil
+}
+
+func (e *engine) closeScheduler() error {
+	if e.scheduler == nil {
+		return nil
+	}
+	return e.scheduler.Close()
+}
+
+func cliSchedulerWorkers(rows uint32, workers int) int {
+	if rows < scheduler.DefaultParallelRows {
+		return 1
+	}
+	if workers > 256 {
+		workers = 256
+	}
+	words := int((uint64(rows) + 63) >> 6)
+	if workers > words {
+		workers = words
+	}
+	if workers < 1 {
+		return 1
+	}
+	return workers
 }

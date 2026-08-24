@@ -416,7 +416,8 @@ go test -timeout 120s -run='^$' -bench='^BenchmarkEvaluateFactIndex$' -benchmem 
 
 ## Fixed Worker Scheduler
 
-Measured on the same host with the compiled Verifoxx policy, repeated canonical
+Measured on 2026-08-24 with Go 1.27.0 on Linux/amd64, the AMD Ryzen AI MAX+ 395,
+and the `avx512` tier. The fixture uses the compiled Verifoxx policy, canonical
 request/evidence rows, fixed worker goroutines, private shard results, and the
 complete deterministic CSR merge. Values are the minimum of six runs after
 priming every worker context and result slot. Every case reported `0 B/op` and
@@ -424,30 +425,60 @@ priming every worker context and result slot. Every case reported `0 B/op` and
 
 | Rows | Workers | Direct ns/op | Scheduled serial ns/op | Parallel ns/op | Parallel gain |
 |---:|---:|---:|---:|---:|---:|
-| 64 | 2 | 13,229 | 15,113 | 15,156 | 0.87x |
-| 64 | 4 | 13,304 | 15,310 | 15,253 | 0.87x |
-| 256 | 2 | 51,427 | 56,928 | 37,725 | 1.36x |
-| 256 | 4 | 51,206 | 57,449 | 30,688 | 1.67x |
-| 1,024 | 2 | 208,948 | 238,708 | 150,399 | 1.39x |
-| 1,024 | 4 | 221,676 | 245,854 | 107,084 | 2.07x |
-| 4,096 | 2 | 850,500 | 958,337 | 594,163 | 1.43x |
-| 4,096 | 4 | 873,927 | 949,407 | 425,001 | 2.06x |
-| 16,384 | 2 | 3,596,793 | 4,012,004 | 2,483,113 | 1.45x |
-| 16,384 | 4 | 3,650,272 | 4,207,342 | 1,459,117 | 2.50x |
+| 64 | 2 | 7,320 | 8,101 | 8,028 | 0.91x |
+| 64 | 4 | 7,344 | 8,147 | 8,105 | 0.91x |
+| 256 | 2 | 28,239 | 30,095 | 23,067 | 1.22x |
+| 256 | 4 | 28,056 | 30,075 | 21,151 | 1.33x |
+| 1,024 | 2 | 111,611 | 114,648 | 73,397 | 1.52x |
+| 1,024 | 4 | 110,983 | 115,496 | 53,916 | 2.06x |
+| 4,096 | 2 | 446,092 | 458,454 | 263,178 | 1.69x |
+| 4,096 | 4 | 446,363 | 459,048 | 196,855 | 2.27x |
+| 16,384 | 2 | 1,873,008 | 1,924,542 | 1,098,167 | 1.71x |
+| 16,384 | 4 | 1,917,032 | 1,930,397 | 771,831 | 2.48x |
 
 Automatic scheduling starts at 256 rows. At that boundary the slowest
-two-worker parallel sample was 44,050 ns/op, below the fastest corresponding
-direct sample at 51,427 ns/op. The 64-row parallel range was slower than direct
+two-worker parallel sample was 24,748 ns/op, below the fastest corresponding
+direct sample at 28,239 ns/op. The 64-row scheduled range was slower than direct
 execution in all six samples. One-worker scheduling remains the direct caller
 path; `ParallelRows` can override the default for tests and controlled tuning.
 Every non-final shard starts and ends on a 64-row bitset boundary; only the
 final shard may end in a partial word.
 
+The service owns one process-lifetime scheduler. Request workspaces retain
+decoder, batch, encoder, result, and audit storage, but all ordinary evaluation
+shares the scheduler's fixed worker and token budget rather than starting a
+nested worker set. The standalone `evaluate` command uses one command-lifetime
+scheduler; debugger execution stays serial and deterministic.
+
 Measurement command:
 
 ```bash
-go test -timeout 120s -run='^$' -bench='^BenchmarkScheduler$' -benchmem -benchtime=300ms -count=6 ./internal/scheduler
+timeout 240s go test -run='^$' -bench='^BenchmarkScheduler$' -benchmem -benchtime=300ms -count=6 -timeout=180s ./internal/scheduler
 ```
+
+### Offline Product Benchmark
+
+`verifoxx bench` compiles and decodes only the embedded fixture, repeats it into
+an exact typed batch, verifies scheduled output against direct evaluation, and
+primes every fixed worker context and admission state before measuring. It
+accepts only bounded shape flags and does not expose a service endpoint or
+accept policy, request, evidence, or stdin payloads. The JSON fields are `rows`,
+`policy_nodes`, `evidence_records`,
+`evidence_refs`, `iterations`, `execution_mode`, `simd_tier`, `workers`,
+`elapsed_ns`, `rows_per_second`, `allocated_bytes`, and `allocations`.
+
+One 2026-08-24 run on the host above reported:
+
+```bash
+timeout 120s go run ./cmd/verifoxx bench --rows 4096 --iterations 100 --workers 4
+```
+
+```json
+{"rows":4096,"policy_nodes":14,"evidence_records":4,"evidence_refs":8192,"iterations":100,"execution_mode":"parallel","simd_tier":"avx512","workers":4,"elapsed_ns":41748013,"rows_per_second":9811245,"allocated_bytes":0,"allocations":0}
+```
+
+This is an illustrative bounded product run, not an A/B comparison. Use the Go
+benchmark and interleaved workflow above for performance-change claims.
 
 ## Explanation Materialization
 
@@ -482,8 +513,9 @@ go test -run='^$' -bench='Encode' -benchmem -benchtime=500ms -count=6 -timeout 9
 
 ## Product CLI Cold Path
 
-Measured on 2026-08-23 on the same host and `avx512` runtime tier. These
-benchmarks intentionally rebuild the policy Program and decode the canonical
+Measured on 2026-08-23 on the same host and `avx512` runtime tier; the scheduled
+`evaluate` row was refreshed on 2026-08-24. These benchmarks intentionally
+rebuild the policy Program and decode the canonical
 five-row batch on every iteration; they are cold adapter measurements, not the
 zero-allocation steady-state evaluator contract.
 
@@ -491,7 +523,7 @@ zero-allocation steady-state evaluator contract.
 |---|---:|---:|---:|---:|
 | demo pipeline, excluding Cobra | 85,476 | 219.43 | 124,824 | 701 |
 | complete `verifoxx demo` command | 106,525 | 176.07 | 166,393 | 849 |
-| complete `verifoxx evaluate` command | 98,467 | 190.48 | 181,578 | 827 |
+| complete `verifoxx evaluate` command | 131,241 | 142.91 | 201,432 | 981 |
 
 The demo compiles one immutable Program, decodes one SoA batch, evaluates the
 five baseline rows, materializes their explanations, then compacts and

@@ -14,8 +14,14 @@ service admission slots (fixed QueueDepth)
        |
        v
 engine workers (fixed Workers)
-  decoder | batch builder | evaluator | result | encoder | audit scratch
+  decoder | batch builder
        |
+       v
+process scheduler (fixed Workers)
+  global work tokens -> private evaluator scratch + shard result
+       |
+       v
+engine worker result | encoder | audit scratch
        +---------------------> response
        |
        v
@@ -29,13 +35,14 @@ become shared state and are returned as one lifetime group.
 
 ## Evaluation Workers
 
-`server.Engine` creates `Workers` complete workspaces before serving. A request
-waits on the worker channel under its request deadline, executes serially in
-that workspace, then returns it. This provides service-level parallelism
-without a decoder, result, or audit allocation per concurrent request.
+`server.Engine` creates `Workers` request workspaces and one process-lifetime
+scheduler before serving. A request waits on the workspace channel under its
+deadline, decodes there, submits its typed batch to the shared scheduler,
+encodes and audits the merged result, then returns the workspace. This bounds
+decoder, result, and audit storage without creating evaluator goroutines per
+request.
 
-The reusable [`scheduler.Scheduler`](../internal/scheduler/scheduler.go) is a
-separate bulk execution component. It owns:
+The reusable [`scheduler.Scheduler`](../internal/scheduler/scheduler.go) owns:
 
 - a fixed worker goroutine set;
 - one preallocated batch-state slab per queue position;
@@ -45,8 +52,10 @@ separate bulk execution component. It owns:
 
 Automatic row sharding starts at 256 rows. Non-final shards begin and end at
 64-row bitmap boundaries. One-worker and smaller-batch execution stay on the
-direct path. The database-backed server currently uses fixed engine workers and
-does not nest the row scheduler inside each request.
+serial scheduler path. Concurrent requests share one global worker-token budget,
+so scheduler shards cannot multiply beyond `Workers`. The standalone `evaluate`
+command creates one bounded command-lifetime scheduler; deterministic debugger,
+demo, simulation, explanation, TUI, and graph execution remain serial.
 
 ## Lock Table
 
@@ -61,6 +70,7 @@ does not nest the row scheduler inside each request.
 | admission `Service.mu` | `sync.Mutex` | accepting, queued, and active counters | request boundary only |
 | admission slots | atomics plus bounded channel | generation-stamped capacity ownership | no allocation while waiting |
 | scheduler context | atomics plus bounded channel | lease generation and output claim | ownership checks only |
+| scheduler stats | two atomic counters | serial and parallel batch dispatch | one increment per batch |
 | journal | channels, atomics, `sync.Once` | slot transfer, counters, one shutdown | one batch submission |
 | lifecycle | `sync.Once` and atomic started flag | one shutdown sequence | shutdown only |
 | debug session | actor command channel | all retained semantic state | debug build only |
@@ -88,19 +98,22 @@ acquires either publication mutex. `Engine.versionMu` is not held while waiting
 for an engine worker, evaluating, encoding, or writing an audit record.
 
 Admission accounting is independent of engine-worker and journal channels. A
-request may wait in that order, but no return path acquires them in reverse:
-the journal copies a complete audit batch before submission returns, the engine
-worker is returned, and the adapter finally releases admission.
+request may wait for an engine workspace, scheduler admission and tokens, then
+the journal, but no return path acquires them in reverse: the journal copies a
+complete audit batch before submission returns, the engine worker is returned,
+and the adapter finally releases admission.
 
 ## Backpressure
 
-Three independent bounds prevent goroutine-driven memory growth:
+Four independent bounds prevent goroutine-driven memory growth:
 
 1. `QueueDepth` creates that many active admission slots and permits at most the
    same number of additional queued callers; a full waiting budget returns
    `service busy`.
-2. `Workers` bounds complete mutable evaluation workspaces.
-3. `AuditQueueDepth` bounds admitted PostgreSQL audit slots, including active
+2. `Workers` bounds complete mutable request workspaces.
+3. The scheduler admits at most `min(QueueDepth, Workers)` batches and grants at
+   most `Workers` shard tokens across all requests.
+4. `AuditQueueDepth` bounds admitted PostgreSQL audit slots, including active
    writes.
 
 Required audit mode waits for a journal slot and commit under the request
@@ -110,10 +123,11 @@ and returns the evaluation result. Off mode starts no journal goroutines.
 ## Cancellation
 
 HTTP and gRPC create a per-call deadline before admission. Cancellation wakes
-admission and engine-worker waits. Once an engine worker begins decoding, the
-current evaluator runs that bounded batch to completion rather than checking
-the context per row or instruction. The deadline still governs required audit
-submission. Once a PostgreSQL transaction has begun, commit and rollback use
+admission, engine-workspace, scheduler-admission, and scheduler-token waits.
+Each shard checks cancellation before entering its executor; an in-flight shard
+runs its bounded evaluator call to completion rather than checking per row or
+instruction. The deadline still governs required audit submission. Once a
+PostgreSQL transaction has begun, commit and rollback use
 short contexts derived with `context.WithoutCancel` so the storage boundary
 reaches a known state after client cancellation.
 
@@ -131,7 +145,7 @@ The lifecycle performs one bounded sequence:
 3. close and drain the audit journal;
 4. stop HTTP and gRPC sessions;
 5. close the PostgreSQL pool; and
-6. join any configured workers.
+6. close and join scheduler workers.
 
 A caller that stops waiting does not cancel the process-owned cleanup goroutine.
 See [operations](operations.md) for timeout configuration.

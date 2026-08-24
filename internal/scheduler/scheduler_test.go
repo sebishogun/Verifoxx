@@ -173,6 +173,9 @@ func TestScheduler(t *testing.T) {
 
 		var nilScheduler *Scheduler
 		var dst result.Batch
+		if got := nilScheduler.Stats(); got != (Stats{}) {
+			t.Fatalf("nil Stats = %+v, want zero", got)
+		}
 		if err := nilScheduler.Execute(context.Background(), &dst, p, base); !errors.Is(err, ErrInvalidScheduler) {
 			t.Fatalf("nil Execute error = %v", err)
 		}
@@ -227,10 +230,11 @@ func TestScheduler(t *testing.T) {
 	t.Run("automatic crossover", func(t *testing.T) {
 		scheduler := newTestScheduler(t, 4, 1, 0)
 		defer closeTestScheduler(t, scheduler)
+		before := scheduler.Stats()
 		for _, test := range []struct {
 			rows       uint32
 			wantShards int
-		}{{defaultParallelRows - 1, 1}, {defaultParallelRows, 4}, {defaultParallelRows + 1, 4}} {
+		}{{DefaultParallelRows - 1, 1}, {DefaultParallelRows, 4}, {DefaultParallelRows + 1, 4}} {
 			batch := repeatSchedulerBatch(t, p, base, test.rows)
 			var dst result.Batch
 			if err := scheduler.Execute(context.Background(), &dst, p, batch); err != nil {
@@ -239,6 +243,16 @@ func TestScheduler(t *testing.T) {
 			if got := scheduler.states[0].shardCount; got != test.wantShards {
 				t.Fatalf("rows=%d shards=%d, want %d", test.rows, got, test.wantShards)
 			}
+		}
+		after := scheduler.Stats()
+		if got := after.Executions - before.Executions; got != 3 {
+			t.Fatalf("execution delta = %d, want 3", got)
+		}
+		if got := after.Serial - before.Serial; got != 1 {
+			t.Fatalf("serial delta = %d, want 1", got)
+		}
+		if got := after.Parallel - before.Parallel; got != 2 {
+			t.Fatalf("parallel delta = %d, want 2", got)
 		}
 	})
 
@@ -287,6 +301,30 @@ func TestScheduler(t *testing.T) {
 		var dst result.Batch
 		if err := scheduler.Execute(preCanceled, &dst, p, base); !errors.Is(err, context.Canceled) {
 			t.Fatalf("pre-canceled error = %v", err)
+		}
+	})
+
+	t.Run("bounded close wait", func(t *testing.T) {
+		scheduler := newTestScheduler(t, 1, 1, 1)
+		held := <-scheduler.available
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- scheduler.CloseContext(ctx) }()
+		schedulerAwait(t, func() bool {
+			select {
+			case <-scheduler.stopping:
+				return true
+			default:
+				return false
+			}
+		})
+		cancel()
+		if err := <-done; !errors.Is(err, context.Canceled) {
+			t.Fatalf("CloseContext cancellation error = %v", err)
+		}
+		scheduler.available <- held
+		if err := scheduler.Close(); err != nil {
+			t.Fatalf("Close after canceled wait: %v", err)
 		}
 	})
 
@@ -414,6 +452,45 @@ func TestScheduler(t *testing.T) {
 		if err := scheduler.Execute(context.Background(), &dst, p, base); !errors.Is(err, ErrSchedulerClosed) {
 			t.Fatalf("Execute after Close error = %v", err)
 		}
+	})
+
+	t.Run("close drains active execution", func(t *testing.T) {
+		scheduler := newTestScheduler(t, 1, 1, 1)
+		lease, err := scheduler.arena.Borrow(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		batch := repeatSchedulerBatch(t, p, base, 64)
+		var got result.Batch
+		executeDone := make(chan error, 1)
+		go func() { executeDone <- scheduler.Execute(context.Background(), &got, p, batch) }()
+		schedulerAwait(t, func() bool {
+			return len(scheduler.available) == 0 && len(scheduler.workTokens) == 0
+		})
+
+		closeDone := make(chan error, 1)
+		go func() { closeDone <- scheduler.Close() }()
+		<-scheduler.stopping
+		select {
+		case err := <-closeDone:
+			t.Fatalf("Close returned before active execution drained: %v", err)
+		default:
+		}
+		if err := scheduler.arena.Return(lease); err != nil {
+			t.Fatal(err)
+		}
+		if err := <-executeDone; err != nil {
+			t.Fatalf("active Execute: %v", err)
+		}
+		if err := <-closeDone; err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+		var direct eval.Executor
+		var want result.Batch
+		if err := direct.Execute(&want, p, batch); err != nil {
+			t.Fatal(err)
+		}
+		assertSchedulerResult(t, got, want)
 	})
 }
 

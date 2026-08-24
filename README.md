@@ -46,11 +46,28 @@ Useful commands are:
 validate                 validate a policy document
 compile                  compile and summarize a policy
 evaluate                 evaluate a request batch as JSON
+bench                    benchmark deterministic offline evaluation
 explain R1               explain one request
 simulate R1 --set K=V    evaluate one bounded field override
 demo                     run evaluation and revision scenarios
 graph --output PATH      export the AST or Program semantic graph
 ```
+
+### Offline Benchmark
+
+Measure warmed scheduler execution with a deterministic typed batch generated
+from the embedded fixtures:
+
+```bash
+timeout 120s go run ./cmd/verifoxx bench --rows 4096 --iterations 100 --workers 4
+```
+
+`bench` accepts no policy, request, evidence, stdin, or network payload. Bounds
+are 1-65,536 rows, 1-100,000 iterations, and 1-256 workers. Its single JSON
+report includes workload shape, serial or parallel execution mode, SIMD tier,
+elapsed nanoseconds, rows per second, allocated bytes, and allocations. Fixture
+setup, direct-result verification, scheduler construction, and enough priming
+runs to warm every fixed context and admission state occur before measurement.
 
 ### Semantic Graph Export
 
@@ -178,11 +195,16 @@ Run the native test suite with explicit process and test deadlines:
 
 ```bash
 timeout 120s go test -count=1 -timeout 60s ./...
+timeout 300s ./scripts/check-fieldalignment.sh
 ```
 
 `./cli/devx` and the `Makefile` provide the same bounded build, test, database,
 debug, benchmark, and container workflows. Run `./cli/devx status` to see which
 optional tools are available.
+
+The field-alignment script is the local and CI production-layout gate. It pins
+the reviewed analyzer version and checks `internal`, `cmd`, and `policies`
+packages without automatically rewriting structs.
 
 See the one-page [design note](docs/design-note.md) for the semantic model and
 [AI usage disclosure](docs/ai-usage.md) for tool assistance.

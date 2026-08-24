@@ -16,7 +16,7 @@ jobs:
   native:
     name: Native runtime dispatch
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v6
@@ -27,6 +27,8 @@ jobs:
         run: timeout 180s go run ./cmd/devx test
       - name: Vet
         run: timeout 120s go vet ./...
+      - name: Check production field alignment
+        run: timeout 300s ./scripts/check-fieldalignment.sh
 
   purego:
     name: Pure-Go fallback

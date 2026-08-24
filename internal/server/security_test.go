@@ -151,8 +151,12 @@ func TestRuntimeSecurityLimitsKeepPolicyAndTransportBoundsIndependent(t *testing
 }
 
 func newSecurityTestEngine(t *testing.T, limits security.Limits) *Engine {
+	return newSecurityTestEngineWithWorkers(t, limits, 1)
+}
+
+func newSecurityTestEngineWithWorkers(t *testing.T, limits security.Limits, workers int) *Engine {
 	t.Helper()
-	engine := newSecurityTestEngineWithoutPolicy(t, limits)
+	engine := newSecurityTestEngineWithoutPolicyAndWorkers(t, limits, workers)
 	if _, err := engine.CompilePolicy(context.Background(), []byte(verifoxx.Source())); err != nil {
 		t.Fatalf("CompilePolicy() error = %v", err)
 	}
@@ -160,6 +164,10 @@ func newSecurityTestEngine(t *testing.T, limits security.Limits) *Engine {
 }
 
 func newSecurityTestEngineWithoutPolicy(t *testing.T, limits security.Limits) *Engine {
+	return newSecurityTestEngineWithoutPolicyAndWorkers(t, limits, 1)
+}
+
+func newSecurityTestEngineWithoutPolicyAndWorkers(t *testing.T, limits security.Limits, workers int) *Engine {
 	t.Helper()
 	store := &memoryPolicyStore{}
 	registry := &program.Registry{}
@@ -171,7 +179,7 @@ func newSecurityTestEngineWithoutPolicy(t *testing.T, limits security.Limits) *E
 	}
 	metrics, err := observability.NewMetrics(observability.MetricsConfig{
 		QueueDepth: func() uint64 { return 0 }, JournalFailures: func() uint64 { return 0 },
-		SIMDTier: simdops.Runtime().Tier, Workers: 1,
+		SIMDTier: simdops.Runtime().Tier, Workers: uint32(workers),
 	})
 	if err != nil {
 		t.Fatalf("NewMetrics() error = %v", err)
@@ -179,10 +187,15 @@ func newSecurityTestEngineWithoutPolicy(t *testing.T, limits security.Limits) *E
 	engine, err := NewEngine(EngineConfig{
 		Registry: registry, Publisher: publisher, Journal: &captureJournal{}, Metrics: metrics,
 		Health: func(context.Context) error { return nil }, EngineVersion: buildinfo.Version(),
-		AuditMode: persistence.AuditOff, Workers: 1, Limits: limits,
+		AuditMode: persistence.AuditOff, Workers: workers, QueueDepth: workers, Limits: limits,
 	})
 	if err != nil {
 		t.Fatalf("NewEngine() error = %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Errorf("Engine.Close() error = %v", err)
+		}
+	})
 	return engine
 }

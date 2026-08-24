@@ -206,11 +206,16 @@ func newFailureEngine(t *testing.T, mode persistence.AuditMode, journal *failure
 		AuditCapacity: persistence.AuditCapacity{
 			Bytes: 64 << 10, Requests: 16, Evidence: 32, Rows: 16, EvidenceLinks: 64,
 		},
-		Limits: security.DefaultLimits(), Workers: 1,
+		Limits: security.DefaultLimits(), Workers: 1, QueueDepth: 1,
 	})
 	if err != nil {
 		t.Fatalf("NewEngine() error = %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Errorf("Engine.Close() error = %v", err)
+		}
+	})
 	if _, err := engine.CompilePolicy(context.Background(), []byte(verifoxx.Source())); err != nil {
 		t.Fatalf("CompilePolicy(v1) error = %v", err)
 	}

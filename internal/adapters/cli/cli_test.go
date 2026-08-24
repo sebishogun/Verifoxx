@@ -2,8 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -253,6 +256,120 @@ func TestPipelineCompilesAndEvaluatesEmbeddedInputs(t *testing.T) {
 	}
 	if decisions.Rows != batch.Rows || len(decisions.OutcomeIDs) != int(batch.Rows) {
 		t.Fatalf("result shape = %d rows, %d outcomes", decisions.Rows, len(decisions.OutcomeIDs))
+	}
+}
+
+func TestPipelineScheduledEvaluation(t *testing.T) {
+	var direct engine
+	compiled, err := direct.compilePolicy([]byte(verifoxx.Source()))
+	if err != nil {
+		t.Fatalf("compilePolicy: %v", err)
+	}
+	batch, err := direct.decodeBatch(compiled, []byte(fixtures.RequestsJSON()), []byte(fixtures.EvidenceJSON()))
+	if err != nil {
+		t.Fatalf("decodeBatch: %v", err)
+	}
+	want, err := direct.evaluate(compiled, batch)
+	if err != nil {
+		t.Fatalf("direct evaluate: %v", err)
+	}
+
+	var scheduled engine
+	got, err := scheduled.evaluateScheduled(context.Background(), compiled, batch)
+	if err != nil {
+		t.Fatalf("evaluateScheduled: %v", err)
+	}
+	if !reflect.DeepEqual(*got, *want) {
+		t.Fatalf("scheduled result differs\ngot:  %+v\nwant: %+v", *got, *want)
+	}
+	stats := scheduled.scheduler.Stats()
+	if stats.Executions != 1 || stats.Serial != 1 || stats.Parallel != 0 {
+		t.Fatalf("scheduler stats = %+v, want one serial execution", stats)
+	}
+	if err := scheduled.closeScheduler(); err != nil {
+		t.Fatalf("closeScheduler: %v", err)
+	}
+	if err := scheduled.closeScheduler(); err != nil {
+		t.Fatalf("second closeScheduler: %v", err)
+	}
+}
+
+func TestPipelineScheduledParallelEvaluation(t *testing.T) {
+	previousProcs := runtime.GOMAXPROCS(2)
+	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
+	var fixture engine
+	compiled, err := fixture.compilePolicy([]byte(verifoxx.Source()))
+	if err != nil {
+		t.Fatalf("compilePolicy: %v", err)
+	}
+	base, err := fixture.decodeBatch(compiled, []byte(fixtures.RequestsJSON()), []byte(fixtures.EvidenceJSON()))
+	if err != nil {
+		t.Fatalf("decodeBatch: %v", err)
+	}
+	var builder eval.Builder
+	batch, err := repeatBenchmarkBatch(&builder, compiled, base, 256)
+	if err != nil {
+		t.Fatalf("repeatBenchmarkBatch: %v", err)
+	}
+	var direct engine
+	want, err := direct.evaluate(compiled, batch)
+	if err != nil {
+		t.Fatalf("direct evaluate: %v", err)
+	}
+	var scheduled engine
+	got, err := scheduled.evaluateScheduled(context.Background(), compiled, batch)
+	if err != nil {
+		t.Fatalf("evaluateScheduled: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := scheduled.closeScheduler(); err != nil {
+			t.Errorf("closeScheduler: %v", err)
+		}
+	})
+	if !reflect.DeepEqual(*got, *want) {
+		t.Fatalf("parallel scheduled result differs\ngot:  %+v\nwant: %+v", *got, *want)
+	}
+	stats := scheduled.scheduler.Stats()
+	if stats.Executions != 1 || stats.Serial != 0 || stats.Parallel != 1 {
+		t.Fatalf("scheduler stats = %+v, want one parallel execution", stats)
+	}
+}
+
+func TestPipelineScheduledCancellation(t *testing.T) {
+	var pipeline engine
+	compiled, err := pipeline.compilePolicy([]byte(verifoxx.Source()))
+	if err != nil {
+		t.Fatalf("compilePolicy: %v", err)
+	}
+	batch, err := pipeline.decodeBatch(compiled, []byte(fixtures.RequestsJSON()), []byte(fixtures.EvidenceJSON()))
+	if err != nil {
+		t.Fatalf("decodeBatch: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := pipeline.evaluateScheduled(ctx, compiled, batch); !errors.Is(err, context.Canceled) {
+		t.Fatalf("evaluateScheduled cancellation error = %v", err)
+	}
+	if pipeline.scheduler != nil {
+		t.Fatal("pre-canceled evaluation constructed a scheduler")
+	}
+}
+
+func TestCLISchedulerWorkers(t *testing.T) {
+	for _, test := range []struct {
+		rows      uint32
+		available int
+		want      int
+	}{
+		{0, 8, 1},
+		{255, 8, 1},
+		{256, 8, 4},
+		{257, 2, 2},
+		{65536, 300, 256},
+	} {
+		if got := cliSchedulerWorkers(test.rows, test.available); got != test.want {
+			t.Fatalf("cliSchedulerWorkers(%d, %d) = %d, want %d", test.rows, test.available, got, test.want)
+		}
 	}
 }
 

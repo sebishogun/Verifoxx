@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	"github.com/sebishogun/verifoxx/internal/eval"
 	"github.com/sebishogun/verifoxx/internal/program"
@@ -17,9 +18,9 @@ var (
 	ErrSchedulerClosed = errors.New("scheduler: closed")
 )
 
-// defaultParallelRows is the first complete-evaluator crossover measured with
+// DefaultParallelRows is the first complete-evaluator crossover measured with
 // the weakest supported multiworker configuration.
-const defaultParallelRows uint32 = 256
+const DefaultParallelRows uint32 = 256
 
 // Config fixes all scheduler concurrency and reusable storage at construction.
 type Config struct {
@@ -27,6 +28,13 @@ type Config struct {
 	Workers      int
 	QueueDepth   int
 	ParallelRows uint32
+}
+
+// Stats is an aggregate snapshot of dispatched scheduler work.
+type Stats struct {
+	Executions uint64
+	Serial     uint64
+	Parallel   uint64
 }
 
 type batchState struct {
@@ -55,10 +63,22 @@ type Scheduler struct {
 	closed       chan struct{}
 	states       []batchState
 	workerDone   sync.WaitGroup
+	serial       atomic.Uint64
+	parallel     atomic.Uint64
 	workers      int
 	queueDepth   int
 	closeOnce    sync.Once
 	parallelRows uint32
+}
+
+// Stats returns a lock-free aggregate execution snapshot.
+func (scheduler *Scheduler) Stats() Stats {
+	if scheduler == nil {
+		return Stats{}
+	}
+	serial := scheduler.serial.Load()
+	parallel := scheduler.parallel.Load()
+	return Stats{Executions: serial + parallel, Serial: serial, Parallel: parallel}
 }
 
 // NewScheduler allocates all worker, admission, and shard bookkeeping storage.
@@ -192,8 +212,10 @@ reserve:
 	state.done.Add(len(ranges))
 
 	if len(ranges) == 1 {
+		scheduler.serial.Add(1)
 		scheduler.runShard(state, 0)
 	} else {
+		scheduler.parallel.Add(1)
 		submitted := 0
 		for ; submitted < len(ranges); submitted++ {
 			select {
@@ -229,10 +251,29 @@ reserve:
 	return err
 }
 
+// Prime executes enough sequential batches to warm every fixed worker context
+// and admission state before a caller starts measuring steady-state work.
+func (scheduler *Scheduler) Prime(
+	ctx context.Context,
+	dst *result.Batch,
+	p *program.Program,
+	batch eval.Batch,
+) error {
+	if !scheduler.valid() {
+		return ErrInvalidScheduler
+	}
+	for range max(scheduler.workers, scheduler.queueDepth) {
+		if err := scheduler.Execute(ctx, dst, p, batch); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (scheduler *Scheduler) desiredShards(rows uint32) int {
 	threshold := scheduler.parallelRows
 	if threshold == 0 {
-		threshold = defaultParallelRows
+		threshold = DefaultParallelRows
 	}
 	if rows == 0 || threshold == 0 || rows < threshold {
 		return 1
@@ -246,18 +287,34 @@ func (scheduler *Scheduler) desiredShards(rows uint32) int {
 
 // Close rejects new admissions, drains admitted calls, and joins all workers.
 func (scheduler *Scheduler) Close() error {
+	return scheduler.CloseContext(context.Background())
+}
+
+// CloseContext starts shutdown once and waits for completion or cancellation.
+func (scheduler *Scheduler) CloseContext(ctx context.Context) error {
 	if !scheduler.valid() {
 		return ErrInvalidScheduler
 	}
+	if ctx == nil {
+		return ErrInvalidContext
+	}
 	scheduler.closeOnce.Do(func() {
 		close(scheduler.stopping)
-		for range scheduler.states {
-			<-scheduler.available
-		}
-		close(scheduler.jobs)
-		scheduler.workerDone.Wait()
-		close(scheduler.closed)
+		go scheduler.shutdown()
 	})
-	<-scheduler.closed
-	return nil
+	select {
+	case <-scheduler.closed:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (scheduler *Scheduler) shutdown() {
+	for range scheduler.states {
+		<-scheduler.available
+	}
+	close(scheduler.jobs)
+	scheduler.workerDone.Wait()
+	close(scheduler.closed)
 }
