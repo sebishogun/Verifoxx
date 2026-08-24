@@ -23,6 +23,7 @@ type dependencies struct {
 	migrationHealth func(context.Context) error
 	serve           func(context.Context) error
 	healthcheck     func(context.Context) error
+	runTUI          func(context.Context, string, sources, io.Reader, io.Writer) error
 	policy          string
 	requests        string
 	evidence        string
@@ -60,6 +61,7 @@ func productionDependencies() dependencies {
 			}
 			return server.Healthcheck(ctx, cfg)
 		},
+		runTUI:   runSemanticTUI,
 		policy:   verifoxx.Source(),
 		requests: fixtures.RequestsJSON(),
 		evidence: fixtures.EvidenceJSON(),
@@ -235,6 +237,7 @@ func newRoot(stdout, stderr io.Writer, deps dependencies) *cobra.Command {
 		newExplainCommand(deps),
 		newSimulateCommand(deps),
 		newDemoCommand(deps),
+		newTUICommand(deps),
 		newDebugWorkerCommand(deps),
 		newMigrationCommand(deps),
 		newMigrationHealthCommand(deps),
