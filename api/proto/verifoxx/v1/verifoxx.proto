@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package verifoxx.v1;
+
+option go_package = "github.com/sebishogun/verifoxx/api/gen/verifoxx/v1;verifoxxv1";
+
+service PolicyService {
+  rpc ValidatePolicy(ValidatePolicyRequest) returns (ValidatePolicyResponse);
+  rpc CompilePolicy(CompilePolicyRequest) returns (CompilePolicyResponse);
+  rpc EvaluateBatch(EvaluateBatchRequest) returns (EvaluateBatchResponse);
+  rpc EvaluateStream(stream EvaluateStreamRequest) returns (stream EvaluateStreamResponse);
+}
+
+message ValidatePolicyRequest {
+  bytes source_json = 1;
+}
+
+message ValidatePolicyResponse {
+  bool valid = 1;
+  repeated Diagnostic diagnostics = 2;
+}
+
+message CompilePolicyRequest {
+  bytes source_json = 1;
+}
+
+message CompilePolicyResponse {
+  PolicyMetadata policy = 1;
+}
+
+message EvaluateBatchRequest {
+  bytes requests_json = 1;
+  bytes evidence_json = 2;
+  // Empty selects the active policy; otherwise this is the raw 32-byte SHA-256.
+  bytes policy_sha256 = 3;
+}
+
+message EvaluateBatchResponse {
+  // result_json is one complete canonical Verifoxx result document.
+  bytes result_json = 1;
+}
+
+message EvaluateStreamRequest {
+  bytes requests_json = 1;
+  bytes evidence_json = 2;
+  // Empty selects the active policy; otherwise this is the raw 32-byte SHA-256.
+  bytes policy_sha256 = 3;
+}
+
+message EvaluateStreamResponse {
+  // result_json is one complete canonical Verifoxx result document.
+  bytes result_json = 1;
+}
+
+message PolicyMetadata {
+  string name = 1;
+  string version = 2;
+  bytes sha256 = 3;
+  uint32 instructions = 4;
+  uint32 requirements = 5;
+  uint32 clauses = 6;
+}
+
+message Diagnostic {
+  string code = 1;
+  string table = 2;
+  string member = 3;
+  uint32 row = 4;
+  DiagnosticSpan span = 5;
+  DiagnosticIDs ids = 6;
+}
+
+message DiagnosticSpan {
+  // Span offsets form a half-open byte range in the retained policy source.
+  uint32 start = 1;
+  uint32 end = 2;
+}
+
+message DiagnosticIDs {
+  // Every zero ID is absent; nonzero IDs use the core's one-based namespace.
+  uint32 node = 1;
+  uint32 clause = 2;
+  uint32 requirement = 3;
+  uint32 field = 4;
+  uint32 value = 5;
+  uint32 outcome = 6;
+  uint32 remediation = 7;
+  uint32 evidence_kind = 8;
+  uint32 evidence_state = 9;
+}
