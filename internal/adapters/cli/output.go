@@ -3,12 +3,10 @@ package cli
 import (
 	"io"
 	"strconv"
-	"unicode/utf8"
 
+	"github.com/sebishogun/verifoxx/internal/adapters/wire"
 	"github.com/sebishogun/verifoxx/internal/compile"
 )
-
-const outputLowerHex = "0123456789abcdef"
 
 func writeComplete(w io.Writer, data []byte) error {
 	if w == nil {
@@ -22,63 +20,11 @@ func writeComplete(w io.Writer, data []byte) error {
 }
 
 func appendOutputString(dst, value []byte) []byte {
-	dst = append(dst, '"')
-	start := 0
-	for i := 0; i < len(value); {
-		c := value[i]
-		if c < utf8.RuneSelf {
-			if c >= 0x20 && c != '\\' && c != '"' && c != '<' && c != '>' && c != '&' {
-				i++
-				continue
-			}
-			dst = append(dst, value[start:i]...)
-			switch c {
-			case '\\', '"':
-				dst = append(dst, '\\', c)
-			case '\b':
-				dst = append(dst, '\\', 'b')
-			case '\f':
-				dst = append(dst, '\\', 'f')
-			case '\n':
-				dst = append(dst, '\\', 'n')
-			case '\r':
-				dst = append(dst, '\\', 'r')
-			case '\t':
-				dst = append(dst, '\\', 't')
-			default:
-				dst = append(dst, '\\', 'u', '0', '0', outputLowerHex[c>>4], outputLowerHex[c&0xf])
-			}
-			i++
-			start = i
-			continue
-		}
-
-		r, size := utf8.DecodeRune(value[i:])
-		if r == utf8.RuneError && size == 1 {
-			dst = append(dst, value[start:i]...)
-			dst = append(dst, '\\', 'u', 'f', 'f', 'f', 'd')
-			i++
-			start = i
-			continue
-		}
-		if r == '\u2028' || r == '\u2029' {
-			dst = append(dst, value[start:i]...)
-			dst = append(dst, '\\', 'u', '2', '0', '2', outputLowerHex[byte(r)&0xf])
-			i += size
-			start = i
-			continue
-		}
-		i += size
-	}
-	dst = append(dst, value[start:]...)
-	return append(dst, '"')
+	return wire.AppendJSONString(dst, value)
 }
 
 func appendOutputHash(dst []byte, hash [32]byte) []byte {
-	for _, value := range hash {
-		dst = append(dst, outputLowerHex[value>>4], outputLowerHex[value&0xf])
-	}
-	return dst
+	return wire.AppendSHA256(dst, hash)
 }
 
 func appendDiagnostics(dst []byte, diagnostics []compile.Diagnostic) []byte {

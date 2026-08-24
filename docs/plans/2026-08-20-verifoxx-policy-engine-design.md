@@ -25,6 +25,7 @@ The working rules are:
 6. Parallelize only after work per shard exceeds coordination cost. Shard on row and bitset boundaries, use private scratch and output, and merge once.
 7. Treat `sync.Pool` as a last resort. Prefer fixed worker ownership, explicit arenas, capacity hints, and caller-provided storage.
 8. Measure the resulting machine behavior. Use `-benchmem`, escape analysis, runtime dispatch checks, disassembly, instructions, cycles, and interleaved benchmark comparisons.
+9. Treat correctness as mandatory and measured performance as a coequal acceptance constraint after correctness. Retain local hot-path specialization when a shared abstraction causes a statistically significant regression, and compare linked consumers because code layout can amplify a helper's machine-code change.
 
 ## Abstract
 
@@ -91,6 +92,7 @@ The following criteria determine whether the design is acceptable.
 - Workers have private scratch and disjoint output.
 - Scalar, SIMD, parallel, and debug execution produce identical semantic results.
 - Performance claims require benchmark output and verified runtime dispatch.
+- Refactors that touch hot code require interleaved linked-binary comparison; source deduplication does not justify a statistically significant regression.
 
 ### 3.3 Operational criteria
 
@@ -117,6 +119,7 @@ The following criteria determine whether the design is acceptable.
 | Interactive UI | Bubble Tea semantic debugger | The TUI can expose policy structure, compiled instructions, evidence, masks, and outcomes in a terminal. |
 | Go debugger | Delve DAP | Neovim can own the standard DAP connection while the TUI uses a separate semantic channel. |
 | Developer tooling | Cobra plus Charmbracelet `huh` in `cmd/devx` | This provides testable command discovery and built-in fuzzy selection without an external `fzf` dependency. |
+| Hot helper reuse | Share only after linked-consumer A/B parity | Go inlining and linker placement can change downstream operation-cache and branch-predictor behavior even when semantic instructions and allocations are unchanged. |
 | Make | Thin wrapper over `devx` | Workflow logic remains testable Go code rather than duplicated shell recipes. |
 | Containers | Release Dockerfile, debug Dockerfile, and Compose | These provide reproducible standalone and full-service operation. |
 

@@ -4,8 +4,8 @@ package jsonresult
 import (
 	"errors"
 	"strconv"
-	"unicode/utf8"
 
+	"github.com/sebishogun/verifoxx/internal/adapters/wire"
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/result"
 	"github.com/sebishogun/verifoxx/internal/schema"
@@ -18,8 +18,6 @@ var (
 )
 
 const clauseExplanationBranchCount = 7
-
-const lowerHex = "0123456789abcdef"
 
 // Encoder retains borrowed immutable Program metadata and reusable explanation
 // storage. One Encoder belongs to one sequential worker and is not concurrent.
@@ -370,56 +368,7 @@ func materializedText(materialized *result.Materialized, text result.TextRange) 
 }
 
 func appendJSONString(dst, value []byte) []byte {
-	dst = append(dst, '"')
-	start := 0
-	for i := 0; i < len(value); {
-		c := value[i]
-		if c < utf8.RuneSelf {
-			if c >= 0x20 && c != '\\' && c != '"' && c != '<' && c != '>' && c != '&' {
-				i++
-				continue
-			}
-			dst = append(dst, value[start:i]...)
-			switch c {
-			case '\\', '"':
-				dst = append(dst, '\\', c)
-			case '\b':
-				dst = append(dst, '\\', 'b')
-			case '\f':
-				dst = append(dst, '\\', 'f')
-			case '\n':
-				dst = append(dst, '\\', 'n')
-			case '\r':
-				dst = append(dst, '\\', 'r')
-			case '\t':
-				dst = append(dst, '\\', 't')
-			default:
-				dst = append(dst, '\\', 'u', '0', '0', lowerHex[c>>4], lowerHex[c&0xf])
-			}
-			i++
-			start = i
-			continue
-		}
-
-		r, size := utf8.DecodeRune(value[i:])
-		if r == utf8.RuneError && size == 1 {
-			dst = append(dst, value[start:i]...)
-			dst = append(dst, '\\', 'u', 'f', 'f', 'f', 'd')
-			i++
-			start = i
-			continue
-		}
-		if r == '\u2028' || r == '\u2029' {
-			dst = append(dst, value[start:i]...)
-			dst = append(dst, '\\', 'u', '2', '0', '2', lowerHex[byte(r)&0xf])
-			i += size
-			start = i
-			continue
-		}
-		i += size
-	}
-	dst = append(dst, value[start:]...)
-	return append(dst, '"')
+	return wire.AppendJSONString(dst, value)
 }
 
 func appendPrefixedID(dst []byte, prefix byte, id uint32) []byte {
@@ -434,8 +383,5 @@ func appendQuotedPrefixedID(dst []byte, prefix byte, id uint32) []byte {
 }
 
 func appendHash(dst []byte, hash [32]byte) []byte {
-	for _, value := range hash {
-		dst = append(dst, lowerHex[value>>4], lowerHex[value&0xf])
-	}
-	return dst
+	return wire.AppendSHA256(dst, hash)
 }

@@ -60,9 +60,9 @@ func (c ErrorCode) String() string {
 // position where the problem was detected and always lies within the source
 // bounds, except for a source-limit rejection, where it is the limit itself.
 type Error struct {
-	Code    ErrorCode
-	Offset  int
 	Message string
+	Offset  int
+	Code    ErrorCode
 }
 
 func (e *Error) Error() string {

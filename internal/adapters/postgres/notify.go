@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/sebishogun/verifoxx/internal/adapters/wire"
 	"github.com/sebishogun/verifoxx/internal/persistence"
 	"github.com/sebishogun/verifoxx/internal/program"
 )
@@ -208,30 +209,5 @@ func policyNotificationChannel(policyName string) string {
 }
 
 func decodePolicyNotificationHash(payload string) ([sha256.Size]byte, bool) {
-	var hash [sha256.Size]byte
-	if len(payload) != sha256.Size*2 {
-		return hash, false
-	}
-	for index := range hash {
-		high, highOK := decodeHexNibble(payload[index*2])
-		low, lowOK := decodeHexNibble(payload[index*2+1])
-		if !highOK || !lowOK {
-			return [sha256.Size]byte{}, false
-		}
-		hash[index] = high<<4 | low
-	}
-	return hash, true
-}
-
-func decodeHexNibble(value byte) (byte, bool) {
-	switch {
-	case value >= '0' && value <= '9':
-		return value - '0', true
-	case value >= 'a' && value <= 'f':
-		return value - 'a' + 10, true
-	case value >= 'A' && value <= 'F':
-		return value - 'A' + 10, true
-	default:
-		return 0, false
-	}
+	return wire.DecodeSHA256(payload)
 }
