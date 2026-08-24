@@ -1,0 +1,65 @@
+#!/bin/sh
+set -eu
+
+source_path=$0
+link_depth=0
+while [ -L "$source_path" ]; do
+	link_depth=$((link_depth + 1))
+	if [ "$link_depth" -gt 16 ]; then
+		printf '%s\n' 'devx: symlink chain is too deep' >&2
+		exit 1
+	fi
+	source_directory=$(CDPATH= cd -P "$(dirname "$source_path")" && pwd)
+	link_target=$(readlink "$source_path")
+	case $link_target in
+		/*) source_path=$link_target ;;
+		*) source_path=$source_directory/$link_target ;;
+	esac
+done
+
+cli_directory=$(CDPATH= cd -P "$(dirname "$source_path")" && pwd)
+repository=$(CDPATH= cd -P "$cli_directory/.." && pwd)
+kernel=${DEVX_UNAME_S:-$(uname -s)}
+machine=${DEVX_UNAME_M:-$(uname -m)}
+
+case $kernel in
+	Linux) goos=linux ;;
+	Darwin) goos=darwin ;;
+	CYGWIN*|MINGW*|MSYS*) goos=windows ;;
+	*)
+		printf 'devx: unsupported operating system: %s\n' "$kernel" >&2
+		exit 1
+		;;
+esac
+
+case $machine in
+	x86_64|amd64) goarch=amd64 ;;
+	aarch64|arm64) goarch=arm64 ;;
+	i386|i486|i586|i686|x86) goarch=386 ;;
+	*)
+		printf 'devx: unsupported architecture: %s\n' "$machine" >&2
+		exit 1
+		;;
+esac
+
+suffix=
+if [ "$goos" = windows ]; then
+	suffix=.exe
+fi
+host_binary=$repository/bin/devx-$goos-$goarch$suffix
+
+if [ "${1:-}" = --print-host-binary ]; then
+	printf '%s\n' "$host_binary"
+	exit 0
+fi
+
+cd "$repository"
+if [ -x "$host_binary" ]; then
+	exec "$host_binary" "$@"
+fi
+if command -v go >/dev/null 2>&1; then
+	exec go run ./cmd/devx "$@"
+fi
+
+printf 'devx: no executable host binary at %s and Go is unavailable\n' "$host_binary" >&2
+exit 1

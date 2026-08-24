@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -13,6 +14,11 @@ var ErrPackageManager = errors.New("devx: no supported package manager found")
 type installOptions struct {
 	dryRun bool
 	yes    bool
+}
+
+type uninstallOptions struct {
+	prefix string
+	dryRun bool
 }
 
 type installAction struct {
@@ -75,6 +81,35 @@ func runInstall(ctx context.Context, deps dependencies, options installOptions) 
 		}
 	}
 	return nil
+}
+
+func runUninstall(ctx context.Context, deps dependencies, options uninstallOptions) error {
+	if ctx == nil || deps.runner == nil {
+		return errWorkflowUnavailable
+	}
+	repository, err := dependencyRepositoryRoot(deps)
+	if err != nil {
+		return err
+	}
+	if reason := workflowBlocker("uninstall", deps, repository); reason != "" {
+		return fmt.Errorf("%w: uninstall: %s", ErrWorkflowBlocked, reason)
+	}
+	arguments := make([]string, 1, 4)
+	arguments[0] = "--uninstall"
+	if options.dryRun {
+		arguments = append(arguments, "--dry-run")
+	}
+	if options.prefix != "" {
+		arguments = append(arguments, "--prefix", options.prefix)
+	}
+	spec := commandSpec{
+		executable: filepath.Join(repository, "cli", "install.sh"),
+		arguments:  arguments,
+		timeout:    30 * time.Second,
+	}
+	commandCtx, cancel := context.WithTimeout(ctx, spec.timeout)
+	defer cancel()
+	return deps.runner.Run(commandCtx, repository, spec, deps.stdin, deps.stdout, deps.stderr)
 }
 
 func buildInstallPlan(lookPath func(string) (string, error)) (string, []installAction, error) {

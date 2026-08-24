@@ -218,6 +218,14 @@ func newRoot(deps dependencies) *cobra.Command {
 				return runInstall(cmd.Context(), deps, options)
 			}
 		}
+		if name == "uninstall" {
+			options := uninstallOptions{}
+			workflow.Flags().StringVar(&options.prefix, "prefix", "", "installation prefix (default: $DEVX_PREFIX or $HOME/.local)")
+			workflow.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the uninstall action without executing it")
+			workflow.RunE = func(cmd *cobra.Command, _ []string) error {
+				return runUninstall(cmd.Context(), deps, options)
+			}
+		}
 		if name == "clean" {
 			workflow.RunE = func(*cobra.Command, []string) error { return runClean(deps) }
 		}
