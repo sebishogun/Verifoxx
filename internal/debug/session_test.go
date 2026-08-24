@@ -252,13 +252,10 @@ func TestSessionPauseInterruptsContinue(t *testing.T) {
 	session := newDebugSession(t, p, batch, config)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	continued := make(chan State, 1)
-	continueErr := make(chan error, 1)
-	go func() {
-		state, err := session.Continue(ctx)
-		continued <- state
-		continueErr <- err
-	}()
+	continueReply, err := session.enqueue(ctx, command{kind: commandContinue})
+	if err != nil {
+		t.Fatalf("enqueue(Continue) error = %v", err)
+	}
 
 	var running State
 	for attempt := 0; attempt < 100; attempt++ {
@@ -281,10 +278,11 @@ func TestSessionPauseInterruptsContinue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Pause() error = %v", err)
 	}
-	continuedState := <-continued
-	if err := <-continueErr; err != nil {
-		t.Fatalf("Continue() error = %v", err)
+	continued := <-continueReply
+	if continued.err != nil {
+		t.Fatalf("Continue() error = %v", continued.err)
 	}
+	continuedState := continued.state
 	if paused.Status != StatusPaused || paused.Stop != StopPause || continuedState.Stop != StopPause ||
 		paused.Cursor != continuedState.Cursor {
 		t.Fatalf("pause states = pause:%+v continue:%+v", paused, continuedState)
