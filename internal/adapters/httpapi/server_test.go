@@ -11,6 +11,7 @@ import (
 
 	"github.com/sebishogun/verifoxx/internal/compile"
 	"github.com/sebishogun/verifoxx/internal/fixtures"
+	"github.com/sebishogun/verifoxx/internal/observability"
 	coreservice "github.com/sebishogun/verifoxx/internal/service"
 )
 
@@ -178,7 +179,9 @@ func TestEvaluateDeadlineAuditAndAdmissionFailures(t *testing.T) {
 			queuedDone <- queuedErr
 		}()
 		waitHTTP(t, func() bool { return gate.Stats().Queued == 1 })
-		server, err := New(&fakePolicyAPI{}, gate, Config{MaxBodyBytes: 1 << 20, RequestTimeout: time.Second})
+		server, err := New(&fakePolicyAPI{}, gate, newTestMetrics(t, gate), Config{
+			MaxBodyBytes: 1 << 20, RequestTimeout: time.Second,
+		})
 		if err != nil {
 			t.Fatalf("New() error = %v", err)
 		}
@@ -246,6 +249,57 @@ func TestPolicyLookupAndHealthHandlers(t *testing.T) {
 	}
 }
 
+func TestMetricsReadinessAndLivenessHandlers(t *testing.T) {
+	t.Parallel()
+
+	gate, err := coreservice.New(2)
+	if err != nil {
+		t.Fatalf("service.New() error = %v", err)
+	}
+	api := &fakePolicyAPI{}
+	metrics := newTestMetrics(t, gate)
+	server, err := New(api, gate, metrics, Config{MaxBodyBytes: 1 << 20, RequestTimeout: time.Second})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	scrape := serveRequest(server, http.MethodGet, "/metrics", "", "")
+	if scrape.Code != http.StatusOK || !strings.HasPrefix(scrape.Header().Get("Content-Type"), "text/plain") ||
+		!strings.Contains(scrape.Body.String(), "verifoxx_evaluation_workers 2\n") {
+		t.Fatalf("metrics response = %d %q %s", scrape.Code, scrape.Header(), scrape.Body.String())
+	}
+	ready := serveRequest(server, http.MethodGet, "/readyz", "", "")
+	if ready.Code != http.StatusOK || ready.Body.String() != "{\"status\":\"ok\"}\n" {
+		t.Fatalf("ready response = %d %s", ready.Code, ready.Body.String())
+	}
+	api.health = func(context.Context) error { return coreservice.ErrUnavailable }
+	unready := serveRequest(server, http.MethodGet, "/readyz", "", "")
+	if unready.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unready response = %d %s", unready.Code, unready.Body.String())
+	}
+	live := serveRequest(server, http.MethodGet, "/livez", "", "")
+	if live.Code != http.StatusOK || live.Body.String() != "{\"status\":\"ok\"}\n" {
+		t.Fatalf("live response = %d %s", live.Code, live.Body.String())
+	}
+	if err := gate.StopAdmission(); err != nil {
+		t.Fatalf("StopAdmission() error = %v", err)
+	}
+	live = serveRequest(server, http.MethodGet, "/livez", "", "")
+	if live.Code != http.StatusOK {
+		t.Fatalf("live response after stop = %d %s", live.Code, live.Body.String())
+	}
+	unready = serveRequest(server, http.MethodGet, "/healthz", "", "")
+	if unready.Code != http.StatusServiceUnavailable {
+		t.Fatalf("health response after stop = %d %s", unready.Code, unready.Body.String())
+	}
+	method := serveRequest(server, http.MethodPost, "/metrics", "", "")
+	assertHTTPError(t, method, http.StatusMethodNotAllowed, "method_not_allowed")
+	for _, path := range []string{"/healthz", "/readyz", "/livez"} {
+		method = serveRequest(server, http.MethodPost, path, "", "")
+		assertHTTPError(t, method, http.StatusMethodNotAllowed, "method_not_allowed")
+	}
+}
+
 func TestHTTPProtocolErrors(t *testing.T) {
 	t.Parallel()
 
@@ -268,12 +322,16 @@ func TestNewRejectsUnboundedBodyConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("service.New() error = %v", err)
 	}
-	server, err := New(&fakePolicyAPI{}, gate, Config{
+	server, err := New(&fakePolicyAPI{}, gate, newTestMetrics(t, gate), Config{
 		MaxBodyBytes:   maxBodyBytes + 1,
 		RequestTimeout: time.Second,
 	})
 	if err != errInvalidServerConfig || server != nil {
 		t.Fatalf("New(oversized body limit) = (%p, %v), want nil %v", server, err, errInvalidServerConfig)
+	}
+	server, err = New(&fakePolicyAPI{}, gate, nil, Config{MaxBodyBytes: 1 << 20, RequestTimeout: time.Second})
+	if err != errInvalidServerConfig || server != nil {
+		t.Fatalf("New(nil metrics) = (%p, %v), want nil %v", server, err, errInvalidServerConfig)
 	}
 }
 
@@ -334,11 +392,27 @@ func newHTTPTestHandler(t *testing.T, api coreservice.PolicyAPI, maxBody int64, 
 	if err != nil {
 		t.Fatalf("service.New() error = %v", err)
 	}
-	server, err := New(api, gate, Config{MaxBodyBytes: maxBody, RequestTimeout: timeout})
+	server, err := New(api, gate, newTestMetrics(t, gate), Config{MaxBodyBytes: maxBody, RequestTimeout: timeout})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
 	return server
+}
+
+func newTestMetrics(t *testing.T, gate *coreservice.Service) *observability.Metrics {
+	t.Helper()
+	metrics, err := observability.NewMetrics(observability.MetricsConfig{
+		QueueDepth: func() uint64 {
+			return uint64(gate.Stats().Queued)
+		},
+		JournalFailures: func() uint64 { return 0 },
+		SIMDTier:        "test",
+		Workers:         uint32(gate.Stats().Limit),
+	})
+	if err != nil {
+		t.Fatalf("observability.NewMetrics() error = %v", err)
+	}
+	return metrics
 }
 
 func serveJSON(handler http.Handler, method, path, body string) *httptest.ResponseRecorder {

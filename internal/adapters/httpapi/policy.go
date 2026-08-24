@@ -75,10 +75,20 @@ func (server *Server) handlePolicy(response http.ResponseWriter, request *http.R
 	writePolicyMetadata(response, metadata)
 }
 
-func (server *Server) handleHealth(response http.ResponseWriter, request *http.Request) {
+func (server *Server) handleReadiness(response http.ResponseWriter, request *http.Request) {
 	ctx, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
 	defer cancel()
-	if err := server.api.Health(ctx); err != nil {
+	if err := server.health.Readiness(ctx); err != nil {
+		writeBytes(response, http.StatusServiceUnavailable, []byte("{\"status\":\"unavailable\"}\n"))
+		return
+	}
+	writeBytes(response, http.StatusOK, []byte("{\"status\":\"ok\"}\n"))
+}
+
+func (server *Server) handleLiveness(response http.ResponseWriter, request *http.Request) {
+	ctx, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
+	defer cancel()
+	if err := server.health.Liveness(ctx); err != nil {
 		writeBytes(response, http.StatusServiceUnavailable, []byte("{\"status\":\"unavailable\"}\n"))
 		return
 	}

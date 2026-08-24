@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/sebishogun/verifoxx/internal/observability"
 	coreservice "github.com/sebishogun/verifoxx/internal/service"
 )
 
@@ -16,21 +17,33 @@ const policyPathPrefix = "/v1/policies/"
 // Server routes requests over transport-independent service ports.
 type Server struct {
 	api       coreservice.PolicyAPI
+	metrics   *observability.Metrics
+	health    *observability.Health
 	admission *coreservice.Service
 	config    Config
 }
 
 // New validates dependencies without starting listeners or goroutines.
-func New(api coreservice.PolicyAPI, admission *coreservice.Service, config Config) (*Server, error) {
-	if api == nil || admission == nil || admission.Stats().Limit == 0 || !config.valid() {
+func New(
+	api coreservice.PolicyAPI,
+	admission *coreservice.Service,
+	metrics *observability.Metrics,
+	config Config,
+) (*Server, error) {
+	if api == nil || admission == nil || metrics == nil || admission.Stats().Limit == 0 || !config.valid() {
 		return nil, errInvalidServerConfig
 	}
-	return &Server{api: api, admission: admission, config: config}, nil
+	health, err := observability.NewHealth(api, admission)
+	if err != nil {
+		return nil, errInvalidServerConfig
+	}
+	return &Server{api: api, metrics: metrics, health: health, admission: admission, config: config}, nil
 }
 
 // ServeHTTP implements exact routing so all failures retain the JSON contract.
 func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if server == nil || server.api == nil || server.admission == nil || response == nil || request == nil {
+	if server == nil || server.api == nil || server.metrics == nil || server.health == nil || server.admission == nil ||
+		response == nil || request == nil {
 		return
 	}
 	response.Header().Set("Content-Type", "application/json")
@@ -61,7 +74,23 @@ func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		if !requireMethod(response, request, http.MethodGet) {
 			return
 		}
-		server.handleHealth(response, request)
+		server.handleReadiness(response, request)
+	case "/readyz":
+		if !requireMethod(response, request, http.MethodGet) {
+			return
+		}
+		server.handleReadiness(response, request)
+	case "/livez":
+		if !requireMethod(response, request, http.MethodGet) {
+			return
+		}
+		server.handleLiveness(response, request)
+	case "/metrics":
+		if !requireMethod(response, request, http.MethodGet) {
+			return
+		}
+		response.Header().Del("Content-Type")
+		server.metrics.ServeHTTP(response, request)
 	default:
 		if strings.HasPrefix(request.URL.Path, policyPathPrefix) {
 			if !requireMethod(response, request, http.MethodGet) {

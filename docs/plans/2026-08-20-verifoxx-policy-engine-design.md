@@ -1067,11 +1067,13 @@ POST /v1/policies/validate
 POST /v1/policies/compile
 POST /v1/evaluate
 GET  /v1/policies/{hash}
-GET  /healthz
+GET  /healthz  (readiness compatibility alias)
+GET  /readyz
+GET  /livez
 GET  /metrics
 ```
 
-The HTTP adapter accepts batches. It applies admission limits before decoding large bodies.
+The HTTP adapter accepts batches. It applies admission limits before decoding large bodies. Readiness requires open admission and healthy runtime dependencies; liveness reports only whether the process can serve its probe. Metrics use Prometheus text exposition rather than the JSON response contract.
 
 ### 25.3 gRPC
 
