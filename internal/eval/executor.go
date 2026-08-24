@@ -185,37 +185,42 @@ func (e *Executor) executeSchedule(p *program.Program, batch Batch) {
 }
 
 func (e *Executor) executeScheduleMode(p *program.Program, batch Batch, mode executionMode) {
-	for row, opcode := range p.Opcodes {
-		instruction := schema.InstructionID(row + 1)
-		dstTruth := e.truthSlot(p.TruthSlots[row], batch.Rows)
-		dstReasons := e.reasonSlot(p.ReasonSlots[row], batch.Rows)
-		switch opcode {
-		case program.OpcodeEqual, program.OpcodeNotEqual, program.OpcodeIn, program.OpcodeExists,
-			program.OpcodeLess, program.OpcodeLessEqual, program.OpcodeGreater, program.OpcodeGreaterEqual:
-			if !e.evalPredicateIndex(dstTruth, dstReasons, batch, p, instruction, mode) &&
-				!e.evalPredicateSIMD(dstTruth, dstReasons, batch, p, instruction, mode) {
-				evalPredicate(dstTruth, dstReasons, batch, p, instruction)
-			}
-		case program.OpcodeEvidence:
-			evalEvidenceValidated(dstTruth, dstReasons, batch, p, &e.states, EvidencePredicate{
-				Kind: p.EvidenceKinds[row], State: p.EvidenceStates[row],
-				Subject: evidenceQualifier(p.EvidenceSubjects, row),
-				Scope:   evidenceQualifier(p.EvidenceScopes, row),
-				Timing:  evidenceQualifier(p.EvidenceTimings, row),
-			})
-		case program.OpcodeAll, program.OpcodeAny:
-			e.reduceTruthGroup(dstTruth, p, row, opcode, batch.Rows, mode)
-			e.reduceReasonGroup(dstReasons, p, row, batch.Rows, mode)
-		case program.OpcodeNot:
-			operand := p.Operands[p.OperandStarts[row]]
-			truth.Not(dstTruth, e.truthSlot(p.TruthSlots[operand-1], batch.Rows), batch.Rows)
-			srcReasons := e.reasonSlot(p.ReasonSlots[operand-1], batch.Rows)
-			if p.ReasonSlots[row] != p.ReasonSlots[operand-1] {
-				copy(dstReasons.Words, srcReasons.Words)
-			}
-		default:
-			panic("eval: invalid execution opcode")
+	for row := range p.Opcodes {
+		e.executeInstructionMode(p, batch, row, mode)
+	}
+}
+
+func (e *Executor) executeInstructionMode(p *program.Program, batch Batch, row int, mode executionMode) {
+	opcode := p.Opcodes[row]
+	instruction := schema.InstructionID(row + 1)
+	dstTruth := e.truthSlot(p.TruthSlots[row], batch.Rows)
+	dstReasons := e.reasonSlot(p.ReasonSlots[row], batch.Rows)
+	switch opcode {
+	case program.OpcodeEqual, program.OpcodeNotEqual, program.OpcodeIn, program.OpcodeExists,
+		program.OpcodeLess, program.OpcodeLessEqual, program.OpcodeGreater, program.OpcodeGreaterEqual:
+		if !e.evalPredicateIndex(dstTruth, dstReasons, batch, p, instruction, mode) &&
+			!e.evalPredicateSIMD(dstTruth, dstReasons, batch, p, instruction, mode) {
+			evalPredicate(dstTruth, dstReasons, batch, p, instruction)
 		}
+	case program.OpcodeEvidence:
+		evalEvidenceValidated(dstTruth, dstReasons, batch, p, &e.states, EvidencePredicate{
+			Kind: p.EvidenceKinds[row], State: p.EvidenceStates[row],
+			Subject: evidenceQualifier(p.EvidenceSubjects, row),
+			Scope:   evidenceQualifier(p.EvidenceScopes, row),
+			Timing:  evidenceQualifier(p.EvidenceTimings, row),
+		})
+	case program.OpcodeAll, program.OpcodeAny:
+		e.reduceTruthGroup(dstTruth, p, row, opcode, batch.Rows, mode)
+		e.reduceReasonGroup(dstReasons, p, row, batch.Rows, mode)
+	case program.OpcodeNot:
+		operand := p.Operands[p.OperandStarts[row]]
+		truth.Not(dstTruth, e.truthSlot(p.TruthSlots[operand-1], batch.Rows), batch.Rows)
+		srcReasons := e.reasonSlot(p.ReasonSlots[operand-1], batch.Rows)
+		if p.ReasonSlots[row] != p.ReasonSlots[operand-1] {
+			copy(dstReasons.Words, srcReasons.Words)
+		}
+	default:
+		panic("eval: invalid execution opcode")
 	}
 }
 
@@ -386,67 +391,82 @@ func programUsesEvidence(p *program.Program) bool {
 }
 
 func (e *Executor) executeMode(dst *result.Batch, p *program.Program, batch Batch, mode executionMode) error {
+	usesEvidence, err := e.prepareExecution(dst, p, batch, mode)
+	if err != nil {
+		return err
+	}
+	e.executeScheduleMode(p, batch, mode)
+	e.finalizeResults(dst, p, batch, usesEvidence)
+	return nil
+}
+
+func (e *Executor) prepareExecution(
+	dst *result.Batch,
+	p *program.Program,
+	batch Batch,
+	mode executionMode,
+) (bool, error) {
 	if e == nil || dst == nil || p == nil {
-		return ErrInvalidProgram
+		return false, ErrInvalidProgram
 	}
 	rebind := e.program != p
 	if rebind && !validExecutionSemantics(p) {
-		return ErrInvalidProgram
+		return false, ErrInvalidProgram
 	}
 	if uint64(len(batch.RequestIDs)) != uint64(batch.Rows) || !validExecutionBatchColumns(p, batch) {
-		return ErrInvalidProgram
+		return false, ErrInvalidProgram
 	}
 	usesEvidence := false
 	for _, opcode := range p.Opcodes {
 		if opcode == program.OpcodeEvidence {
 			usesEvidence = true
 			if !validEvidenceBatch(batch, p) {
-				return ErrInvalidProgram
+				return false, ErrInvalidProgram
 			}
 			break
 		}
 	}
 	truthLen, ok := executorScratchLen(uint64(p.TruthSlotCount), 2, uint64(truth.WordCount(batch.Rows)))
 	if !ok {
-		return ErrBatchTooLarge
+		return false, ErrBatchTooLarge
 	}
 	reasonLen, ok := executorScratchLen(uint64(p.ReasonSlotCount), truth.ReasonCount, uint64(truth.WordCount(batch.Rows)))
 	if !ok {
-		return ErrBatchTooLarge
+		return false, ErrBatchTooLarge
 	}
 	maxRequirements, ok := executorResultLen(uint64(batch.Rows), uint64(len(p.RequirementIDs)), 4)
 	if !ok {
-		return ErrBatchTooLarge
+		return false, ErrBatchTooLarge
 	}
 	maxDrivers, ok := executorResultLen(uint64(batch.Rows), 1, 4)
 	if !ok {
-		return ErrBatchTooLarge
+		return false, ErrBatchTooLarge
 	}
 	maxReasons, ok := executorResultLen(uint64(batch.Rows), truth.ReasonCount, 4)
 	if !ok {
-		return ErrBatchTooLarge
+		return false, ErrBatchTooLarge
 	}
 	maxRemediations, ok := executorResultLen(uint64(batch.Rows), uint64(maxExecutionRemediations(p)), 4)
 	if !ok {
-		return ErrBatchTooLarge
+		return false, ErrBatchTooLarge
 	}
 	maxEvidence := 0
 	if usesEvidence {
 		maxEvidence, ok = executorResultLen(1, uint64(len(batch.EvidenceRefs)), 4)
 		if !ok {
-			return ErrBatchTooLarge
+			return false, ErrBatchTooLarge
 		}
 	}
 	if rebind {
 		if err := e.query.Bind(&p.ApplicabilityIndex); err != nil {
-			return ErrInvalidProgram
+			return false, ErrInvalidProgram
 		}
 		if err := e.states.Bind(p); err != nil {
-			return ErrInvalidProgram
+			return false, ErrInvalidProgram
 		}
 	}
 	if err := e.buildFactIndex(p, batch, mode); err != nil {
-		return err
+		return false, err
 	}
 	e.prepareValidated(p, truthLen, reasonLen)
 
@@ -454,7 +474,7 @@ func (e *Executor) executeMode(dst *result.Batch, p *program.Program, batch Batc
 	e.selectorValues = resizeExecutorScratch(e.selectorValues, len(p.ApplicabilityIndex.FieldIDs))
 	e.selectorPresent = resizeExecutorScratch(e.selectorPresent, len(p.ApplicabilityIndex.FieldIDs))
 	if err := dst.Reset(batch.Rows); err != nil {
-		return ErrBatchTooLarge
+		return false, ErrBatchTooLarge
 	}
 	dst.RequirementIDs = reserveResultEdges(dst.RequirementIDs, maxRequirements)
 	dst.DriverRequirements = reserveResultEdges(dst.DriverRequirements, maxDrivers)
@@ -468,8 +488,10 @@ func (e *Executor) executeMode(dst *result.Batch, p *program.Program, batch Batc
 	dst.ReasonEvidenceIDs = reserveResultEdges(dst.ReasonEvidenceIDs, maxReasons)
 	dst.ReasonEvidenceStates = reserveResultEdges(dst.ReasonEvidenceStates, maxReasons)
 	dst.RemediationIDs = reserveResultEdges(dst.RemediationIDs, maxRemediations)
+	return usesEvidence, nil
+}
 
-	e.executeScheduleMode(p, batch, mode)
+func (e *Executor) finalizeResults(dst *result.Batch, p *program.Program, batch Batch, usesEvidence bool) {
 	resolver := p.ResultResolver()
 	for row := uint32(0); row < batch.Rows; row++ {
 		e.selectRequirementCandidates(p, batch, row)
@@ -536,7 +558,6 @@ func (e *Executor) executeMode(dst *result.Batch, p *program.Program, batch Batc
 		dst.ReasonOffsets[row+1] = uint32(len(dst.ReasonIDs))
 		dst.RemediationOffsets[row+1] = uint32(len(dst.RemediationIDs))
 	}
-	return nil
 }
 
 func executorResultLen(rows, perRow, elementBytes uint64) (int, bool) {

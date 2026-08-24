@@ -78,6 +78,42 @@ func (b Batch) Present(field schema.FieldID, row uint32) bool {
 	return b.PresenceMasks[int(word)]&(uint64(1)<<(row&63)) != 0
 }
 
+// Symbol reports the value in one zero-based kind-local column for row.
+func (b Batch) Symbol(column, row uint32) (schema.SymbolID, bool) {
+	if row >= b.Rows || !b.validPhysicalRange() {
+		return 0, false
+	}
+	index := uint64(column)*uint64(b.sourceRows()) + uint64(b.rowBase) + uint64(row)
+	if index >= uint64(len(b.SymbolValues)) {
+		return 0, false
+	}
+	return b.SymbolValues[index], true
+}
+
+// Integer reports the value in one zero-based kind-local column for row.
+func (b Batch) Integer(column, row uint32) (int64, bool) {
+	if row >= b.Rows || !b.validPhysicalRange() {
+		return 0, false
+	}
+	index := uint64(column)*uint64(b.sourceRows()) + uint64(b.rowBase) + uint64(row)
+	if index >= uint64(len(b.IntegerValues)) {
+		return 0, false
+	}
+	return b.IntegerValues[index], true
+}
+
+// Timestamp reports the value in one zero-based kind-local column for row.
+func (b Batch) Timestamp(column, row uint32) (int64, bool) {
+	if row >= b.Rows || !b.validPhysicalRange() {
+		return 0, false
+	}
+	index := uint64(column)*uint64(b.sourceRows()) + uint64(b.rowBase) + uint64(row)
+	if index >= uint64(len(b.TimestampValues)) {
+		return 0, false
+	}
+	return b.TimestampValues[index], true
+}
+
 // Boolean reports the Boolean value in zero-based kind-local column for row.
 // Malformed and out-of-range inputs return false rather than panicking.
 func (b Batch) Boolean(column, row uint32) bool {
