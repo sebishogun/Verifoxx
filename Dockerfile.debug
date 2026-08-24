@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1
+
+FROM golang:1.27.0-bookworm
+
+ARG DELVE_VERSION=v1.27.1
+RUN GOBIN=/usr/local/bin go install github.com/go-delve/delve/cmd/dlv@${DELVE_VERSION}
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -buildvcs=false -gcflags="all=-N -l" \
+    -o /usr/local/bin/verifoxx ./cmd/verifoxx
+
+EXPOSE 40000
+ENTRYPOINT ["dlv", "exec", "/usr/local/bin/verifoxx", "--headless=true", "--listen=:40000", "--api-version=2", "--accept-multiclient", "--"]
+CMD ["evaluate"]
