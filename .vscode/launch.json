@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Verifoxx",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/verifoxx",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "debug-worker",
+        "--socket",
+        "${workspaceFolder}/.verifoxx/debug.sock"
+      ],
+      "buildFlags": "-tags=debug -gcflags='all=-N -l'"
+    }
+  ]
+}

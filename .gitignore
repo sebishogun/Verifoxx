@@ -1,5 +1,6 @@
 # Build output
 /verifoxx
+/__debug_bin
 /bin/
 *.exe
 *.test
@@ -9,6 +10,7 @@
 
 # Local development secrets
 /.env
+/.verifoxx/
 
 # Test and coverage artifacts
 *.out

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 
+	"github.com/sebishogun/verifoxx/internal/debug/debugtrap"
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/result"
 	"github.com/sebishogun/verifoxx/internal/schema"
@@ -72,6 +73,8 @@ func (retained *RetainedExecutor) Step() (schema.InstructionID, bool, error) {
 		return 0, retained != nil && retained.complete, ErrInvalidRetainedExecution
 	}
 	row := int(retained.next)
+	instruction := schema.InstructionID(row + 1)
+	debugtrap.Reached(retained.program.InstructionNodes[row], instruction)
 	retained.executor.executeInstructionMode(&retained.program, retained.batch, row, executionScalar)
 	retained.next++
 	if uint64(retained.next) == uint64(len(retained.program.Opcodes)) {
@@ -80,7 +83,7 @@ func (retained *RetainedExecutor) Step() (schema.InstructionID, bool, error) {
 		)
 		retained.complete = true
 	}
-	return schema.InstructionID(row + 1), retained.complete, nil
+	return instruction, retained.complete, nil
 }
 
 // Rewind moves to an already executed instruction boundary. Retain-all slots

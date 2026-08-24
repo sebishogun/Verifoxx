@@ -182,6 +182,7 @@ func newRoot(stdout, stderr io.Writer, deps dependencies) *cobra.Command {
 		newExplainCommand(deps),
 		newSimulateCommand(deps),
 		newDemoCommand(deps),
+		newDebugWorkerCommand(deps),
 	)
 	root.SetHelpCommand(&cobra.Command{
 		Use:   "help [command]",
