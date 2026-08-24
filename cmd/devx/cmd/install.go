@@ -117,12 +117,11 @@ func buildInstallPlan(lookPath func(string) (string, error)) (string, []installA
 	if !ok {
 		return "", nil, ErrPackageManager
 	}
-	actions := make([]installAction, 1, 5)
+	actions := make([]installAction, 1, 4)
 	actions[0] = packageAction
 	for _, target := range []string{
 		"github.com/go-delve/delve/cmd/dlv@v1.27.1",
 		"github.com/bufbuild/buf/cmd/buf@v1.72.0",
-		"github.com/bojand/ghz/cmd/ghz@v0.121.0",
 		"golang.org/x/perf/cmd/benchstat@v0.0.0-20260819171926-ebcb4798430d",
 	} {
 		actions = append(actions, installAction{spec: commandSpec{

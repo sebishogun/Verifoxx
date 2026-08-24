@@ -3,6 +3,8 @@ package jsonpolicy
 import (
 	"errors"
 	"testing"
+
+	"github.com/sebishogun/verifoxx/internal/compile"
 )
 
 // FuzzDecode drives the package-level Decode entry point with bounded limits
@@ -34,6 +36,13 @@ func FuzzDecode(f *testing.F) {
 		if err == nil {
 			if _, ok := b.Document().PolicyMetadata(); !ok {
 				t.Fatal("successful decode left no metadata")
+			}
+			compiled, compileErr := compile.Lower(b.Document(), fields, symbols)
+			if compileErr == nil && compiled == nil {
+				t.Fatal("successful compile returned a nil Program")
+			}
+			if compileErr != nil && compiled != nil {
+				t.Fatalf("failed compile returned Program %p: %v", compiled, compileErr)
 			}
 			return
 		}

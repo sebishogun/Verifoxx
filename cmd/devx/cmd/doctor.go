@@ -22,7 +22,6 @@ var doctorProbes = [...]doctorProbe{
 	{label: "Delve", executable: "dlv", arguments: []string{"version"}},
 	{label: "Buf", executable: "buf", arguments: []string{"--version"}},
 	{label: "protoc", executable: "protoc", arguments: []string{"--version"}},
-	{label: "ghz", executable: "ghz", arguments: []string{"--version"}},
 	{label: "benchstat", executable: "benchstat", arguments: []string{"-h"}},
 	{label: "PostgreSQL client", executable: "psql", arguments: []string{"--version"}},
 }

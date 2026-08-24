@@ -11,11 +11,6 @@ import (
 // decoder walks one JSON byte slice without allocation. The scratch buffers
 // are reused across every string token in one Decode call.
 type decoder struct {
-	src    []byte
-	pos    int
-	limits Limits
-	saw    uint8
-
 	fields  *schema.Schema
 	symbols *schema.Interner
 
@@ -26,6 +21,13 @@ type decoder struct {
 	valueIDScratch []schema.ValueID
 	clauseScratch  []schema.ClauseID
 	remedyScratch  []schema.RemediationID
+
+	// Keep src and pos adjacent for the byte scanner after grouping every
+	// pointer-bearing field into the shortest possible GC scan region.
+	src    []byte
+	pos    int
+	limits Limits
+	saw    uint8
 }
 
 // fail returns an Error at the current position.

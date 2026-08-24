@@ -1,0 +1,42 @@
+name: Integration
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test migrations, graph, audit, and service integration
+        run: timeout 420s go run ./cmd/devx test:integration
+
+  docker:
+    name: Release image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build release image
+        run: timeout 600s go run ./cmd/devx docker:build
+      - name: Run release image demonstration
+        run: timeout 180s go run ./cmd/devx docker:run

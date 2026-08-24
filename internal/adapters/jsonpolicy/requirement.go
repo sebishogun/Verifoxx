@@ -585,15 +585,8 @@ func (d *decoder) decodeResolution(dst *ast.Builder) (ast.Resolution, error) {
 
 func (d *decoder) resolveOutcome(dst *ast.Builder, name []byte, offset int) (schema.OutcomeID, error) {
 	doc := dst.Document()
-	for i := 1; i <= len(doc.OutcomeNames); i++ {
-		valueID, _, _, ok := doc.Outcome(schema.OutcomeID(i))
-		if !ok {
-			continue
-		}
-		existing, ok := doc.SymbolValue(valueID)
-		if ok && bytes.Equal(existing, name) {
-			return schema.OutcomeID(i), nil
-		}
+	if row, ok := findCatalogName(doc, doc.OutcomeNames, name); ok {
+		return schema.OutcomeID(row), nil
 	}
 	return 0, d.failAt(CodeInvalidReference, offset, "unknown outcome")
 }

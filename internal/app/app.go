@@ -2,6 +2,7 @@
 package app
 
 import (
+	"context"
 	"io"
 
 	"github.com/sebishogun/verifoxx/internal/adapters/cli"
@@ -20,4 +21,9 @@ func Run(args []string, stdout, stderr io.Writer) int {
 // RunWithInput dispatches the command-line interface with caller-owned I/O.
 func RunWithInput(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return cli.Execute(args, stdin, stdout, stderr)
+}
+
+// RunContext dispatches the command-line interface under caller cancellation.
+func RunContext(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	return cli.ExecuteContext(ctx, args, stdin, stdout, stderr)
 }

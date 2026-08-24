@@ -2,7 +2,8 @@
 set -eu
 
 script_directory=$(CDPATH= cd -P "$(dirname "$0")" && pwd)
-wrapper=$script_directory/devx
+dispatcher=$script_directory/devx-dispatch
+dispatcher_marker='# devx-repository-dispatch-v1'
 prefix=${DEVX_PREFIX:-${HOME:?HOME is required}/.local}
 dry_run=0
 uninstall=0
@@ -53,63 +54,88 @@ bin_directory=$prefix/bin
 destination=$bin_directory/devx
 printf 'prefix: %s\n' "$prefix"
 
-if [ "$uninstall" -eq 1 ]; then
+is_owned_dispatcher() {
+	[ -f "$destination" ] && [ ! -L "$destination" ] || return 1
+	installed_marker=
+	{
+		IFS= read -r _installed_shebang || :
+		IFS= read -r installed_marker || :
+	} <"$destination"
+	[ "$installed_marker" = "$dispatcher_marker" ]
+}
+
+is_legacy_repository_link() {
+	[ -L "$destination" ] || return 1
+	installed_target=$(readlink "$destination")
+	case $installed_target in
+	*/cli/devx) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+refuse_unowned_destination() {
 	if [ -L "$destination" ]; then
-		installed_target=$(readlink "$destination")
-		if [ "$installed_target" != "$wrapper" ]; then
-			printf 'install.sh: refusing to remove unowned symlink: %s -> %s\n' "$destination" "$installed_target" >&2
-			exit 1
-		fi
+		printf 'install.sh: refusing unowned symlink: %s -> %s\n' "$destination" "$(readlink "$destination")" >&2
+	else
+		printf 'install.sh: refusing unowned path: %s\n' "$destination" >&2
+	fi
+	exit 1
+}
+
+if [ "$uninstall" -eq 1 ]; then
+	if is_owned_dispatcher || is_legacy_repository_link; then
 		if [ "$dry_run" -eq 1 ]; then
 			printf '[dry-run] rm %s\n' "$destination"
 		else
 			rm "$destination"
 			printf 'removed: %s\n' "$destination"
 		fi
-	elif [ -e "$destination" ]; then
-		printf 'install.sh: refusing to remove unowned path: %s\n' "$destination" >&2
-		exit 1
+	elif [ -e "$destination" ] || [ -L "$destination" ]; then
+		refuse_unowned_destination
 	else
 		printf 'not installed: %s\n' "$destination"
 	fi
 	exit 0
 fi
 
-if [ ! -x "$wrapper" ]; then
-	printf 'install.sh: wrapper is not executable: %s\n' "$wrapper" >&2
+if [ ! -x "$dispatcher" ]; then
+	printf 'install.sh: dispatcher is not executable: %s\n' "$dispatcher" >&2
 	exit 1
 fi
 
-if [ "$dry_run" -eq 1 ]; then
-	if [ -L "$destination" ]; then
-		installed_target=$(readlink "$destination")
-		if [ "$installed_target" != "$wrapper" ]; then
-			printf 'install.sh: refusing to replace unowned symlink: %s -> %s\n' "$destination" "$installed_target" >&2
-			exit 1
-		fi
-		printf '[dry-run] already installed: %s -> %s\n' "$destination" "$wrapper"
-	elif [ -e "$destination" ]; then
-		printf 'install.sh: refusing to replace unowned path: %s\n' "$destination" >&2
-		exit 1
-	else
-		printf '[dry-run] mkdir -p %s\n' "$bin_directory"
-		printf '[dry-run] ln -s %s %s\n' "$wrapper" "$destination"
+destination_exists=0
+if [ -e "$destination" ] || [ -L "$destination" ]; then
+	destination_exists=1
+	if ! is_owned_dispatcher && ! is_legacy_repository_link; then
+		refuse_unowned_destination
 	fi
+fi
+
+if [ "$dry_run" -eq 1 ]; then
+	if [ ! -d "$bin_directory" ]; then
+		printf '[dry-run] mkdir -p %s\n' "$bin_directory"
+	fi
+	printf '[dry-run] install -m 0755 %s %s\n' "$dispatcher" "$destination"
 else
 	mkdir -p "$bin_directory"
-	if [ -L "$destination" ]; then
-		installed_target=$(readlink "$destination")
-		if [ "$installed_target" != "$wrapper" ]; then
-			printf 'install.sh: refusing to replace unowned symlink: %s -> %s\n' "$destination" "$installed_target" >&2
-			exit 1
+	temporary=$(mktemp "$destination.tmp.XXXXXX")
+	cleanup_temporary() {
+		if [ -n "${temporary:-}" ]; then
+			rm -f "$temporary"
 		fi
-		printf 'already installed: %s -> %s\n' "$destination" "$wrapper"
-	elif [ -e "$destination" ]; then
-		printf 'install.sh: refusing to replace unowned path: %s\n' "$destination" >&2
-		exit 1
+	}
+	trap cleanup_temporary EXIT
+	trap 'exit 1' HUP INT TERM
+	install -m 0755 "$dispatcher" "$temporary"
+	if [ -L "$destination" ]; then
+		rm "$destination"
+	fi
+	mv -f "$temporary" "$destination"
+	temporary=
+	if [ "$destination_exists" -eq 1 ]; then
+		printf 'updated: %s\n' "$destination"
 	else
-		ln -s "$wrapper" "$destination"
-		printf 'installed: %s -> %s\n' "$destination" "$wrapper"
+		printf 'installed: %s\n' "$destination"
 	fi
 fi
 

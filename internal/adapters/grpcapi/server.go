@@ -11,6 +11,7 @@ import (
 
 	verifoxxv1 "github.com/sebishogun/verifoxx/api/gen/verifoxx/v1"
 	"github.com/sebishogun/verifoxx/internal/compile"
+	"github.com/sebishogun/verifoxx/internal/security"
 	coreservice "github.com/sebishogun/verifoxx/internal/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -18,9 +19,8 @@ import (
 )
 
 const (
-	maxMessageBytes   = 64 << 20
-	maxRequestTimeout = 30 * time.Minute
-	policyHashBytes   = 32
+	maxMessageBytes = security.MaximumRequestBytes
+	policyHashBytes = 32
 )
 
 // ErrInvalidServer reports an unusable dependency or transport limit.
@@ -33,8 +33,14 @@ type Config struct {
 }
 
 func (config Config) valid() bool {
-	return config.MaxMessageBytes > 0 && config.MaxMessageBytes <= maxMessageBytes &&
-		config.RequestTimeout > 0 && config.RequestTimeout <= maxRequestTimeout
+	if config.MaxMessageBytes <= 0 || config.MaxMessageBytes > maxMessageBytes {
+		return false
+	}
+	limits := security.DefaultLimits()
+	limits.RequestTimeout = config.RequestTimeout
+	limits.MaxRequestBytes = config.MaxMessageBytes
+	limits.MaxOutputBytes = config.MaxMessageBytes
+	return limits.Validate() == nil
 }
 
 type policyServer struct {
@@ -66,7 +72,7 @@ func (server *policyServer) ValidatePolicy(
 	if request == nil || len(request.GetSourceJson()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "policy source is required")
 	}
-	if len(request.GetSourceJson()) > server.config.MaxMessageBytes {
+	if len(request.GetSourceJson()) > server.config.maxPolicyBytes() {
 		return nil, status.Error(codes.ResourceExhausted, "policy source exceeds limit")
 	}
 	callCtx, cancel, admission, err := server.admit(ctx)
@@ -94,7 +100,7 @@ func (server *policyServer) CompilePolicy(
 	if request == nil || len(request.GetSourceJson()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "policy source is required")
 	}
-	if len(request.GetSourceJson()) > server.config.MaxMessageBytes {
+	if len(request.GetSourceJson()) > server.config.maxPolicyBytes() {
 		return nil, status.Error(codes.ResourceExhausted, "policy source exceeds limit")
 	}
 	callCtx, cancel, admission, err := server.admit(ctx)
@@ -213,6 +219,10 @@ func (server *policyServer) admit(ctx context.Context) (
 func (server *policyServer) release(admission *coreservice.Admission, cancel context.CancelFunc) {
 	_ = server.admission.Release(admission)
 	cancel()
+}
+
+func (config Config) maxPolicyBytes() int {
+	return min(config.MaxMessageBytes, security.MaximumPolicyBytes)
 }
 
 func encodeDiagnostic(diagnostic *compile.Diagnostic) *verifoxxv1.Diagnostic {

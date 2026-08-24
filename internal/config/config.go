@@ -20,22 +20,23 @@ import (
 	"time"
 
 	"github.com/sebishogun/verifoxx/internal/persistence"
+	"github.com/sebishogun/verifoxx/internal/security"
 )
 
 var ErrInvalidConfig = errors.New("config: invalid configuration")
 
-const RedactedSecret = "[REDACTED]"
+const RedactedSecret = security.RedactedValue
 
 const (
 	MaxWorkers           = 256
 	MaxQueueDepth        = 4096
-	MaxBatchRows  uint32 = 1 << 20
-	MaxBodyBytes  int64  = 64 << 20
+	MaxBatchRows  uint32 = security.MaximumBatchRows
+	MaxBodyBytes  int64  = security.MaximumRequestBytes
 
 	maxDatabaseConnections = 1024
 	maxDatabaseURLBytes    = 4096
 	maxConfigFileBytes     = 64 << 10
-	maxOperationalTimeout  = 30 * time.Minute
+	maxOperationalTimeout  = security.MaximumRequestTimeout
 )
 
 // Config is the validated cold-path configuration shared by service adapters.

@@ -25,6 +25,7 @@ The working rules are:
 6. Parallelize only after work per shard exceeds coordination cost. Shard on row and bitset boundaries, use private scratch and output, and merge once.
 7. Treat `sync.Pool` as a last resort. Prefer fixed worker ownership, explicit arenas, capacity hints, and caller-provided storage.
 8. Measure the resulting machine behavior. Use `-benchmem`, escape analysis, runtime dispatch checks, disassembly, instructions, cycles, and interleaved benchmark comparisons.
+9. Treat correctness as mandatory and measured performance as a coequal acceptance constraint after correctness. Retain local hot-path specialization when a shared abstraction causes a statistically significant regression, and compare linked consumers because code layout can amplify a helper's machine-code change.
 
 ## Abstract
 
@@ -91,6 +92,7 @@ The following criteria determine whether the design is acceptable.
 - Workers have private scratch and disjoint output.
 - Scalar, SIMD, parallel, and debug execution produce identical semantic results.
 - Performance claims require benchmark output and verified runtime dispatch.
+- Refactors that touch hot code require interleaved linked-binary comparison; source deduplication does not justify a statistically significant regression.
 
 ### 3.3 Operational criteria
 
@@ -117,6 +119,7 @@ The following criteria determine whether the design is acceptable.
 | Interactive UI | Bubble Tea semantic debugger | The TUI can expose policy structure, compiled instructions, evidence, masks, and outcomes in a terminal. |
 | Go debugger | Delve DAP | Neovim can own the standard DAP connection while the TUI uses a separate semantic channel. |
 | Developer tooling | Cobra plus Charmbracelet `huh` in `cmd/devx` | This provides testable command discovery and built-in fuzzy selection without an external `fzf` dependency. |
+| Hot helper reuse | Share only after linked-consumer A/B parity | Go inlining and linker placement can change downstream operation-cache and branch-predictor behavior even when semantic instructions and allocations are unchanged. |
 | Make | Thin wrapper over `devx` | Workflow logic remains testable Go code rather than duplicated shell recipes. |
 | Containers | Release Dockerfile, debug Dockerfile, and Compose | These provide reproducible standalone and full-service operation. |
 
@@ -1176,11 +1179,11 @@ cli/install.sh
 cli/build.sh
 ```
 
-The wrapper selects a host binary when prebuilt binaries are available. The installer creates a symlink in `~/.local/bin`, verifies `PATH`, and never edits shell startup files.
+The repository wrapper selects a host binary when prebuilt binaries are available. The installer copies a repository-neutral dispatcher into `~/.local/bin`; that command runs the nearest ancestor repository with an executable `cli/devx` and fails outside a devx-enabled tree. Installation verifies `PATH` and never edits shell startup files.
 
 `devx install` detects available package managers, checks versions, shows exact commands, marks commands requiring elevated privileges, asks for confirmation, and supports dry-run. `devx doctor` is read-only. `devx status` reports which workflows are runnable and which prerequisite blocks each unavailable workflow.
 
-Expected tools include Go 1.27, Docker and Compose, Delve, Buf, protoc, ghz, benchstat, and PostgreSQL client tools. The SIMD library does not require a C toolchain for consumption.
+Expected tools include Go 1.27, Docker and Compose, Delve, Buf, protoc, `timeout`, benchstat, and PostgreSQL client tools. Load generation uses the repository's Go client. The SIMD library does not require a C toolchain for consumption.
 
 ### 26.4 Makefile
 

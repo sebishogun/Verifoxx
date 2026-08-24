@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/sebishogun/verifoxx/internal/adapters/wire"
 	"github.com/sebishogun/verifoxx/internal/compile"
 	coreservice "github.com/sebishogun/verifoxx/internal/service"
 )
@@ -18,7 +19,7 @@ func (server *Server) handleValidate(response http.ResponseWriter, request *http
 		return
 	}
 	defer server.release(&admission, cancel)
-	body, err := readPolicyBody(ctx, response, request, server.config.MaxBodyBytes)
+	body, err := readPolicyBody(ctx, response, request, server.config.maxPolicyBytes())
 	if err != nil {
 		writePolicyBodyError(response, err)
 		return
@@ -42,7 +43,7 @@ func (server *Server) handleCompile(response http.ResponseWriter, request *http.
 		return
 	}
 	defer server.release(&admission, cancel)
-	body, err := readPolicyBody(ctx, response, request, server.config.MaxBodyBytes)
+	body, err := readPolicyBody(ctx, response, request, server.config.maxPolicyBytes())
 	if err != nil {
 		writePolicyBodyError(response, err)
 		return
@@ -194,32 +195,12 @@ func writePolicyMetadata(response http.ResponseWriter, metadata coreservice.Poli
 }
 
 func decodeHash(destination *[32]byte, source string) bool {
-	if destination == nil || len(source) != 64 {
+	if destination == nil {
 		return false
 	}
-	for index := range destination {
-		high, ok := decodeHex(source[index*2])
-		if !ok {
-			return false
-		}
-		low, ok := decodeHex(source[index*2+1])
-		if !ok {
-			return false
-		}
-		destination[index] = high<<4 | low
+	hash, ok := wire.DecodeSHA256(source)
+	if ok {
+		*destination = hash
 	}
-	return true
-}
-
-func decodeHex(value byte) (byte, bool) {
-	switch {
-	case value >= '0' && value <= '9':
-		return value - '0', true
-	case value >= 'a' && value <= 'f':
-		return value - 'a' + 10, true
-	case value >= 'A' && value <= 'F':
-		return value - 'A' + 10, true
-	default:
-		return 0, false
-	}
+	return ok
 }

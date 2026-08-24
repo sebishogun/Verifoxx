@@ -369,18 +369,8 @@ func (d *decoder) rejectDuplicateEvidenceKindName(dst *ast.Builder, id schema.Va
 		return d.fail(CodeMalformed, "decoded catalog name is missing")
 	}
 	doc := dst.Document()
-	for i := 1; i <= len(doc.EvidenceKindNames); i++ {
-		vid, ok := doc.EvidenceKindName(schema.EvidenceKindID(i))
-		if !ok {
-			continue
-		}
-		existing, ok := doc.SymbolValue(vid)
-		if !ok {
-			continue
-		}
-		if bytes.Equal(existing, name) {
-			return d.failAt(CodeDuplicateID, offset, "duplicate evidence kind name")
-		}
+	if _, duplicate := findCatalogName(doc, doc.EvidenceKindNames, name); duplicate {
+		return d.failAt(CodeDuplicateID, offset, "duplicate evidence kind name")
 	}
 	return nil
 }
@@ -393,18 +383,8 @@ func (d *decoder) rejectDuplicateEvidenceStateName(dst *ast.Builder, id schema.V
 		return d.fail(CodeMalformed, "decoded catalog name is missing")
 	}
 	doc := dst.Document()
-	for i := 1; i <= len(doc.EvidenceStateNames); i++ {
-		vid, ok := doc.EvidenceStateName(schema.EvidenceStateID(i))
-		if !ok {
-			continue
-		}
-		existing, ok := doc.SymbolValue(vid)
-		if !ok {
-			continue
-		}
-		if bytes.Equal(existing, name) {
-			return d.failAt(CodeDuplicateID, offset, "duplicate evidence state name")
-		}
+	if _, duplicate := findCatalogName(doc, doc.EvidenceStateNames, name); duplicate {
+		return d.failAt(CodeDuplicateID, offset, "duplicate evidence state name")
 	}
 	return nil
 }
@@ -590,18 +570,8 @@ func (d *decoder) rejectDuplicateOutcomeName(dst *ast.Builder, id schema.ValueID
 		return d.fail(CodeMalformed, "decoded outcome name is missing")
 	}
 	doc := dst.Document()
-	for i := 1; i <= len(doc.OutcomeNames); i++ {
-		vid, _, _, ok := doc.Outcome(schema.OutcomeID(i))
-		if !ok {
-			continue
-		}
-		existing, ok := doc.SymbolValue(vid)
-		if !ok {
-			continue
-		}
-		if bytes.Equal(existing, name) {
-			return d.failAt(CodeDuplicateID, offset, "duplicate outcome name")
-		}
+	if _, duplicate := findCatalogName(doc, doc.OutcomeNames, name); duplicate {
+		return d.failAt(CodeDuplicateID, offset, "duplicate outcome name")
 	}
 	return nil
 }

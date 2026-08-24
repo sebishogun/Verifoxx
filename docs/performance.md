@@ -1,5 +1,113 @@
 # Performance
 
+## Methodology
+
+Performance claims use bounded, reproducible commands and retain the machine
+context needed to interpret them:
+
+1. Record both commit IDs, Go version, `GOOS/GOARCH`, CPU, `GOMAXPROCS`, runtime
+   SIMD tier, build tags, benchmark regex, benchtime, and sample count.
+2. Generate fixtures, construct Programs and batches, allocate destinations,
+   and prime reusable storage before the timer unless setup cost is the stated
+   subject.
+3. Use `-benchmem`; steady-state evaluator, scheduler, explanation, and encoder
+   kernels must report `0 B/op` and `0 allocs/op`.
+4. Collect at least six samples on a quiet host. Use all samples with `benchstat`
+   for a comparison; do not select one favorable run. Tables in this document
+   that report a minimum say so explicitly.
+5. Build baseline and candidate test binaries before measurement and alternate
+   A/B then B/A execution order. Do not switch or rebuild a checkout between
+   samples.
+6. Confirm the selected runtime backend through `simdops.Runtime` and, for
+   kernel claims, through disassembly or hardware counters.
+7. Never use `-tags=debug` or `-gcflags=all='-N -l'` for a performance result.
+
+Correctness is mandatory, and measured performance is a coequal acceptance
+constraint after correctness. A shared abstraction is rejected when an
+interleaved comparison shows a statistically significant regression in an
+affected production path. Small local specializations are retained when they
+are faster; source-level deduplication is not worth slower machine behavior.
+
+The standard evaluator run is:
+
+```bash
+./cli/devx bench
+```
+
+Interleaved comparison requires prebuilt baseline and current binaries plus the
+environment variables documented below:
+
+```bash
+./cli/devx bench:compare
+```
+
+Linux hardware-counter inspection of the cold product path is available as:
+
+```bash
+./cli/devx perf
+```
+
+Use the explicit prebuilt-binary `perf stat` command later in this guide for a
+kernel comparison so compilation remains outside the measured process.
+
+## Refactor Acceptance And Code Layout
+
+The reusable-path audit on 2026-08-24 consolidated byte-identical adapter work
+without moving per-row evaluator storage helpers across package boundaries:
+
+- canonical JSON-string and SHA-256 encoding is shared by the CLI and result
+  adapters, and SHA-256 decoding is shared by the HTTP and PostgreSQL adapters;
+- policy catalog name lookup is shared inside the policy JSON decoder;
+- `jsonbatch.resizeZero`, `eval.resizeClear`, `index.resizeIndex`, and
+  `compile.resizeSlots` remain local specializations.
+
+All retained wire paths preserved their allocation counts. Interleaved runs
+found no significant change for result encoding (2.830 versus 2.835 us/op,
+`p=0.818`), policy decoding fresh (10.061 versus 9.847 us/op, `p=0.310`) or on
+reuse (6.003 versus 6.079 us/op, `p=0.699`), or the three affected CLI paths.
+
+The local resize functions are behaviorally identical, but replacing them with
+one generic function in `internal/arena` changed Go 1.27 amd64 machine layout.
+The direct `eval.Builder.Begin` comparison regressed by 2.00% (`p=0.002`),
+and the linked `jsonbatch.BenchmarkDecodeBatch` consumer regressed by 12.44%
+(`p<0.001`), with `0 B/op` and `0 allocs/op` in both variants. Restoring the
+local compiler helper returned `ValidateCatalogUniqueScaling/Rows128` to parity
+at 36.11 versus 36.09 us/op (`p=0.699`).
+
+Disassembly isolated the mechanism. The local and shared `Builder.Begin`
+variants each contained 539 non-NOP instructions and 41 calls. The local
+variant was 2,793 bytes with 13 NOP instructions occupying 30 bytes. The shared
+generic variant was 2,821 bytes with 27 NOP instructions occupying 58 bytes.
+Nested cross-package inlining introduced unmatched `OpInlMark` positions;
+`cmd/compile/internal/ssagen` materialized them as hardware NOPs, and the amd64
+assembler's fused-jump boundary rule inserted further padding to avoid crossing
+or ending at a 32-byte boundary. The net growth was 14 NOP instructions and 28
+bytes, not additional semantic work.
+
+Linker alignment rounded that growth into a `0x20` address shift for the
+otherwise byte-identical JSON decoder functions that followed it. A controlled
+binary retained the local `Builder.Begin` byte-for-byte and introduced
+only the same downstream `0x20` shift; `BenchmarkDecodeBatch` then regressed by
+13.19% (`p<0.001`). This reproduced the downstream cost without the shared
+helper.
+
+On the AMD Ryzen AI MAX+ 395 host, 50,000 controlled decodes changed the Zen 5
+operation-cache counters as follows:
+
+| Layout | op-cache hits | op-cache misses | accesses | miss rate |
+|---|---:|---:|---:|---:|
+| local | 2.034B | 125.206M | 2.159B | 5.8% |
+| local plus `0x20` shift | 2.136B | 477.733M | 2.614B | 18.3% |
+
+Retired branch mispredicts rose from 4.677M to 5.118M. A separate 200,000-run
+comparison retired the same approximately 47.67B instructions while the shifted
+layout consumed 9.06B instead of 8.19B cycles. The regression is therefore an
+address-sensitive Zen 5 operation-cache and branch-predictor layout effect.
+
+Hot refactors must consequently compare prebuilt linked consumers, not only the
+edited helper. Source equivalence, zero allocations, equal call counts, and an
+unchanged non-NOP instruction count do not establish performance parity.
+
 ## SIMD Boundary
 
 Verifoxx pins `github.com/sebishogun/simd` v1.21.0 and reaches it only through
@@ -74,6 +182,94 @@ The supported alias contracts are:
 All operations process the shortest input. Compression preserves source order,
 stops at destination capacity, and returns the number written. Invalid
 comparison modes panic before mutating output.
+
+## Controlled Evaluation Harness
+
+`BenchmarkEvaluate` measures complete evaluator execution over deterministic,
+exact-size typed columns generated before the timer starts. Every benchmark name
+records the runtime SIMD tier, rows, policy nodes, evidence percentage, match
+percentage, worker count, and forced mode. The reported `rows`, `nodes`,
+`evidence_pct`, `match_pct`, and `workers` metrics repeat those dimensions in
+machine-readable benchmark output.
+
+The three forced modes isolate scalar leaf execution, SIMD leaf execution, and
+fact-index execution without exposing a production tuning API. Each case is
+primed before timing, reuses executor and result storage, and is checked against
+the scalar result. Data generation, Program construction, batch construction,
+and the equality checks are excluded from the timed region. The evaluator loop
+must report `0 B/op` and `0 allocs/op`:
+
+```bash
+timeout 180s go test -run='^$' -bench='^BenchmarkEvaluate$' -benchmem -benchtime=200ms -count=6 -timeout=120s ./internal/eval
+./cli/devx bench
+```
+
+Parallel scheduling is intentionally a separate measurement. Its names carry
+the active SIMD tier plus rows and workers, and distinguish direct,
+scheduled-serial, and scheduled-parallel execution:
+
+```bash
+timeout 180s go test -run='^$' -bench='^BenchmarkScheduler$' -benchmem -benchtime=300ms -count=6 -timeout=120s ./internal/scheduler
+```
+
+### Interleaved A/B Comparison
+
+Build one evaluator test binary from each source tree before measuring. Use
+separate worktrees so the comparison never switches or modifies a checkout:
+
+```bash
+timeout 120s env GOWORK=off go test -mod=readonly -c -o /tmp/verifoxx-baseline.test ./internal/eval  # run in baseline worktree
+timeout 120s env GOWORK=off go test -mod=readonly -c -o /tmp/verifoxx-current.test ./internal/eval   # run in current worktree
+timeout 300s scripts/bench-compare.sh /tmp/verifoxx-baseline.test /tmp/verifoxx-current.test '^BenchmarkEvaluate$' 6 200ms
+```
+
+The script validates both prebuilt binaries, alternates A/B then B/A by round,
+bounds every invocation, keeps samples in separate temporary files, and calls
+`benchstat` once. It does not build, edit, or switch either source tree. Six
+rounds is the minimum accepted sample count. The devx wrapper accepts the same
+inputs through environment variables:
+
+```bash
+BENCH_BASELINE_BINARY=/tmp/verifoxx-baseline.test \
+BENCH_CURRENT_BINARY=/tmp/verifoxx-current.test \
+BENCH_COMPARE_REGEX='^BenchmarkEvaluate$' \
+BENCH_COMPARE_ROUNDS=6 BENCH_COMPARE_TIME=200ms \
+./cli/devx bench:compare
+```
+
+Record both commit IDs, Go version, host CPU, runtime tier, benchmark regex, and
+benchtime with retained results. Run on a quiet host and inspect distributions
+from `benchstat`; do not select one favorable sample. For hardware-counter work,
+run one prebuilt binary directly so compilation remains outside the measurement:
+
+```bash
+timeout 180s perf stat -r 6 -- /tmp/verifoxx-current.test -test.run='^$' -test.bench='^BenchmarkEvaluate$' -test.benchtime=1s -test.count=1 -test.cpu=1 -test.timeout=120s
+```
+
+### Public Transport Load
+
+`cmd/loadgen` sends the embedded canonical request and evidence payload through
+the public HTTP or gRPC evaluation API. It divides one fixed request budget
+across private worker loops, uses one bounded run context, cancels on the first
+transport, status, size, or JSON validation failure, and closes every response
+body and client connection. Its single JSON report contains the protocol,
+target, requested and completed requests, concurrency, elapsed nanoseconds, and
+requests per second. This is adapter and service load, not a private benchmark
+endpoint.
+
+Start the Compose environment, then exercise either transport:
+
+```bash
+timeout 300s docker compose up -d --build --wait
+timeout 60s go run ./cmd/loadgen -protocol http -target 127.0.0.1:8080 -requests 1000 -concurrency 4 -timeout 30s
+timeout 60s go run ./cmd/loadgen -protocol grpc -target 127.0.0.1:9090 -requests 1000 -concurrency 4 -timeout 30s
+timeout 120s ./cli/devx load
+timeout 60s docker compose down -v
+```
+
+The devx load command uses the HTTP values shown above. Increase request count,
+concurrency, or timeout only within the command's enforced bounds; a partial
+report and non-zero exit identify an incomplete run.
 
 ## Evaluator Crossovers
 

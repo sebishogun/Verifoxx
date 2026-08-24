@@ -770,18 +770,8 @@ func (d *decoder) resolveStateToken(dst *ast.Builder, token ast.SourceSpan) (sch
 // kind catalog by byte equality.
 func (d *decoder) resolveEvidenceKind(dst *ast.Builder, name []byte, offset int) (schema.EvidenceKindID, error) {
 	doc := dst.Document()
-	for i := 1; i <= len(doc.EvidenceKindNames); i++ {
-		vid, ok := doc.EvidenceKindName(schema.EvidenceKindID(i))
-		if !ok {
-			continue
-		}
-		existing, ok := doc.SymbolValue(vid)
-		if !ok {
-			continue
-		}
-		if bytes.Equal(existing, name) {
-			return schema.EvidenceKindID(i), nil
-		}
+	if row, ok := findCatalogName(doc, doc.EvidenceKindNames, name); ok {
+		return schema.EvidenceKindID(row), nil
 	}
 	return 0, d.failAt(CodeInvalidReference, offset, "unknown evidence kind")
 }
@@ -790,18 +780,8 @@ func (d *decoder) resolveEvidenceKind(dst *ast.Builder, name []byte, offset int)
 // evidence state catalog by byte equality.
 func (d *decoder) resolveEvidenceState(dst *ast.Builder, name []byte, offset int) (schema.EvidenceStateID, error) {
 	doc := dst.Document()
-	for i := 1; i <= len(doc.EvidenceStateNames); i++ {
-		vid, ok := doc.EvidenceStateName(schema.EvidenceStateID(i))
-		if !ok {
-			continue
-		}
-		existing, ok := doc.SymbolValue(vid)
-		if !ok {
-			continue
-		}
-		if bytes.Equal(existing, name) {
-			return schema.EvidenceStateID(i), nil
-		}
+	if row, ok := findCatalogName(doc, doc.EvidenceStateNames, name); ok {
+		return schema.EvidenceStateID(row), nil
 	}
 	return 0, d.failAt(CodeInvalidReference, offset, "unknown evidence state")
 }

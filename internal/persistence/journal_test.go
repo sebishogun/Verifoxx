@@ -104,6 +104,34 @@ func TestValidateAuditBatch(t *testing.T) {
 	}
 }
 
+func TestValidateAuditBatchRejectsProtectedRows(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		mutate func(*AuditBatch, ByteRange, [sha256.Size]byte)
+		name   string
+	}{
+		{name: "request", mutate: func(batch *AuditBatch, payload ByteRange, digest [sha256.Size]byte) {
+			batch.Requests.Payloads[0] = payload
+			batch.Requests.Hashes[0] = digest
+		}},
+		{name: "evidence", mutate: func(batch *AuditBatch, payload ByteRange, digest [sha256.Size]byte) {
+			batch.Evidence.Payloads[0] = payload
+			batch.Evidence.Hashes[0] = digest
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			batch := testAuditBatch()
+			payload := appendAuditText(&batch, `{"dataset_rows":[{"secret":"private-row-value"}]}`)
+			test.mutate(&batch, payload, sha256.Sum256(payload.Bytes(batch.Bytes)))
+			if err := ValidateAuditBatch(&batch); !errors.Is(err, ErrInvalidAuditBatch) {
+				t.Fatalf("ValidateAuditBatch() error = %v, want %v", err, ErrInvalidAuditBatch)
+			}
+		})
+	}
+}
+
 func TestCopyAuditBatchOwnsStorageAndRespectsCapacity(t *testing.T) {
 	source := testAuditBatch()
 	destination, err := NewAuditBatch(testAuditCapacity())

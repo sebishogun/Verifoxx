@@ -3,6 +3,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -10,21 +11,57 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sebishogun/verifoxx/internal/buildinfo"
+	"github.com/sebishogun/verifoxx/internal/config"
 	"github.com/sebishogun/verifoxx/internal/fixtures"
+	"github.com/sebishogun/verifoxx/internal/server"
 	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
 )
 
 type dependencies struct {
-	readFile func(string) ([]byte, error)
-	policy   string
-	requests string
-	evidence string
-	version  string
+	readFile        func(string) ([]byte, error)
+	migrate         func(context.Context) error
+	migrationHealth func(context.Context) error
+	serve           func(context.Context) error
+	healthcheck     func(context.Context) error
+	runTUI          func(context.Context, string, sources, io.Reader, io.Writer) error
+	policy          string
+	requests        string
+	evidence        string
+	version         string
 }
 
 func productionDependencies() dependencies {
 	return dependencies{
 		readFile: os.ReadFile,
+		migrate: func(ctx context.Context) error {
+			cfg, err := config.LoadOS(nil)
+			if err != nil {
+				return err
+			}
+			return server.Migrate(ctx, cfg)
+		},
+		migrationHealth: func(ctx context.Context) error {
+			cfg, err := config.LoadOS(nil)
+			if err != nil {
+				return err
+			}
+			return server.MigrationHealth(ctx, cfg)
+		},
+		serve: func(ctx context.Context) error {
+			cfg, err := config.LoadOS(nil)
+			if err != nil {
+				return err
+			}
+			return server.Serve(ctx, cfg)
+		},
+		healthcheck: func(ctx context.Context) error {
+			cfg, err := config.LoadOS(nil)
+			if err != nil {
+				return err
+			}
+			return server.Healthcheck(ctx, cfg)
+		},
+		runTUI:   runSemanticTUI,
 		policy:   verifoxx.Source(),
 		requests: fixtures.RequestsJSON(),
 		evidence: fixtures.EvidenceJSON(),
@@ -102,10 +139,28 @@ func (w *trackingWriter) Write(p []byte) (int, error) {
 // Execute runs one command with caller-owned I/O and returns its process exit
 // code. It never exits the process itself.
 func Execute(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	return executeWithDependencies(args, stdin, stdout, stderr, productionDependencies())
+	return ExecuteContext(context.Background(), args, stdin, stdout, stderr)
+}
+
+// ExecuteContext runs one command under caller-owned cancellation.
+func ExecuteContext(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	return executeWithDependenciesContext(ctx, args, stdin, stdout, stderr, productionDependencies())
 }
 
 func executeWithDependencies(args []string, stdin io.Reader, stdout, stderr io.Writer, deps dependencies) int {
+	return executeWithDependenciesContext(context.Background(), args, stdin, stdout, stderr, deps)
+}
+
+func executeWithDependenciesContext(
+	ctx context.Context,
+	args []string,
+	stdin io.Reader,
+	stdout, stderr io.Writer,
+	deps dependencies,
+) int {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if stdin == nil {
 		stdin = bytes.NewReader(nil)
 	}
@@ -121,7 +176,7 @@ func executeWithDependencies(args []string, stdin io.Reader, stdout, stderr io.W
 	if len(args) > 1 && (args[0] == "--help" || args[0] == "-h") {
 		err = errors.New("help accepts no arguments")
 	} else {
-		err = root.Execute()
+		err = root.ExecuteContext(ctx)
 	}
 	if out.err != nil || errOut.err != nil {
 		return 1
@@ -182,7 +237,12 @@ func newRoot(stdout, stderr io.Writer, deps dependencies) *cobra.Command {
 		newExplainCommand(deps),
 		newSimulateCommand(deps),
 		newDemoCommand(deps),
+		newTUICommand(deps),
 		newDebugWorkerCommand(deps),
+		newMigrationCommand(deps),
+		newMigrationHealthCommand(deps),
+		newServeCommand(deps),
+		newHealthcheckCommand(deps),
 	)
 	root.SetHelpCommand(&cobra.Command{
 		Use:   "help [command]",

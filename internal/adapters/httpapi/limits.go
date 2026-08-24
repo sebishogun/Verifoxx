@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/sebishogun/verifoxx/internal/security"
 )
 
 var (
@@ -17,10 +19,7 @@ var (
 	errBodyRead            = errors.New("httpapi: request body unreadable")
 )
 
-const (
-	maxBodyBytes      int64 = 64 << 20
-	maxRequestTimeout       = 30 * time.Minute
-)
+const maxBodyBytes int64 = security.MaximumRequestBytes
 
 // Config fixes request storage and deadline limits for one HTTP adapter.
 type Config struct {
@@ -29,8 +28,18 @@ type Config struct {
 }
 
 func (config Config) valid() bool {
-	return config.MaxBodyBytes > 0 && config.MaxBodyBytes <= maxBodyBytes &&
-		config.RequestTimeout > 0 && config.RequestTimeout <= maxRequestTimeout
+	if config.MaxBodyBytes <= 0 || config.MaxBodyBytes > maxBodyBytes {
+		return false
+	}
+	limits := security.DefaultLimits()
+	limits.RequestTimeout = config.RequestTimeout
+	limits.MaxRequestBytes = int(config.MaxBodyBytes)
+	limits.MaxOutputBytes = int(config.MaxBodyBytes)
+	return limits.Validate() == nil
+}
+
+func (config Config) maxPolicyBytes() int64 {
+	return min(config.MaxBodyBytes, int64(security.MaximumPolicyBytes))
 }
 
 func requireJSONContentType(request *http.Request) bool {
