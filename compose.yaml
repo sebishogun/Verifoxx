@@ -22,5 +22,85 @@ services:
       retries: 30
     stop_grace_period: 30s
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    command: ["migrate", "--wait"]
+    environment:
+      VERIFOXX_DATABASE_URL: postgresql://verifoxx_migrator:${VERIFOXX_MIGRATION_PASSWORD:-verifoxx-migrator-local}@postgres:5432/${POSTGRES_DB:-verifoxx}?sslmode=disable
+      VERIFOXX_DATABASE_CONNECT_TIMEOUT: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/verifoxx", "migration-healthcheck"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["serve"]
+    environment:
+      VERIFOXX_HTTP_ADDRESS: 0.0.0.0:8080
+      VERIFOXX_GRPC_ADDRESS: 0.0.0.0:9090
+      VERIFOXX_DATABASE_URL: postgresql://verifoxx_runtime:${VERIFOXX_RUNTIME_PASSWORD:-verifoxx-runtime-local}@postgres:5432/${POSTGRES_DB:-verifoxx}?sslmode=disable
+      VERIFOXX_DATABASE_CONNECT_TIMEOUT: 30s
+      VERIFOXX_AUDIT_MODE: required
+      VERIFOXX_AUDIT_WRITE_TIMEOUT: 10s
+      VERIFOXX_AUDIT_WRITERS: 1
+      VERIFOXX_AUDIT_QUEUE_DEPTH: 4
+      VERIFOXX_WORKERS: 2
+      VERIFOXX_QUEUE_DEPTH: 8
+      VERIFOXX_MAX_BATCH_ROWS: 16
+      VERIFOXX_MAX_BODY_BYTES: 1048576
+    ports:
+      - "127.0.0.1:${VERIFOXX_HTTP_PORT:-8080}:8080"
+      - "127.0.0.1:${VERIFOXX_GRPC_PORT:-9090}:9090"
+    depends_on:
+      migrate:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/verifoxx", "healthcheck"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 2s
+    stop_grace_period: 30s
+
+  debug:
+    profiles: ["debug"]
+    build:
+      context: .
+      dockerfile: Dockerfile.debug
+    command: ["serve"]
+    environment:
+      VERIFOXX_HTTP_ADDRESS: 0.0.0.0:8080
+      VERIFOXX_GRPC_ADDRESS: 0.0.0.0:9090
+      VERIFOXX_DATABASE_URL: postgresql://verifoxx_runtime:${VERIFOXX_RUNTIME_PASSWORD:-verifoxx-runtime-local}@postgres:5432/${POSTGRES_DB:-verifoxx}?sslmode=disable
+      VERIFOXX_DATABASE_CONNECT_TIMEOUT: 30s
+      VERIFOXX_AUDIT_MODE: required
+      VERIFOXX_AUDIT_WRITE_TIMEOUT: 10s
+      VERIFOXX_AUDIT_WRITERS: 1
+      VERIFOXX_AUDIT_QUEUE_DEPTH: 2
+      VERIFOXX_WORKERS: 1
+      VERIFOXX_QUEUE_DEPTH: 4
+      VERIFOXX_MAX_BATCH_ROWS: 16
+      VERIFOXX_MAX_BODY_BYTES: 1048576
+    ports:
+      - "127.0.0.1:${VERIFOXX_DEBUG_PORT:-40000}:40000"
+    depends_on:
+      migrate:
+        condition: service_healthy
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+
 volumes:
   postgres-data:

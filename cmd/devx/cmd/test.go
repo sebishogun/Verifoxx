@@ -18,7 +18,7 @@ func testCommandPlan(name string) ([]commandSpec, bool) {
 		}}, true
 	case "test:e2e":
 		return []commandSpec{{
-			executable: "go", arguments: []string{"test", "-count=1", "-tags=e2e", "-timeout", "300s", "./..."}, timeout: 6 * time.Minute,
+			executable: "go", arguments: []string{"test", "-count=1", "-tags=docker", "-timeout", "600s", "./internal/e2e"}, timeout: 11 * time.Minute,
 		}}, true
 	case "test:race":
 		return []commandSpec{{

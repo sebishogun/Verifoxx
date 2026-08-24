@@ -66,12 +66,8 @@ func workflowStaticBlocker(name string) string {
 		return "pinned SIMD dependency is incompatible with the Go 1.27 experiment API"
 	case "tui", "debug:tui":
 		return "tui product command is unavailable"
-	case "serve":
-		return "serve product command is unavailable"
 	case "load":
-		return "load target requires the unavailable serve product command"
-	case "test:e2e":
-		return "e2e test suite is unavailable"
+		return "load generator is unavailable"
 	default:
 		return ""
 	}
