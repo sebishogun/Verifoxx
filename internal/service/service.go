@@ -13,6 +13,7 @@ var (
 	ErrInvalidService    = errors.New("service: invalid service")
 	ErrInvalidContext    = errors.New("service: invalid context")
 	ErrServiceStopping   = errors.New("service: stopping")
+	ErrServiceBusy       = errors.New("service: busy")
 	ErrInvalidAdmission  = errors.New("service: invalid admission")
 	ErrAdmissionReleased = errors.New("service: admission released")
 )
@@ -105,6 +106,10 @@ func (service *Service) Admit(ctx context.Context) (Admission, error) {
 	if !service.accepting {
 		service.mu.Unlock()
 		return Admission{}, ErrServiceStopping
+	}
+	if service.queued >= len(service.slots) {
+		service.mu.Unlock()
+		return Admission{}, ErrServiceBusy
 	}
 	service.queued++
 	service.mu.Unlock()

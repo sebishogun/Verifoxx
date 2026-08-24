@@ -128,6 +128,39 @@ func TestServiceAdmissionCancellationAndLeaseValidation(t *testing.T) {
 	}
 }
 
+func TestServiceBoundsQueuedAdmissions(t *testing.T) {
+	t.Parallel()
+
+	gate, err := New(1)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	active, err := gate.Admit(context.Background())
+	if err != nil {
+		t.Fatalf("Admit(active) error = %v", err)
+	}
+	queuedCtx, cancelQueued := context.WithCancel(context.Background())
+	queued := make(chan error, 1)
+	go func() {
+		_, queuedErr := gate.Admit(queuedCtx)
+		queued <- queuedErr
+	}()
+	waitService(t, func() bool { return gate.Stats().Queued == 1 })
+
+	busyCtx, cancelBusy := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancelBusy()
+	if _, err := gate.Admit(busyCtx); !errors.Is(err, ErrServiceBusy) {
+		t.Fatalf("Admit(over queue limit) error = %v, want %v", err, ErrServiceBusy)
+	}
+	cancelQueued()
+	if err := receiveService(t, queued); !errors.Is(err, context.Canceled) {
+		t.Fatalf("queued Admit() error = %v, want context cancellation", err)
+	}
+	if err := gate.Release(&active); err != nil {
+		t.Fatalf("Release(active) error = %v", err)
+	}
+}
+
 func TestServiceAdmitReleaseAllocations(t *testing.T) {
 	gate, err := New(1)
 	if err != nil {
