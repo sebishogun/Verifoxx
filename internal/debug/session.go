@@ -226,33 +226,41 @@ func (session *Session) Close(ctx context.Context) error {
 }
 
 func (session *Session) request(ctx context.Context, request command) (response, error) {
-	if session == nil || session.commands == nil || session.done == nil || ctx == nil {
-		return response{}, ErrInvalidSession
-	}
-	if err := ctx.Err(); err != nil {
+	reply, err := session.enqueue(ctx, request)
+	if err != nil {
 		return response{}, err
 	}
-	request.ctx = ctx
-	request.reply = make(chan response, 1)
 	select {
-	case session.commands <- request:
-	case <-session.done:
-		return response{}, ErrSessionClosed
-	case <-ctx.Done():
-		return response{}, ctx.Err()
-	}
-	select {
-	case reply := <-request.reply:
-		return reply, reply.err
+	case response := <-reply:
+		return response, response.err
 	case <-session.done:
 		select {
-		case reply := <-request.reply:
-			return reply, reply.err
+		case response := <-reply:
+			return response, response.err
 		default:
 			return response{}, ErrSessionClosed
 		}
 	case <-ctx.Done():
 		return response{}, ctx.Err()
+	}
+}
+
+func (session *Session) enqueue(ctx context.Context, request command) (<-chan response, error) {
+	if session == nil || session.commands == nil || session.done == nil || ctx == nil {
+		return nil, ErrInvalidSession
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	request.ctx = ctx
+	request.reply = make(chan response, 1)
+	select {
+	case session.commands <- request:
+		return request.reply, nil
+	case <-session.done:
+		return nil, ErrSessionClosed
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -270,7 +278,22 @@ func (session *Session) run(state *sessionState) {
 		}
 
 		select {
+		case <-pending.ctx.Done():
+			pending.reply <- response{state: state.snapshot(StatusPaused, StopPause, 0, 0), err: pending.ctx.Err()}
+			running = false
+			continue
+		default:
+		}
+		select {
 		case request := <-session.commands:
+			if request.ctx == nil || request.ctx.Err() != nil {
+				err := ErrInvalidSession
+				if request.ctx != nil {
+					err = request.ctx.Err()
+				}
+				request.reply <- response{err: err}
+				continue
+			}
 			switch request.kind {
 			case commandPause:
 				pending.reply <- response{state: state.snapshot(StatusPaused, StopPause, 0, 0)}
@@ -312,6 +335,14 @@ func (session *Session) handlePaused(
 	pending *command,
 	running *bool,
 ) bool {
+	if request.ctx == nil || request.ctx.Err() != nil {
+		err := ErrInvalidSession
+		if request.ctx != nil {
+			err = request.ctx.Err()
+		}
+		request.reply <- response{err: err}
+		return false
+	}
 	switch request.kind {
 	case commandSnapshot:
 		request.reply <- response{state: state.snapshot(state.status(), StopNone, 0, 0)}

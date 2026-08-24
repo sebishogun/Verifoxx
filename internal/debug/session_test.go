@@ -392,6 +392,64 @@ func TestSessionBoundsBreakpointsAndCheckpoints(t *testing.T) {
 	}
 }
 
+func TestSessionQueuedCommandsPreserveSubmissionOrder(t *testing.T) {
+	t.Parallel()
+
+	p, batch, _ := debugFixture(t)
+	session := newDebugSession(t, p, batch, debugConfig())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	breakpointReply, err := session.enqueue(ctx, command{
+		kind:       commandAddBreakpoint,
+		breakpoint: Breakpoint{Kind: BreakInstruction, Instruction: 1},
+	})
+	if err != nil {
+		t.Fatalf("enqueue(AddBreakpoint) error = %v", err)
+	}
+	continueReply, err := session.enqueue(ctx, command{kind: commandContinue})
+	if err != nil {
+		t.Fatalf("enqueue(Continue) error = %v", err)
+	}
+	added := <-breakpointReply
+	continued := <-continueReply
+	if added.err != nil || added.breakpointID == 0 {
+		t.Fatalf("AddBreakpoint response = %+v", added)
+	}
+	if continued.err != nil || continued.state.Stop != StopBreakpoint ||
+		continued.state.Breakpoint != added.breakpointID || continued.state.Instruction != 1 {
+		t.Fatalf("Continue response = %+v after AddBreakpoint %+v", continued, added)
+	}
+}
+
+func TestSessionCanceledPausedCommandDoesNotMutateState(t *testing.T) {
+	t.Parallel()
+
+	p, batch, _ := debugFixture(t)
+	state := &sessionState{
+		program: p, batch: batch,
+		checkpoints: newCheckpointSet(1, 1),
+	}
+	if err := state.execution.Begin(p, batch); err != nil {
+		t.Fatalf("Begin() error = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	reply := make(chan response, 1)
+	request := command{ctx: ctx, reply: reply, kind: commandStepInstruction}
+	var pending command
+	running := false
+	if closed := (&Session{}).handlePaused(state, request, &pending, &running); closed {
+		t.Fatal("canceled StepInstruction closed the session")
+	}
+	got := <-reply
+	if !errors.Is(got.err, context.Canceled) {
+		t.Fatalf("canceled StepInstruction error = %v, want context.Canceled", got.err)
+	}
+	if cursor := state.execution.Cursor(); cursor != 0 {
+		t.Fatalf("canceled StepInstruction cursor = %d, want 0", cursor)
+	}
+}
+
 func debugFixture(t testing.TB) (*program.Program, eval.Batch, result.Batch) {
 	t.Helper()
 	fields, symbols, err := verifoxx.NewSchema()
