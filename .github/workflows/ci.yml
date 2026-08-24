@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Native runtime dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test native runtime dispatch
+        run: timeout 180s go run ./cmd/devx test
+      - name: Vet
+        run: timeout 120s go vet ./...
+
+  purego:
+    name: Pure-Go fallback
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test portable scalar implementation
+        run: timeout 180s go test -count=1 -tags=purego -timeout 120s ./...
+
+  scalar-386:
+    name: 386 scalar fallback
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test 386 scalar implementation
+        run: timeout 180s env GOARCH=386 go test -count=1 -timeout 120s ./...
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test internal and command packages
+        run: timeout 180s go run ./cmd/devx test:unit
+
+  race:
+    name: Race and checkptr
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test race and pointer safety
+        run: timeout 300s go run ./cmd/devx test:race
+
+  generated:
+    name: Generated and canonical files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.72.0"
+      - name: Check policy
+        run: timeout 180s go run ./cmd/devx policy:check
+      - name: Check results
+        run: timeout 180s go run ./cmd/devx results:check
+      - name: Check protobuf
+        run: timeout 300s go run ./cmd/devx proto:check
+      - name: Check generated drift
+        run: timeout 30s git diff --exit-code
+
+  docs:
+    name: Documentation contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check documentation
+        run: timeout 90s go test -count=1 -timeout 60s ./internal/doccheck
+
+  release-snapshot:
+    name: Release snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean

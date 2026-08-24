@@ -35,9 +35,8 @@ The developer command registry provides separate DAP and semantic-TUI clients:
 
 `debug:dap` starts `dlv dap` on `127.0.0.1:38697`; the DAP client must then send
 the launch request. `debug:tui` connects to `.verifoxx/debug.sock` and therefore
-requires a running `debug-worker`. At this revision `devx status` still marks
-`debug:tui` as unavailable even though the product TUI is implemented. Until
-that status gate is removed, use the direct TUI command shown below.
+requires a running `debug-worker`. Use `./cli/devx debug` to host the worker
+through Delve, or start both semantic-debug processes directly as shown below.
 
 ## Debug Build
 
@@ -142,8 +141,7 @@ Keep the Unix socket in a user-owned directory with owner-only permissions.
 Closing a TUI connection does not destroy the retained session; a later local
 client may reconnect. Cancel the session host when the debug run is complete.
 
-Start both semantic-debug processes directly when diagnosing the devx status
-gate:
+Start both semantic-debug processes directly without the developer wrappers:
 
 ```bash
 mkdir -p .verifoxx && chmod 700 .verifoxx

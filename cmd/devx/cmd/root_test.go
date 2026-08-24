@@ -384,6 +384,16 @@ func TestPerformanceWorkflowPlansAndRequirements(t *testing.T) {
 	}
 }
 
+func TestImplementedTUIWorkflowsHaveNoStaticBlocker(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"tui", "debug:tui"} {
+		if reason := workflowStaticBlocker(name); reason != "" {
+			t.Errorf("workflow %q static blocker = %q", name, reason)
+		}
+	}
+}
+
 func TestStatusBlocksInstallWithoutSupportedPackageManager(t *testing.T) {
 	t.Parallel()
 

@@ -64,8 +64,6 @@ func workflowStaticBlocker(name string) string {
 	switch name {
 	case "build:exp":
 		return "pinned SIMD dependency is incompatible with the Go 1.27 experiment API"
-	case "tui", "debug:tui":
-		return "tui product command is unavailable"
 	default:
 		return ""
 	}
