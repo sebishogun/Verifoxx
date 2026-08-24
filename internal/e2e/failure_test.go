@@ -18,6 +18,7 @@ import (
 	"github.com/sebishogun/verifoxx/internal/observability"
 	"github.com/sebishogun/verifoxx/internal/persistence"
 	"github.com/sebishogun/verifoxx/internal/program"
+	"github.com/sebishogun/verifoxx/internal/security"
 	"github.com/sebishogun/verifoxx/internal/server"
 	"github.com/sebishogun/verifoxx/internal/service"
 	"github.com/sebishogun/verifoxx/internal/simdops"
@@ -205,7 +206,7 @@ func newFailureEngine(t *testing.T, mode persistence.AuditMode, journal *failure
 		AuditCapacity: persistence.AuditCapacity{
 			Bytes: 64 << 10, Requests: 16, Evidence: 32, Rows: 16, EvidenceLinks: 64,
 		},
-		Workers: 1,
+		Limits: security.DefaultLimits(), Workers: 1,
 	})
 	if err != nil {
 		t.Fatalf("NewEngine() error = %v", err)

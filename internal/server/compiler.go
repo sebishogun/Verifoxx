@@ -8,28 +8,38 @@ import (
 	"github.com/sebishogun/verifoxx/internal/compile"
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/verifoxx/internal/security"
 	"github.com/sebishogun/verifoxx/internal/service"
 	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
 )
 
-var serverPolicyLimits = jsonpolicy.Limits{
-	MaxSourceBytes:   4 << 20,
-	MaxCatalogItems:  1024,
-	MaxStringBytes:   1 << 20,
-	MaxDepth:         128,
-	MaxNodes:         1 << 16,
-	MaxValues:        1 << 17,
-	MaxArrayItems:    1 << 16,
-	MaxSymbolBytes:   4 << 20,
-	MaxRequirements:  1024,
-	MaxClauses:       1 << 13,
-	MaxTemplateBytes: 1 << 20,
-	MaxAssumptions:   1024,
-	MaxUncertainty:   1024,
+func policyDecoderLimits(limits security.Limits) jsonpolicy.Limits {
+	return jsonpolicy.Limits{
+		MaxSourceBytes:   limits.MaxPolicyBytes,
+		MaxCatalogItems:  1024,
+		MaxStringBytes:   1 << 20,
+		MaxDepth:         limits.MaxASTDepth,
+		MaxNodes:         limits.MaxASTNodes,
+		MaxValues:        1 << 17,
+		MaxArrayItems:    1 << 16,
+		MaxSymbolBytes:   4 << 20,
+		MaxRequirements:  1024,
+		MaxClauses:       1 << 13,
+		MaxTemplateBytes: 1 << 20,
+		MaxAssumptions:   1024,
+		MaxUncertainty:   1024,
+	}
 }
 
 func compilePolicySource(source []byte) (*program.Program, error) {
-	document, fields, symbols, diagnostics, err := decodeAndValidatePolicy(source)
+	return compilePolicySourceWithLimits(source, security.DefaultLimits())
+}
+
+func compilePolicySourceWithLimits(source []byte, limits security.Limits) (*program.Program, error) {
+	if limits.Validate() != nil {
+		return nil, service.ErrInvalidPolicy
+	}
+	document, fields, symbols, diagnostics, err := decodeAndValidatePolicy(source, policyDecoderLimits(limits))
 	if err != nil {
 		return nil, err
 	}
@@ -45,11 +55,18 @@ func compilePolicySource(source []byte) (*program.Program, error) {
 }
 
 func validatePolicySource(source []byte) ([]compile.Diagnostic, error) {
-	_, _, _, diagnostics, err := decodeAndValidatePolicy(source)
+	return validatePolicySourceWithLimits(source, security.DefaultLimits())
+}
+
+func validatePolicySourceWithLimits(source []byte, limits security.Limits) ([]compile.Diagnostic, error) {
+	if limits.Validate() != nil {
+		return nil, service.ErrInvalidPolicy
+	}
+	_, _, _, diagnostics, err := decodeAndValidatePolicy(source, policyDecoderLimits(limits))
 	return diagnostics, err
 }
 
-func decodeAndValidatePolicy(source []byte) (
+func decodeAndValidatePolicy(source []byte, limits jsonpolicy.Limits) (
 	*ast.Document,
 	*schema.Schema,
 	*schema.Interner,
@@ -62,7 +79,7 @@ func decodeAndValidatePolicy(source []byte) (
 	}
 	builder := ast.NewBuilder(ast.Hints{SourceBytes: len(source)})
 	var decoder jsonpolicy.Decoder
-	if err := decoder.Decode(builder, source, fields, symbols, serverPolicyLimits); err != nil {
+	if err := decoder.Decode(builder, source, fields, symbols, limits); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("%w: decode policy: %v", service.ErrInvalidPolicy, err)
 	}
 	var validator compile.Validator

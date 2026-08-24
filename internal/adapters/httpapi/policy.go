@@ -18,7 +18,7 @@ func (server *Server) handleValidate(response http.ResponseWriter, request *http
 		return
 	}
 	defer server.release(&admission, cancel)
-	body, err := readPolicyBody(ctx, response, request, server.config.MaxBodyBytes)
+	body, err := readPolicyBody(ctx, response, request, server.config.maxPolicyBytes())
 	if err != nil {
 		writePolicyBodyError(response, err)
 		return
@@ -42,7 +42,7 @@ func (server *Server) handleCompile(response http.ResponseWriter, request *http.
 		return
 	}
 	defer server.release(&admission, cancel)
-	body, err := readPolicyBody(ctx, response, request, server.config.MaxBodyBytes)
+	body, err := readPolicyBody(ctx, response, request, server.config.maxPolicyBytes())
 	if err != nil {
 		writePolicyBodyError(response, err)
 		return

@@ -14,6 +14,7 @@ import (
 	"github.com/sebishogun/verifoxx/internal/observability"
 	"github.com/sebishogun/verifoxx/internal/persistence"
 	"github.com/sebishogun/verifoxx/internal/program"
+	"github.com/sebishogun/verifoxx/internal/security"
 	"github.com/sebishogun/verifoxx/internal/service"
 	"github.com/sebishogun/verifoxx/internal/simdops"
 	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
@@ -38,7 +39,7 @@ func TestEngineEvaluatesGoldenAndSubmitsRequiredAudit(t *testing.T) {
 	engine, err := NewEngine(EngineConfig{
 		Registry: registry, Publisher: publisher, Journal: journal, Metrics: metrics,
 		Health: func(context.Context) error { return nil }, EngineVersion: buildinfo.Version(),
-		AuditMode: persistence.AuditRequired, AuditCapacity: capacity, Workers: 1,
+		AuditMode: persistence.AuditRequired, AuditCapacity: capacity, Limits: security.DefaultLimits(), Workers: 1,
 	})
 	if err != nil {
 		t.Fatalf("NewEngine() error = %v", err)

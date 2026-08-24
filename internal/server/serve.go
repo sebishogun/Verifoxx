@@ -21,6 +21,7 @@ import (
 	"github.com/sebishogun/verifoxx/internal/observability"
 	"github.com/sebishogun/verifoxx/internal/persistence"
 	"github.com/sebishogun/verifoxx/internal/program"
+	"github.com/sebishogun/verifoxx/internal/security"
 	"github.com/sebishogun/verifoxx/internal/service"
 	"github.com/sebishogun/verifoxx/internal/simdops"
 	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
@@ -36,6 +37,10 @@ type serveFailure struct {
 func Serve(ctx context.Context, cfg config.Config) error {
 	if ctx == nil || cfg.DatabaseURL.Empty() {
 		return ErrInvalidRuntime
+	}
+	limits, err := runtimeSecurityLimits(cfg)
+	if err != nil {
+		return err
 	}
 	connectContext, cancelConnect := context.WithTimeout(ctx, cfg.DatabaseConnectTimeout)
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL.Reveal())
@@ -63,7 +68,9 @@ func Serve(ctx context.Context, cfg config.Config) error {
 		pool.Close()
 		return err
 	}
-	publisher, err := persistence.NewPublisher(policyStore, registry, compilePolicySource, buildinfo.Version())
+	publisher, err := persistence.NewPublisher(policyStore, registry, func(source []byte) (*program.Program, error) {
+		return compilePolicySourceWithLimits(source, limits)
+	}, buildinfo.Version())
 	if err != nil {
 		pool.Close()
 		return err
@@ -76,7 +83,7 @@ func Serve(ctx context.Context, cfg config.Config) error {
 			return err
 		}
 	}
-	auditCapacity, err := runtimeAuditCapacity(cfg)
+	auditCapacity, err := runtimeAuditCapacity(cfg, limits)
 	if err != nil {
 		pool.Close()
 		return err
@@ -108,6 +115,7 @@ func Serve(ctx context.Context, cfg config.Config) error {
 	engine, err := NewEngine(EngineConfig{
 		Registry: registry, Publisher: publisher, Journal: journal, Metrics: metrics, Health: pool.Ping,
 		EngineVersion: buildinfo.Version(), AuditCapacity: auditCapacity, AuditMode: cfg.AuditMode, Workers: cfg.Workers,
+		Limits: limits,
 	})
 	if err != nil {
 		_ = journal.Close(context.Background())
@@ -217,13 +225,28 @@ func Serve(ctx context.Context, cfg config.Config) error {
 	}
 }
 
-func runtimeAuditCapacity(cfg config.Config) (persistence.AuditCapacity, error) {
+func runtimeSecurityLimits(cfg config.Config) (security.Limits, error) {
+	if cfg.MaxBodyBytes <= 0 || cfg.MaxBodyBytes > int64(security.MaximumRequestBytes) {
+		return security.Limits{}, ErrInvalidRuntime
+	}
+	limits := security.DefaultLimits()
+	limits.RequestTimeout = cfg.RequestTimeout
+	limits.MaxRequestBytes = int(cfg.MaxBodyBytes)
+	limits.MaxOutputBytes = int(cfg.MaxBodyBytes)
+	limits.MaxBatchRows = cfg.MaxBatchRows
+	if err := limits.Validate(); err != nil {
+		return security.Limits{}, ErrInvalidRuntime
+	}
+	return limits, nil
+}
+
+func runtimeAuditCapacity(cfg config.Config, limits security.Limits) (persistence.AuditCapacity, error) {
 	if cfg.MaxBatchRows == 0 || cfg.MaxBodyBytes <= 0 || cfg.MaxBodyBytes > int64(^uint32(0))/3 {
 		return persistence.AuditCapacity{}, ErrInvalidRuntime
 	}
 	rows := uint64(cfg.MaxBatchRows)
-	evidence := min(rows*4, uint64(serverBatchLimits.MaxEvidence))
-	links := min(rows*16, uint64(serverBatchLimits.MaxEvidenceRefs))
+	evidence := min(rows*4, uint64(limits.MaxEvidenceRecords))
+	links := min(rows*16, uint64(1<<20))
 	return persistence.AuditCapacity{
 		Bytes: int(cfg.MaxBodyBytes * 3), Requests: int(rows), Evidence: int(evidence),
 		Rows: int(rows), EvidenceLinks: int(links),

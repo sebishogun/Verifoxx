@@ -16,6 +16,7 @@ import (
 	"github.com/sebishogun/verifoxx/internal/persistence"
 	"github.com/sebishogun/verifoxx/internal/program"
 	"github.com/sebishogun/verifoxx/internal/result"
+	"github.com/sebishogun/verifoxx/internal/security"
 	"github.com/sebishogun/verifoxx/internal/service"
 )
 
@@ -28,16 +29,18 @@ var (
 	escalateOutcomeName = []byte("Escalate")
 )
 
-var serverBatchLimits = jsonbatch.Limits{
-	MaxRequestBytes:       8 << 20,
-	MaxEvidenceBytes:      8 << 20,
-	MaxStringBytes:        1 << 20,
-	MaxRequests:           1 << 16,
-	MaxEvidence:           1 << 18,
-	MaxEvidenceRefs:       1 << 20,
-	MaxFactsPerRequest:    256,
-	MaxEvidenceAttributes: 64,
-	MaxDepth:              128,
+func batchDecoderLimits(limits security.Limits) jsonbatch.Limits {
+	return jsonbatch.Limits{
+		MaxRequestBytes:       limits.MaxRequestBytes,
+		MaxEvidenceBytes:      limits.MaxRequestBytes,
+		MaxStringBytes:        1 << 20,
+		MaxRequests:           limits.MaxBatchRows,
+		MaxEvidence:           limits.MaxEvidenceRecords,
+		MaxEvidenceRefs:       1 << 20,
+		MaxFactsPerRequest:    256,
+		MaxEvidenceAttributes: 64,
+		MaxDepth:              limits.MaxASTDepth,
+	}
 }
 
 type auditJournal interface {
@@ -55,6 +58,7 @@ type EngineConfig struct {
 	EngineVersion string
 	AuditCapacity persistence.AuditCapacity
 	AuditMode     persistence.AuditMode
+	Limits        security.Limits
 	Workers       int
 }
 
@@ -70,31 +74,36 @@ type engineWorker struct {
 // Engine implements the transport-independent PolicyAPI with a fixed worker
 // set and immutable published Programs.
 type Engine struct {
-	publisher     *persistence.Publisher
-	registry      *program.Registry
-	journal       auditJournal
-	metrics       *observability.Metrics
-	health        func(context.Context) error
-	workers       chan *engineWorker
-	versions      map[[32]byte]persistence.PolicyVersionID
-	engineVersion string
-	versionMu     sync.RWMutex
-	sequence      atomic.Uint64
-	auditMode     persistence.AuditMode
+	publisher      *persistence.Publisher
+	registry       *program.Registry
+	journal        auditJournal
+	metrics        *observability.Metrics
+	health         func(context.Context) error
+	workers        chan *engineWorker
+	versions       map[[32]byte]persistence.PolicyVersionID
+	engineVersion  string
+	batchLimits    jsonbatch.Limits
+	limits         security.Limits
+	versionMu      sync.RWMutex
+	sequence       atomic.Uint64
+	maxPolicyBytes int
+	maxOutputBytes int
+	auditMode      persistence.AuditMode
 }
 
 // NewEngine allocates all evaluator and audit workspaces before serving.
 func NewEngine(config EngineConfig) (*Engine, error) {
 	if config.Registry == nil || config.Publisher == nil || config.Journal == nil || config.Metrics == nil ||
 		config.Health == nil || config.EngineVersion == "" || !config.AuditMode.Valid() ||
-		config.Workers <= 0 || config.Workers > maxEngineWorkers {
+		config.Workers <= 0 || config.Workers > maxEngineWorkers || config.Limits.Validate() != nil {
 		return nil, ErrInvalidRuntime
 	}
 	engine := &Engine{
 		publisher: config.Publisher, registry: config.Registry, journal: config.Journal,
 		metrics: config.Metrics, health: config.Health, workers: make(chan *engineWorker, config.Workers),
 		versions: make(map[[32]byte]persistence.PolicyVersionID), engineVersion: config.EngineVersion,
-		auditMode: config.AuditMode,
+		batchLimits: batchDecoderLimits(config.Limits), limits: config.Limits, maxPolicyBytes: config.Limits.MaxPolicyBytes,
+		maxOutputBytes: config.Limits.MaxOutputBytes, auditMode: config.AuditMode,
 	}
 	for range config.Workers {
 		worker := &engineWorker{}
@@ -112,13 +121,13 @@ func NewEngine(config EngineConfig) (*Engine, error) {
 
 // ValidatePolicy validates source without publishing it.
 func (engine *Engine) ValidatePolicy(ctx context.Context, source []byte) (service.Validation, error) {
-	if !engine.valid() || ctx == nil || len(source) == 0 {
+	if !engine.valid() || ctx == nil || len(source) == 0 || len(source) > engine.maxPolicyBytes {
 		return service.Validation{}, service.ErrInvalidPolicy
 	}
 	if err := ctx.Err(); err != nil {
 		return service.Validation{}, err
 	}
-	diagnostics, err := validatePolicySource(source)
+	diagnostics, err := validatePolicySourceWithLimits(source, engine.limits)
 	if err != nil {
 		return service.Validation{}, err
 	}
@@ -127,7 +136,7 @@ func (engine *Engine) ValidatePolicy(ctx context.Context, source []byte) (servic
 
 // CompilePolicy persists, publishes, and activates valid source.
 func (engine *Engine) CompilePolicy(ctx context.Context, source []byte) (service.PolicyMetadata, error) {
-	if !engine.valid() || ctx == nil || len(source) == 0 {
+	if !engine.valid() || ctx == nil || len(source) == 0 || len(source) > engine.maxPolicyBytes {
 		return service.PolicyMetadata{}, service.ErrInvalidPolicy
 	}
 	compiled, version, err := engine.publisher.Publish(ctx, source)
@@ -194,7 +203,7 @@ func (engine *Engine) EvaluateBatch(
 	}
 	defer func() { engine.workers <- worker }()
 	started := time.Now().UTC()
-	batch, err := worker.decoder.Decode(&worker.builder, compiled, request.Requests, request.Evidence, serverBatchLimits)
+	batch, err := worker.decoder.Decode(&worker.builder, compiled, request.Requests, request.Evidence, engine.batchLimits)
 	if err != nil {
 		return nil, fmt.Errorf("%w: decode batch: %v", service.ErrInvalidRequest, err)
 	}
@@ -211,6 +220,9 @@ func (engine *Engine) EvaluateBatch(
 	output, err = worker.encoder.Append(output, batch.RequestIDs, &worker.results, []byte(engine.engineVersion))
 	if err != nil {
 		return nil, fmt.Errorf("%w: encode results: %v", service.ErrUnavailable, err)
+	}
+	if len(output) > engine.maxOutputBytes {
+		return nil, fmt.Errorf("%w: encoded output exceeds service limit", service.ErrInvalidRequest)
 	}
 	completed := time.Now().UTC()
 	if engine.auditMode != persistence.AuditOff {
@@ -249,7 +261,7 @@ func (engine *Engine) Health(ctx context.Context) error {
 func (engine *Engine) valid() bool {
 	return engine != nil && engine.publisher != nil && engine.registry != nil && engine.journal != nil &&
 		engine.metrics != nil && engine.health != nil && engine.workers != nil && cap(engine.workers) > 0 &&
-		engine.engineVersion != "" && engine.auditMode.Valid()
+		engine.engineVersion != "" && engine.maxPolicyBytes > 0 && engine.maxOutputBytes > 0 && engine.auditMode.Valid()
 }
 
 func (engine *Engine) acquire(ctx context.Context) (*engineWorker, error) {

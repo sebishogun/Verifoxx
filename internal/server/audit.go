@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sebishogun/verifoxx/internal/persistence"
+	"github.com/sebishogun/verifoxx/internal/security"
 )
 
 type auditInput struct {
@@ -107,7 +108,8 @@ func buildAuditBatch(batch *persistence.AuditBatch, input auditInput) error {
 	requestIDs := make([]string, len(requests.Requests))
 	for row, payload := range requests.Requests {
 		var metadata auditObjectID
-		if json.Unmarshal(payload, &metadata) != nil || !validAuditID(metadata.ID, 'R') || containsString(requestIDs[:row], metadata.ID) {
+		if json.Unmarshal(payload, &metadata) != nil || security.ContainsProtectedRows(payload) ||
+			!validAuditID(metadata.ID, 'R') || containsString(requestIDs[:row], metadata.ID) {
 			return persistence.ErrInvalidAuditBatch
 		}
 		requestIDs[row] = metadata.ID
@@ -128,7 +130,8 @@ func buildAuditBatch(batch *persistence.AuditBatch, input auditInput) error {
 	evidenceIDs := make([]string, len(evidence.Evidence))
 	for row, payload := range evidence.Evidence {
 		var metadata auditObjectID
-		if json.Unmarshal(payload, &metadata) != nil || !validAuditID(metadata.ID, 'E') || containsString(evidenceIDs[:row], metadata.ID) {
+		if json.Unmarshal(payload, &metadata) != nil || security.ContainsProtectedRows(payload) ||
+			!validAuditID(metadata.ID, 'E') || containsString(evidenceIDs[:row], metadata.ID) {
 			return persistence.ErrInvalidAuditBatch
 		}
 		evidenceIDs[row] = metadata.ID

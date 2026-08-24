@@ -43,6 +43,10 @@ func (server *Server) handleEvaluate(response http.ResponseWriter, request *http
 		writeServiceError(response, err)
 		return
 	}
+	if int64(len(encoded)) > server.config.MaxBodyBytes {
+		writeError(response, http.StatusRequestEntityTooLarge, "output_too_large", "evaluation output exceeds limit")
+		return
+	}
 	if len(encoded) == 0 || !json.Valid(encoded) {
 		writeServiceError(response, coreservice.ErrUnavailable)
 		return

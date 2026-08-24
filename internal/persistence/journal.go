@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/sebishogun/verifoxx/internal/security"
 )
 
 var (
@@ -318,7 +320,8 @@ func validRequestSnapshots(batch *AuditBatch) bool {
 	for row := range count {
 		payload := requests.Payloads[row].Bytes(batch.Bytes)
 		if !validRequiredAuditText(batch.Bytes, requests.Keys[row], true) ||
-			!validAuditJSON(batch.Bytes, requests.Payloads[row], '{', '}') || requests.CapturedAt[row].IsZero() {
+			!validAuditJSON(batch.Bytes, requests.Payloads[row], '{', '}') || security.ContainsProtectedRows(payload) ||
+			requests.CapturedAt[row].IsZero() {
 			return false
 		}
 		digest := sha256.Sum256(payload)
@@ -340,7 +343,8 @@ func validEvidenceSnapshots(batch *AuditBatch) bool {
 		payload := evidence.Payloads[row].Bytes(batch.Bytes)
 		expires := evidence.ExpiresAt[row]
 		if !validRequiredAuditText(batch.Bytes, evidence.Keys[row], true) ||
-			!validAuditJSON(batch.Bytes, evidence.Payloads[row], '{', '}') || evidence.CapturedAt[row].IsZero() ||
+			!validAuditJSON(batch.Bytes, evidence.Payloads[row], '{', '}') || security.ContainsProtectedRows(payload) ||
+			evidence.CapturedAt[row].IsZero() ||
 			(!expires.IsZero() && expires.Before(evidence.CapturedAt[row])) {
 			return false
 		}
