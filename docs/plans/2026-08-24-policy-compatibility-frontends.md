@@ -414,13 +414,15 @@ Use `ast.ParseModuleWithOpts` with `ParserOptions{RegoVersion: ast.RegoV1}`. Rej
 
 Use OPA `Location.Offset` and `Location.Text` directly for byte spans. An explicit true default folds the root to a true Boolean node. False/no defaults retain rule roots and set `Policy.Default` to Reject/Escalate respectively.
 
-OPA `not` is negation-as-failure, so a missing field makes the negated atom
-succeed. Existing `Exists` deliberately maps absence to unknown and must not be
-changed. Append a shared semantic `NodeKindDefined`, core
+OPA v1.19.1 makes a missing bare reference or equality succeed under `not`, but
+missing `!=`, ordered comparisons, and membership remain undefined. Existing
+`Exists` deliberately maps absence to unknown and must not be changed. Append a
+shared semantic `NodeKindDefined`, core
 `CompareOpDefined`, and `OpcodeDefined`; the new leaf returns true for present,
-false for absent, and clears reasons. Lower `not E(field)` as
-`NOT DEFINED(field) OR NOT E(field)`; lower negated constants with ordinary
-`Not`. Reject negated expressions that are not one supported scalar atom. Add
+false for absent, and clears reasons. Lower negated bare references and equality
+as `NOT DEFINED(field) OR NOT E(field)`; use ordinary `Not` for the other
+supported operators and constants. Reject negated expressions that are not one
+supported scalar atom. Add
 public-builder, core, and shared-validator/lowerer RED/GREEN tests before the
 Rego implementation.
 
