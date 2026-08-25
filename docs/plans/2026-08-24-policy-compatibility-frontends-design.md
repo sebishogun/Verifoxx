@@ -87,10 +87,12 @@ Without a default, undefined input produces uncertainty. An explicit
 `default allow := false` maps unresolved evaluation to Reject, matching the
 bounded complete-rule decision contract.
 
-Rego negation is negation-as-failure: `not E(input.x)` succeeds when `input.x`
-is absent, whereas the shared four-valued `Not` preserves missing as unknown.
-The Rego frontend therefore lowers a negated field atom as
-`NOT DEFINED(field) OR NOT E(field)`. Negated constants use ordinary `Not`.
+OPA v1.19.1 distinguishes missing operands under negation. A negated bare input
+reference or equality succeeds when the field is absent, whereas negated `!=`,
+ordered comparisons, and membership remain undefined. The frontend lowers the
+first category as `NOT DEFINED(field) OR NOT E(field)` and the second with the
+shared four-valued `Not`, preserving missing as unknown. Negated constants also
+use ordinary `Not`.
 `Defined` reads the existing presence masks in one bitwise pass and clears all
 reason planes. It is distinct from native `Exists`, so CEL and native policy
 semantics remain unchanged.

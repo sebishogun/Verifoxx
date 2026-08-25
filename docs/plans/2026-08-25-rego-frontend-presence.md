@@ -4,7 +4,7 @@
 
 **Goal:** Implement the bounded Rego v1 frontend while preserving OPA negation-as-failure exactly for present and missing bound fields.
 
-**Architecture:** Append one generic `Defined` leaf to the public semantic table and shared core. It reads existing field presence masks as a classical Boolean, while the existing native `Exists` operation retains its missing-is-unknown contract. The Rego frontend rewrites `not E(field)` into `NOT DEFINED(field) OR NOT E(field)` before using the shared compiler.
+**Architecture:** Append one generic `Defined` leaf to the public semantic table and shared core. It reads existing field presence masks as a classical Boolean, while the existing native `Exists` operation retains its missing-is-unknown contract. For OPA v1.19.1, the Rego frontend rewrites negated bare references and equality as `NOT DEFINED(field) OR NOT E(field)`; negated `!=`, ordered comparisons, membership, and constants use ordinary `Not` because their missing-input result remains undefined.
 
 **Tech Stack:** Go 1.27, OPA/Rego v1.19.1, existing frontend SoA/CSR builder, append-only AST/Program enums, presence-mask evaluator storage, and the shared semantic compiler.
 
@@ -268,7 +268,7 @@ Reverse ordered operations when the literal is left. Reuse typed scratch.
 
 **Step 2: Lower exact negation**
 
-For base field node `E` and field `F`, append:
+For a bare field reference or equality node `E` and field `F`, append:
 
 ```text
 definedF  = Defined(F)
@@ -277,7 +277,10 @@ notE      = Not(E)
 result    = Any(notDefined, notE)
 ```
 
-Negated constants use ordinary Not. Reject every other negated form.
+Negated `!=`, ordered comparisons, membership, and constants use ordinary Not.
+This preserves missing as unknown for the operators that OPA leaves undefined.
+Reject every other negated form. Differentially test every supported negated
+operator with a missing field and with an explicit false default.
 
 **Step 3: Build roots and defaults**
 
