@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	cel.dev/cel-go v0.32.0
+	github.com/cedar-policy/cedar-go v1.8.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/huh v1.0.0
 	github.com/charmbracelet/lipgloss v1.1.0
