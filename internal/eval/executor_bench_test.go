@@ -92,3 +92,23 @@ func BenchmarkExecutorScalar(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkExecutorBoolean(b *testing.B) {
+	p, batch, executor := booleanExecutorFixture(b, true, 1024)
+	executor.executeSchedule(p, batch)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		executor.executeSchedule(p, batch)
+	}
+}
+
+func BenchmarkExecutorDefined(b *testing.B) {
+	p, batch, executor := definedExecutorFixture(b, 1024)
+	executor.executeSchedule(p, batch)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		executor.executeSchedule(p, batch)
+	}
+}

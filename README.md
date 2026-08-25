@@ -85,8 +85,22 @@ with mode `0600`; an existing destination is rejected unless `--force` is set.
 
 ### Semantic TUI
 
-The TUI is a client for a retained semantic debug session. Start the worker in
-one terminal:
+The TUI is a client for a retained semantic debug session. With the installed
+Neovim configuration, open the repository, run `:DapContinue`, and select
+`Debug Verifoxx`. Neovim imports `.vscode/launch.json`, starts an ephemeral
+Delve DAP server, and launches `debug-worker`. Once `.verifoxx/debug.sock`
+exists, connect from a terminal:
+
+```bash
+./cli/devx debug:tui
+```
+
+`./cli/devx debug` and `./cli/devx debug:dap` are aliases for a fixed
+`127.0.0.1:38697` Delve DAP server when an editor-managed ephemeral server is
+not desired. Both wait for a DAP launch request; neither starts the worker by
+itself.
+
+Without an editor, start the worker directly in one terminal:
 
 ```bash
 mkdir -p .verifoxx && chmod 700 .verifoxx
@@ -104,10 +118,31 @@ Add `--browser` to start a synchronized viewer on an ephemeral
 terminal remains the debugger controller. If the desktop opener fails, the TUI
 prints the loopback URL and continues running.
 
-Use `s`, `n`, and `o` to step; `c` to continue; `a` and `p` to switch between
-the source AST and compiled program; and `q` to quit. Supply the same custom
-`--policy`, `--requests`, and `--evidence` paths to both commands when not using
-the embedded pack.
+In the browser, use Tab to enter the graph, left/right to move between nodes at
+the same depth, and up/down to follow incoming/outgoing relationships. Enter or
+Space selects the focused node. Dense edge labels are suppressed only when they
+would overlap; the inspector always lists every typed relationship for the
+selected node. Pointer pan, wheel zoom, Fit, AST, and Program controls remain
+available.
+
+The alternate-screen dashboard follows terminal resizes and keeps Requests,
+Graph, Runtime, and Breakpoints/Watches in bounded panes. Graphs that fit use
+labeled boxes; larger graphs use a complete fit-to-pane topology with current
+node and typed relationship details below it. The browser remains the richer
+pan-and-zoom labeled view.
+
+Use `s`, `n`, and `o` to step; `c` to continue; and `a` and `p` to switch the
+visible `[AST]` and `[PROGRAM]` tabs. `h` opens a bounded 64-stop Session
+history, `tab` switches to Persisted history, `j`/`k` select history rows, and
+`esc` returns focus to Requests. Persisted history is optional: when
+`VERIFOXX_DATABASE_URL` is set, the TUI lazily loads at most 64 newest audit
+findings for the selected request; when unset, that tab reports that persistence
+is not configured. Database failures remain inside the history pane and never
+stop stepping. Credentials are not displayed.
+
+Supply the same custom `--policy`, `--requests`, and `--evidence` paths to both
+commands when not using the embedded pack. Press `q` to restore the prior screen
+and quit.
 
 ### Docker
 

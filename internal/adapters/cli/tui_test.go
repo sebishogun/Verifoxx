@@ -7,13 +7,16 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	postgresadapter "github.com/sebishogun/verifoxx/internal/adapters/postgres"
 	tuiadapter "github.com/sebishogun/verifoxx/internal/adapters/tui"
+	"github.com/sebishogun/verifoxx/internal/config"
 	"github.com/sebishogun/verifoxx/internal/debug"
 	"github.com/sebishogun/verifoxx/internal/graphview"
 )
@@ -161,6 +164,70 @@ func TestTUIRunsWithEmbeddedSourcesAndDefaultSocket(t *testing.T) {
 	}
 }
 
+func TestTUICommandPassesOptionalPersistedHistoryConfiguration(t *testing.T) {
+	deps := productTestDependencies()
+	databaseURL := config.SecretURL("postgres://history:secret@database/verifoxx")
+	deps.databaseURL = func() config.SecretURL { return databaseURL }
+	called := false
+	deps.runTUI = func(_ context.Context, options tuiRunOptions, _ sources, _ io.Reader, _ io.Writer) error {
+		called = true
+		if options.databaseURL.Reveal() != databaseURL.Reveal() {
+			t.Fatalf("database URL = %s, want configured secret", options.databaseURL)
+		}
+		return nil
+	}
+
+	code, stdout, stderr := runCLIWithDependencies(t, deps, "tui")
+	if code != 0 || !called || stdout != "" || stderr != "" {
+		t.Fatalf("tui history config = (%d, called=%v, stdout=%q, stderr=%q)", code, called, stdout, stderr)
+	}
+	if strings.Contains(stdout+stderr, "secret") {
+		t.Fatalf("TUI output exposed database credentials: %q", stdout+stderr)
+	}
+}
+
+func TestTUIHistoryLoaderMapsPersistedRowsAndSanitizesFailures(t *testing.T) {
+	now := time.Date(2026, time.August, 24, 12, 30, 0, 0, time.UTC)
+	store := &tuiHistoryStoreStub{entries: []postgresadapter.DecisionHistoryEntry{
+		{CompletedAt: now, Policy: "policy", Version: "2.1.0", Decision: "Revise"},
+		{CompletedAt: now.Add(-time.Hour), Policy: "policy", Version: "2.0.0", Decision: "Approve"},
+	}}
+	loader := &tuiHistoryLoader{store: store}
+	entries, err := loader.LoadHistory(context.Background(), tuiadapter.RequestItem{ID: 2, Name: "R2"})
+	if err != nil {
+		t.Fatalf("LoadHistory() error = %v", err)
+	}
+	if store.requestKey != "R2" || len(entries) != 2 || entries[0].Version != "2.0.0" ||
+		entries[1].At != now || entries[1].Policy != "policy" || entries[1].Version != "2.1.0" ||
+		entries[1].Decision != "Revise" {
+		t.Fatalf("LoadHistory() request=%q entries=%+v", store.requestKey, entries)
+	}
+
+	store.err = errors.New("postgres://history:super-secret@database/verifoxx")
+	if _, err := loader.LoadHistory(context.Background(), tuiadapter.RequestItem{ID: 2, Name: "R2"}); !errors.Is(err, errPersistedHistoryUnavailable) || strings.Contains(err.Error(), "super-secret") {
+		t.Fatalf("sanitized history error = %v", err)
+	}
+}
+
+func TestTUIHistoryLoaderIsLazyAndClosesItsPool(t *testing.T) {
+	loader := newTUIHistoryLoader(config.SecretURL("postgres://history:secret@database/verifoxx"))
+	if loader == nil || loader.store != nil || loader.pool != nil {
+		t.Fatalf("new history loader is not lazy: %+v", loader)
+	}
+	pool := &tuiHistoryPoolStub{}
+	loader.pool = pool
+	loader.store = &tuiHistoryStoreStub{}
+	loader.Close()
+	if !pool.closed || loader.pool != nil || loader.store != nil {
+		t.Fatalf("history loader close = pool closed %v, pool %v, store %v", pool.closed, loader.pool, loader.store)
+	}
+
+	loader = newTUIHistoryLoader(config.SecretURL("postgres://history:super-secret@%"))
+	if _, err := loader.LoadHistory(context.Background(), tuiadapter.RequestItem{ID: 1, Name: "R1"}); !errors.Is(err, errPersistedHistoryUnavailable) || strings.Contains(err.Error(), "super-secret") {
+		t.Fatalf("history parse error = %v", err)
+	}
+}
+
 func TestTUIBrowserFlagReachesRunner(t *testing.T) {
 	deps := productTestDependencies()
 	opened := false
@@ -224,6 +291,44 @@ func TestSemanticTUIRunsAgainstDebugSocket(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "REQUESTS") || !strings.Contains(output.String(), "R1 Approve") {
 		t.Fatalf("TUI output does not contain request pane: %q", output.String())
+	}
+	if !strings.Contains(output.String(), "\x1b[?1049h") || !strings.Contains(output.String(), "\x1b[?1049l") {
+		t.Fatalf("TUI output does not enter and leave the alternate screen: %q", output.String())
+	}
+}
+
+func TestTUIProgramOutputExposesTrackedTerminalDescriptor(t *testing.T) {
+	file, err := os.CreateTemp(t.TempDir(), "terminal-output")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	tracked := &trackingWriter{w: file}
+
+	output := tuiProgramOutput(tracked)
+	terminal, ok := output.(interface {
+		io.ReadWriteCloser
+		Fd() uintptr
+	})
+	if !ok {
+		t.Fatalf("tuiProgramOutput(%T) = %T, want descriptor-bearing output", tracked, output)
+	}
+	if terminal.Fd() != file.Fd() {
+		t.Fatalf("terminal descriptor = %d, want %d", terminal.Fd(), file.Fd())
+	}
+	if _, err := output.Write([]byte("frame")); err != nil || tracked.err != nil {
+		t.Fatalf("tracked terminal write error = %v, tracking error = %v", err, tracked.err)
+	}
+	if err := terminal.Close(); err != nil {
+		t.Fatalf("terminal output Close() error = %v", err)
+	}
+	if _, err := file.Write([]byte(" still open")); err != nil {
+		t.Fatalf("terminal output closed caller-owned file: %v", err)
+	}
+
+	var buffer bytes.Buffer
+	if output := tuiProgramOutput(&buffer); output != &buffer {
+		t.Fatalf("non-terminal output = %T, want original *bytes.Buffer", output)
 	}
 }
 
@@ -303,4 +408,28 @@ func startSemanticTestServer(t *testing.T, inputs sources) string {
 		}
 	})
 	return socket
+}
+
+type tuiHistoryStoreStub struct {
+	entries    []postgresadapter.DecisionHistoryEntry
+	err        error
+	requestKey string
+}
+
+type tuiHistoryPoolStub struct {
+	closed bool
+}
+
+func (pool *tuiHistoryPoolStub) Close() { pool.closed = true }
+
+func (store *tuiHistoryStoreStub) Load(
+	_ context.Context,
+	requestKey string,
+	destination []postgresadapter.DecisionHistoryEntry,
+) ([]postgresadapter.DecisionHistoryEntry, error) {
+	store.requestKey = requestKey
+	if store.err != nil {
+		return destination, store.err
+	}
+	return append(destination, store.entries...), nil
 }

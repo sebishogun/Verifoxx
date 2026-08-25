@@ -119,6 +119,45 @@ func TestBuildProgramGraphIncludesCompleteSemanticTopology(t *testing.T) {
 	assertNoGraphPayloadLeak(t, graph)
 }
 
+func TestBooleanGraphLabels(t *testing.T) {
+	document := &ast.Document{
+		NodeKinds:     []ast.NodeKind{ast.NodeKindBoolean},
+		NodeRefs:      []uint32{1},
+		ValueKinds:    []schema.ValueKind{schema.ValueKindBoolean},
+		ValueRefs:     []uint32{0},
+		BooleanValues: []uint8{1},
+	}
+	if kind := astGraphNodeKind(ast.NodeKindBoolean); kind != graphview.NodeCompare {
+		t.Fatalf("Boolean graph kind = %v, want compare-style leaf", kind)
+	}
+	if label, ok := astGraphNodeLabel(document, nil, 1, ast.NodeKindBoolean); !ok || label != "true" {
+		t.Fatalf("AST Boolean label = %q, %v", label, ok)
+	}
+	compiled := &program.Program{
+		Fields:           []schema.FieldID{0},
+		Values:           []schema.ValueID{1},
+		ListStarts:       []uint32{0},
+		ListCounts:       []uint16{0},
+		EvidenceKinds:    []schema.EvidenceKindID{0},
+		EvidenceStates:   []schema.EvidenceStateID{0},
+		EvidenceSubjects: []schema.SymbolID{0},
+		EvidenceScopes:   []schema.SymbolID{0},
+		EvidenceTimings:  []schema.SymbolID{0},
+		ValueKinds:       []schema.ValueKind{schema.ValueKindBoolean},
+		ValueRefs:        []uint32{1},
+		BooleanValues:    []uint64{1},
+	}
+	if label, ok := programGraphInstructionLabel(compiled, 0, program.OpcodeBoolean); !ok || label != "true" {
+		t.Fatalf("Program Boolean label = %q, %v", label, ok)
+	}
+	if name := programOpcodeName(program.OpcodeBoolean); name != "boolean" {
+		t.Fatalf("Boolean opcode name = %q", name)
+	}
+	if name := programOpcodeName(program.OpcodeDefined); name != "defined" {
+		t.Fatalf("Defined opcode name = %q", name)
+	}
+}
+
 func graphTestPolicy(t *testing.T) (decodedPolicy, *program.Program) {
 	t.Helper()
 	deps := productTestDependencies()

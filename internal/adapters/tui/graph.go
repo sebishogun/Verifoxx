@@ -10,7 +10,12 @@ import (
 	"github.com/sebishogun/verifoxx/internal/graphview"
 )
 
-const graphNarrowWidth = 20
+const (
+	graphNarrowWidth        = 20
+	graphOverviewDetailRows = 2
+	graphLegendRows         = 2
+	graphOverviewMinHeight  = graphOverviewDetailRows + graphLegendRows + 3
+)
 
 type graphRenderOptions struct {
 	Breakpoints  []breakpointBinding
@@ -52,14 +57,18 @@ type graphRenderer struct {
 	breaks    []bool
 	watches   []bool
 
-	reverseStarts []uint32
-	reverseCounts []uint32
-	reverseFill   []uint32
-	reverseEdges  []uint32
-	queue         []uint32
-	seen          []bool
-	compactNext   []uint32
-	compactEnds   []uint32
+	reverseStarts  []uint32
+	reverseCounts  []uint32
+	reverseFill    []uint32
+	reverseEdges   []uint32
+	reverseIndexes []uint32
+	queue          []uint32
+	seen           []bool
+	compactNext    []uint32
+	compactEnds    []uint32
+	overviewX      []int
+	overviewY      []int
+	overviewCounts []uint16
 
 	text   []rune
 	number []byte
@@ -88,11 +97,10 @@ func (renderer *graphRenderer) Append(dst []byte, graph *Graph, options graphRen
 	if cellCount/options.Width != options.Height {
 		return dst, ErrInvalidModel
 	}
-	renderer.cells = resizeGraphSlice(renderer.cells, cellCount)
-	for row := range renderer.cells {
-		renderer.cells[row].rune = ' '
-		renderer.cells[row].style = graphStyleNone
+	if options.Height >= graphOverviewMinHeight && (layout.Width > options.Width || layout.Height > graphHeight+2) {
+		return renderer.appendOverview(dst, graph, layout, options, cellCount), nil
 	}
+	renderer.resetCanvas(cellCount)
 	renderer.prepareState(graph, options)
 	originX, originY := layout.Viewport(options.Width, graphHeight, options.Current)
 	for _, edge := range layout.Edges {
@@ -106,6 +114,172 @@ func (renderer *graphRenderer) Append(dst []byte, graph *Graph, options graphRen
 	renderer.drawText(0, options.Height-1, "• path  · dim  B break  W watch",
 		graphStyleWhite, options.Width, options.Height)
 	return renderer.appendCanvas(dst, options.Width, options.Height, options.Color), nil
+}
+
+func (renderer *graphRenderer) resetCanvas(cellCount int) {
+	renderer.cells = resizeGraphSlice(renderer.cells, cellCount)
+	for row := range renderer.cells {
+		renderer.cells[row].rune = ' '
+		renderer.cells[row].style = graphStyleNone
+	}
+}
+
+func (renderer *graphRenderer) appendOverview(
+	dst []byte,
+	graph *Graph,
+	layout graphview.Layout,
+	options graphRenderOptions,
+	cellCount int,
+) []byte {
+	renderer.resetCanvas(cellCount)
+	renderer.prepareState(graph, options)
+	renderer.overviewX = resizeGraphSlice(renderer.overviewX, len(layout.Nodes))
+	renderer.overviewY = resizeGraphSlice(renderer.overviewY, len(layout.Nodes))
+
+	maxLayer := uint16(0)
+	for _, node := range layout.Nodes {
+		maxLayer = max(maxLayer, node.Layer)
+	}
+	topologyHeight := options.Height - graphOverviewDetailRows - graphLegendRows
+	renderer.overviewCounts = resizeGraphSlice(renderer.overviewCounts, options.Width*topologyHeight)
+	clear(renderer.overviewCounts)
+	for _, node := range layout.Nodes {
+		row := node.ID - 1
+		center := node.X + node.Width/2
+		renderer.overviewX[row] = center * (options.Width - 1) / max(1, layout.Width)
+		if maxLayer != 0 {
+			renderer.overviewY[row] = int(node.Layer) * (topologyHeight - 1) / int(maxLayer)
+		}
+		cell := renderer.overviewY[row]*options.Width + renderer.overviewX[row]
+		renderer.overviewCounts[cell]++
+	}
+	for _, edge := range layout.Edges {
+		renderer.drawOverviewEdge(edge, options.Width, topologyHeight)
+	}
+	for _, node := range layout.Nodes {
+		row := node.ID - 1
+		marker := '·'
+		style := renderer.nodeStyle(graph.Kinds[row], node.ID, options)
+		switch {
+		case renderer.overviewCounts[renderer.overviewY[row]*options.Width+renderer.overviewX[row]] > 1:
+			marker = '◆'
+			style = graphStyleMagenta
+		case node.ID == options.Current:
+			marker = '▶'
+		case renderer.breaks[row]:
+			marker = 'B'
+		case renderer.watches[row]:
+			marker = 'W'
+		case renderer.active[row]:
+			marker = '•'
+		}
+		renderer.setCell(renderer.overviewX[row], renderer.overviewY[row], marker,
+			style, options.Width, topologyHeight, true)
+	}
+
+	selected := options.Current
+	if selected == 0 || uint64(selected) > uint64(len(graph.Kinds)) {
+		selected = graph.Roots[0]
+	}
+	renderer.drawOverviewDetails(graph, selected, options, topologyHeight)
+	renderer.drawText(0, options.Height-2, "▶ current  ✓ true  ✗ false  ! both  ? unknown",
+		graphStyleWhite, options.Width, options.Height)
+	renderer.drawText(0, options.Height-1, "• path  · dim  B break  W watch  ◆ group",
+		graphStyleWhite, options.Width, options.Height)
+	return renderer.appendCanvas(dst, options.Width, options.Height, options.Color)
+}
+
+func (renderer *graphRenderer) drawOverviewEdge(edge graphview.Edge, width, height int) {
+	fromX := renderer.overviewX[edge.From-1]
+	fromY := renderer.overviewY[edge.From-1]
+	toX := renderer.overviewX[edge.To-1]
+	toY := renderer.overviewY[edge.To-1]
+	style := graphEdgeStyle(edge.Kind)
+	vertical, horizontal := '│', '─'
+	if edge.Kind == graphview.EdgeEvidence || edge.Kind == graphview.EdgeRemediation {
+		vertical, horizontal = '┆', '╌'
+	}
+	if toY <= fromY+1 {
+		renderer.drawHorizontal(fromY, fromX, toX, horizontal, style, width, height)
+		return
+	}
+	startY := fromY + 1
+	endY := toY - 1
+	middleY := startY + (endY-startY)/2
+	renderer.drawVertical(fromX, startY, middleY, vertical, style, width, height)
+	renderer.drawHorizontal(middleY, fromX, toX, horizontal, style, width, height)
+	renderer.drawVertical(toX, middleY, endY, vertical, style, width, height)
+	renderer.setCell(toX, endY, '▼', style, width, height, true)
+}
+
+func (renderer *graphRenderer) drawOverviewDetails(graph *Graph, selected uint32, options graphRenderOptions, y int) {
+	renderer.text = renderer.text[:0]
+	renderer.appendNodeMarker(selected, options)
+	renderer.text = append(renderer.text, ' ', '#')
+	renderer.number = strconv.AppendUint(renderer.number[:0], uint64(selected), 10)
+	for _, character := range renderer.number {
+		renderer.text = append(renderer.text, rune(character))
+	}
+	renderer.text = append(renderer.text, ' ')
+	for _, character := range graph.Labels[selected-1] {
+		renderer.text = append(renderer.text, character)
+	}
+	cell := renderer.overviewY[selected-1]*options.Width + renderer.overviewX[selected-1]
+	if renderer.overviewCounts[cell] > 1 {
+		renderer.text = append(renderer.text, ' ', ' ', 'c', 'l', 'u', 's', 't', 'e', 'r', ' ')
+		renderer.number = strconv.AppendUint(renderer.number[:0], uint64(renderer.overviewCounts[cell]), 10)
+		for _, character := range renderer.number {
+			renderer.text = append(renderer.text, rune(character))
+		}
+	}
+	renderer.text = append(renderer.text, ' ', ' ', '·', ' ')
+	renderer.number = strconv.AppendUint(renderer.number[:0], uint64(len(graph.Kinds)), 10)
+	for _, character := range renderer.number {
+		renderer.text = append(renderer.text, rune(character))
+	}
+	renderer.text = append(renderer.text, ' ', 'n', 'o', 'd', 'e', 's')
+	renderer.drawRunes(0, y, renderer.text, graphStyleWhite, options.Width, options.Width, options.Height)
+
+	renderer.text = append(renderer.text[:0], 'i', 'n', ':', ' ')
+	reverseStart := renderer.reverseStarts[selected-1]
+	reverseEnd := reverseStart + renderer.reverseCounts[selected-1]
+	for position := reverseStart; position < reverseEnd; position++ {
+		if position != reverseStart {
+			renderer.text = append(renderer.text, ' ', ' ')
+		}
+		edge := renderer.reverseIndexes[position]
+		for _, character := range graph.EdgeLabels[edge] {
+			renderer.text = append(renderer.text, character)
+		}
+		renderer.text = append(renderer.text, '←', '#')
+		renderer.number = strconv.AppendUint(renderer.number[:0], uint64(renderer.reverseEdges[position]), 10)
+		for _, character := range renderer.number {
+			renderer.text = append(renderer.text, rune(character))
+		}
+	}
+	if reverseStart == reverseEnd {
+		renderer.text = append(renderer.text, 'n', 'o', 'n', 'e')
+	}
+	renderer.text = append(renderer.text, ' ', ' ', 'o', 'u', 't', ':', ' ')
+	start := graph.EdgeStarts[selected-1]
+	end := start + uint32(graph.EdgeCounts[selected-1])
+	for edge := start; edge < end; edge++ {
+		if edge != start {
+			renderer.text = append(renderer.text, ' ', ' ')
+		}
+		for _, character := range graph.EdgeLabels[edge] {
+			renderer.text = append(renderer.text, character)
+		}
+		renderer.text = append(renderer.text, '→', '#')
+		renderer.number = strconv.AppendUint(renderer.number[:0], uint64(graph.Edges[edge]), 10)
+		for _, character := range renderer.number {
+			renderer.text = append(renderer.text, rune(character))
+		}
+	}
+	if start == end {
+		renderer.text = append(renderer.text, 'n', 'o', 'n', 'e')
+	}
+	renderer.drawRunes(0, y+1, renderer.text, graphStyleDim, options.Width, options.Width, options.Height)
 }
 
 func (renderer *graphRenderer) prepareState(graph *Graph, options graphRenderOptions) {
@@ -129,13 +303,6 @@ func (renderer *graphRenderer) prepareState(graph *Graph, options graphRenderOpt
 			}
 		}
 	}
-	if options.Current == 0 || uint64(options.Current) > uint64(nodes) {
-		for row := range renderer.active {
-			renderer.active[row] = true
-		}
-		return
-	}
-
 	renderer.reverseCounts = resizeGraphSlice(renderer.reverseCounts, nodes)
 	clear(renderer.reverseCounts)
 	for _, destination := range graph.Edges {
@@ -151,14 +318,23 @@ func (renderer *graphRenderer) prepareState(graph *Graph, options graphRenderOpt
 	renderer.reverseFill = resizeGraphSlice(renderer.reverseFill, nodes)
 	copy(renderer.reverseFill, renderer.reverseStarts[:nodes])
 	renderer.reverseEdges = resizeGraphSlice(renderer.reverseEdges, len(graph.Edges))
+	renderer.reverseIndexes = resizeGraphSlice(renderer.reverseIndexes, len(graph.Edges))
 	for source := range graph.Kinds {
 		start := graph.EdgeStarts[source]
 		end := start + uint32(graph.EdgeCounts[source])
-		for _, destination := range graph.Edges[start:end] {
+		for edge := start; edge < end; edge++ {
+			destination := graph.Edges[edge]
 			position := renderer.reverseFill[destination-1]
 			renderer.reverseEdges[position] = uint32(source + 1)
+			renderer.reverseIndexes[position] = edge
 			renderer.reverseFill[destination-1]++
 		}
+	}
+	if options.Current == 0 || uint64(options.Current) > uint64(nodes) {
+		for row := range renderer.active {
+			renderer.active[row] = true
+		}
+		return
 	}
 	renderer.queue = resizeGraphSlice(renderer.queue, nodes)
 	renderer.markDescendants(graph, options.Current)
@@ -505,10 +681,7 @@ func appendGraphStyle(dst []byte, style graphCellStyle) []byte {
 
 func (renderer *graphRenderer) appendCompact(dst []byte, graph *Graph, options graphRenderOptions) []byte {
 	renderer.prepareState(graph, options)
-	current := options.Current
-	if current == 0 || uint64(current) > uint64(len(graph.Kinds)) {
-		current = graph.Roots[0]
-	}
+	current := graph.Roots[0]
 	lines := 0
 	dst, lines = renderer.appendCompactNode(dst, graph, options, current, lines)
 	contentLines := max(0, options.Height-1)

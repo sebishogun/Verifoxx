@@ -134,7 +134,7 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 		panic("eval: invalid predicate instruction")
 	}
 	opcode := p.Opcodes[row]
-	if opcode < program.OpcodeEqual || opcode > program.OpcodeGreaterEqual {
+	if (opcode < program.OpcodeEqual || opcode > program.OpcodeGreaterEqual) && opcode != program.OpcodeDefined {
 		panic("eval: unsupported predicate opcode")
 	}
 	field := p.Fields[row]
@@ -151,9 +151,9 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 	var value predicateValue
 	var listStart, listCount uint32
 	switch opcode {
-	case program.OpcodeExists:
+	case program.OpcodeExists, program.OpcodeDefined:
 		if p.Values[row] != 0 {
-			panic("eval: invalid exists value")
+			panic("eval: invalid value-free predicate value")
 		}
 	case program.OpcodeIn:
 		if p.Values[row] != 0 || row >= uint64(len(p.ListStarts)) || row >= uint64(len(p.ListCounts)) {
@@ -170,22 +170,24 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 	default:
 		value = programPredicateValue(p, p.Values[row], kind)
 	}
-	if kind == schema.ValueKindPresence && opcode != program.OpcodeExists {
-		panic("eval: presence field requires exists")
+	if kind == schema.ValueKindPresence && opcode != program.OpcodeExists && opcode != program.OpcodeDefined {
+		panic("eval: presence field requires exists or defined")
 	}
 	if orderedPredicate(opcode) && kind != schema.ValueKindInteger && kind != schema.ValueKindTimestamp {
 		panic("eval: ordered predicate requires numeric field")
 	}
 
-	switch kind {
-	case schema.ValueKindSymbol:
-		requireColumnLength(len(batch.SymbolValues), p.FieldIndex.Counts[kind], batch.sourceRows())
-	case schema.ValueKindInteger:
-		requireColumnLength(len(batch.IntegerValues), p.FieldIndex.Counts[kind], batch.sourceRows())
-	case schema.ValueKindBoolean:
-		requireColumnLength(len(batch.BooleanValues), p.FieldIndex.Counts[kind], batch.sourceWords())
-	case schema.ValueKindTimestamp:
-		requireColumnLength(len(batch.TimestampValues), p.FieldIndex.Counts[kind], batch.sourceRows())
+	if opcode != program.OpcodeDefined {
+		switch kind {
+		case schema.ValueKindSymbol:
+			requireColumnLength(len(batch.SymbolValues), p.FieldIndex.Counts[kind], batch.sourceRows())
+		case schema.ValueKindInteger:
+			requireColumnLength(len(batch.IntegerValues), p.FieldIndex.Counts[kind], batch.sourceRows())
+		case schema.ValueKindBoolean:
+			requireColumnLength(len(batch.BooleanValues), p.FieldIndex.Counts[kind], batch.sourceWords())
+		case schema.ValueKindTimestamp:
+			requireColumnLength(len(batch.TimestampValues), p.FieldIndex.Counts[kind], batch.sourceRows())
+		}
 	}
 
 	resetLeafOutputs(dst, reasons, batch.Rows)
@@ -197,6 +199,11 @@ func evalPredicate(dst truth.Planes, reasons ReasonPlanes, batch Batch, p *progr
 	for word := 0; word < words; word++ {
 		valid := leafWordMask(word, words, batch.Rows)
 		present := presence[word] & valid
+		if opcode == program.OpcodeDefined {
+			dst.Positive[word] = present
+			dst.Negative[word] = valid &^ present
+			continue
+		}
 		missing[word] = valid &^ present
 		if opcode == program.OpcodeExists {
 			dst.Positive[word] = present

@@ -590,6 +590,7 @@ func TestRepresentativeWorkflowPlansUseExactArguments(t *testing.T) {
 		{name: "test", executable: "go", arguments: []string{"test", "-count=1", "-timeout", "60s", "./..."}},
 		{name: "bench", executable: "go", arguments: []string{"test", "-run", "^$", "-bench", "^BenchmarkEvaluate$", "-benchmem", "-benchtime", "200ms", "-count", "6", "-timeout", "120s", "./internal/eval"}},
 		{name: "load", executable: "go", arguments: []string{"run", "./cmd/loadgen", "-protocol", "http", "-target", "127.0.0.1:8080", "-requests", "1000", "-concurrency", "4", "-timeout", "30s"}},
+		{name: "debug", executable: "dlv", arguments: []string{"dap", "--listen", "127.0.0.1:38697", "--log"}},
 		{name: "debug:dap", executable: "dlv", arguments: []string{"dap", "--listen", "127.0.0.1:38697", "--log"}},
 		{name: "docker:build", executable: "docker", arguments: []string{"build", "-t", "verifoxx:dev", "."}},
 	}
@@ -606,29 +607,20 @@ func TestRepresentativeWorkflowPlansUseExactArguments(t *testing.T) {
 	}
 }
 
-func TestDebugWorkflowBindsAbsoluteRepositorySocketPath(t *testing.T) {
+func TestDebugWorkflowAliasesDAPServer(t *testing.T) {
 	t.Parallel()
 
-	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
-		t.Fatalf("WriteFile(go.mod) error = %v", err)
+	debug, ok := namedCommandPlan("debug")
+	if !ok || len(debug) != 1 {
+		t.Fatalf("debug plan = (%+v, %v)", debug, ok)
 	}
-	runner := &recordingRunner{}
-	root := newRoot(dependencies{
-		getwd: func() (string, error) { return repository, nil }, readFile: os.ReadFile,
-		lookPath: func(name string) (string, error) { return filepath.Join("/usr/bin", name), nil }, runner: runner,
-	})
-	root.SetArgs([]string{"debug"})
-	if err := root.ExecuteContext(context.Background()); err != nil {
-		t.Fatalf("Execute(debug) error = %v", err)
+	dap, ok := namedCommandPlan("debug:dap")
+	if !ok || len(dap) != 1 {
+		t.Fatalf("debug:dap plan = (%+v, %v)", dap, ok)
 	}
-	if len(runner.runs) != 1 {
-		t.Fatalf("runner calls = %d", len(runner.runs))
-	}
-	wantSocket := filepath.Join(repository, ".verifoxx", "debug.sock")
-	arguments := runner.runs[0].spec.arguments
-	if len(arguments) < 2 || arguments[len(arguments)-1] != wantSocket || !filepath.IsAbs(arguments[len(arguments)-1]) {
-		t.Fatalf("debug arguments = %v, want socket %q", arguments, wantSocket)
+	if debug[0].executable != dap[0].executable || !slices.Equal(debug[0].arguments, dap[0].arguments) ||
+		debug[0].timeout != dap[0].timeout || len(debug[0].repositoryPathArguments) != 0 {
+		t.Fatalf("debug plan = %+v, debug:dap plan = %+v", debug[0], dap[0])
 	}
 }
 

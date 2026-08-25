@@ -1,24 +1,24 @@
-┌─────────────────────┐ ┌─────────────────────────────────────────────────────────┐ ┌──────────────────────────────────┐
-│ REQUESTS            │ │ AST GRAPH                                               │ │ RUNTIME STATE                    │
-│ > R1 Approve        │ │              ┌──────────────────┐                       │ │ DEBUG TARGET DISCONNECTED        │
-│   R2 Reject         │ │              │• #1 all          │                       │ │ Request: R1 (#1)                 │
-│                     │ │              └──────────────────┘                       │ │ local review                     │
-│                     │ │                        │                                │ │ Status: Invalid / None           │
-│                     │ │           ┼───arg 1────┼───arg 2────┼                   │ │ I: 0 -> 0  Cursor: 0             │
-│                     │ │           │                         │                   │ │ Node: 0  Source: [0,0)           │
-│                     │ │           ▼                         ▼                   │ │ Row: 1/0  Truth: Neither         │
-│                     │ │ ┌──────────────────┐      ┌──────────────────┐          │ │ Outcome: #0                      │
-│                     │ │ │• #2 protected    │      │• #3 local        │          │ │ Reasons: none                    │
-│                     │ │ └──────────────────┘      └──────────────────┘          │ │ Worker: 0  Shard: 0              │
-│                     │ │                                                         │ │ Slab: T=0 R=0                    │
-│                     │ │                                                         │ │ Breakpoints: 0                   │
-│                     │ │                                                         │ │ Watches: 0                       │
-│                     │ │                                                         │ │ Message: peer closed             │
-│                     │ │                                                         │ │                                  │
-│                     │ │                                                         │ │                                  │
-│                     │ │ ▶ current  ✓ true  ✗ false  ! both  ? unknown           │ │                                  │
-│                     │ │ • path  · dim  B break  W watch                         │ │                                  │
-└─────────────────────┘ └─────────────────────────────────────────────────────────┘ └──────────────────────────────────┘
-------------------------------------------------------------------------------------------------------------------------
+VERIFOXX SEMANTIC DEBUGGER  |  AST  |  R1 Approve  |  Invalid / None
+┌──────────────────┐ ┌────────────────────────────────────────────────────────────────┐ ┌──────────────────────────────┐
+│ REQUESTS         │ │ AST GRAPH  [AST]  PROGRAM                                      │ │ RUNTIME STATE                │
+│ > R1 Approve     │ │              ┌──────────────────┐                              │ │ DEBUG TARGET DISCONNECTED    │
+│   R2 Reject      │ │              │• #1 all          │                              │ │ Request: R1 (#1)             │
+│                  │ │              └──────────────────┘                              │ │ local review                 │
+│                  │ │                        │                                       │ │ Status: Invalid / None       │
+│                  │ │           ┼───arg 1────┼───arg 2────┼                          │ │ I: 0 -> 0  Cursor: 0         │
+│                  │ │           │                         │                          │ │ Node: 0  Source: [0,0)       │
+│                  │ │           ▼                         ▼                          │ │ Row: 1/0  Truth: Neither     │
+│                  │ │ ┌──────────────────┐      ┌──────────────────┐                 │ │ Outcome: #0                  │
+│                  │ │ │• #2 protected    │      │• #3 local        │                 │ │ Reasons: none                │
+│                  │ │ └──────────────────┘      └──────────────────┘                 │ │ Worker: 0  Shard: 0          │
+│                  │ │                                                                │ │ Slab: T=0 R=0                │
+│                  │ │                                                                │ │ Breakpoints: 0               │
+│                  │ │                                                                │ └──────────────────────────────┘
+│                  │ │                                                                │ ┌──────────────────────────────┐
+│                  │ │                                                                │ │ BREAKPOINTS / WATCHES        │
+│                  │ │ ▶ current  ✓ true  ✗ false  ! both  ? unknown                  │ │ Breakpoints: 0               │
+│                  │ │ • path  · dim  B break  W watch                                │ │ Watches: 0                   │
+└──────────────────┘ └────────────────────────────────────────────────────────────────┘ └──────────────────────────────┘
+STATUS  peer closed
 [s] step  [n] node  [o] over  [c] continue  [space] pause  [r] restart  [u] replay
 [b] break  [w] watch  [h] history  [a] ast  [p] program  [x] refs  [q] quit

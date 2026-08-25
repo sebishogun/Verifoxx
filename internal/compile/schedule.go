@@ -8,7 +8,7 @@ import (
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
 
-const scheduleOpcodeCount = int(program.OpcodeNot) + 1
+const scheduleOpcodeCount = int(program.OpcodeDefined) + 1
 
 func (l *Lowerer) setScheduleReady(opcode program.Opcode, oldID uint32, words int) error {
 	if !opcode.Valid() || int(opcode) >= scheduleOpcodeCount {
@@ -123,8 +123,8 @@ func (l *Lowerer) buildScheduleOrder(p *program.Program) error {
 	l.scheduleReadyBits = resizeSlots(l.scheduleReadyBits, scheduleOpcodeCount*words)
 	l.scheduleOrder = resizeSlots(l.scheduleOrder, n)[:0]
 	l.scheduleOldToNew = resizeSlots(l.scheduleOldToNew, n)
-	l.scheduleReadyCount = [13]uint32{}
-	l.scheduleReadyCursor = [13]uint32{}
+	l.scheduleReadyCount = [program.OpcodeDefined + 1]uint32{}
+	l.scheduleReadyCursor = [program.OpcodeDefined + 1]uint32{}
 	p.OpcodeRunOpcodes = p.OpcodeRunOpcodes[:0]
 	p.OpcodeRunStarts = p.OpcodeRunStarts[:0]
 	p.OpcodeRunCounts = p.OpcodeRunCounts[:0]
@@ -137,7 +137,7 @@ func (l *Lowerer) buildScheduleOrder(p *program.Program) error {
 	}
 	for len(l.scheduleOrder) < n {
 		opcode := program.OpcodeInvalid
-		for candidate := program.OpcodeEqual; candidate <= program.OpcodeNot; candidate++ {
+		for candidate := program.OpcodeEqual; candidate <= program.OpcodeDefined; candidate++ {
 			if l.scheduleReadyCount[candidate] != 0 {
 				opcode = candidate
 				break

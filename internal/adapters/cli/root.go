@@ -26,6 +26,7 @@ type dependencies struct {
 	healthcheck     func(context.Context) error
 	runTUI          func(context.Context, tuiRunOptions, sources, io.Reader, io.Writer) error
 	openBrowser     func(context.Context, string) error
+	databaseURL     func() config.SecretURL
 	policy          string
 	requests        string
 	evidence        string
@@ -66,10 +67,13 @@ func productionDependencies() dependencies {
 		},
 		runTUI:      runSemanticTUI,
 		openBrowser: openBrowserURL,
-		policy:      verifoxx.Source(),
-		requests:    fixtures.RequestsJSON(),
-		evidence:    fixtures.EvidenceJSON(),
-		version:     buildinfo.Version(),
+		databaseURL: func() config.SecretURL {
+			return config.SecretURL(os.Getenv(config.EnvDatabaseURL))
+		},
+		policy:   verifoxx.Source(),
+		requests: fixtures.RequestsJSON(),
+		evidence: fixtures.EvidenceJSON(),
+		version:  buildinfo.Version(),
 	}
 }
 

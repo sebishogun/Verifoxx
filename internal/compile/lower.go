@@ -140,8 +140,8 @@ type Lowerer struct {
 	// Public Lower freezes exact copies before publication.
 	output program.Program
 
-	scheduleReadyCount  [13]uint32
-	scheduleReadyCursor [13]uint32
+	scheduleReadyCount  [program.OpcodeDefined + 1]uint32
+	scheduleReadyCursor [program.OpcodeDefined + 1]uint32
 }
 
 // Lower validates and compiles doc into a frozen, self-contained Program.
@@ -550,8 +550,8 @@ func (l *Lowerer) resetInstructionScratch() {
 	l.scheduleReadyBits = l.scheduleReadyBits[:0]
 	l.scheduleOrder = l.scheduleOrder[:0]
 	l.scheduleOldToNew = l.scheduleOldToNew[:0]
-	l.scheduleReadyCount = [13]uint32{}
-	l.scheduleReadyCursor = [13]uint32{}
+	l.scheduleReadyCount = [program.OpcodeDefined + 1]uint32{}
+	l.scheduleReadyCursor = [program.OpcodeDefined + 1]uint32{}
 }
 
 // lowerInstructions emits the normalized topological instruction DAG into dst.
@@ -695,8 +695,9 @@ func (l *Lowerer) collectRoots(doc *ast.Document) {
 }
 
 // edgeCount returns the number of outgoing AST edges of a structurally safe
-// node: zero for Compare and Evidence leaves, one for Not, and the child CSR
-// count for All and Any groups. An accessor failure reports corrupt input.
+// node: zero for Boolean, Compare, and Evidence leaves, one for Not, and the
+// child CSR count for All and Any groups. An accessor failure reports corrupt
+// input.
 func (l *Lowerer) edgeCount(doc *ast.Document, node schema.NodeID) (uint32, error) {
 	kind, ok := doc.Kind(node)
 	if !ok {

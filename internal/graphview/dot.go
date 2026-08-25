@@ -9,6 +9,7 @@ import (
 type Renderer struct {
 	validator Validator
 	layouter  Layouter
+	nodeText  []byte
 }
 
 // AppendDOT appends a deterministic Graphviz representation to dst.

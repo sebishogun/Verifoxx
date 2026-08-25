@@ -26,17 +26,21 @@ enabled. Do not expose the DAP listener outside the host.
 
 ## Developer Workflows
 
-The developer command registry provides separate DAP and semantic-TUI clients:
+The developer command registry provides a fixed DAP server alternative and a
+separate semantic-TUI client:
 
 ```bash
+./cli/devx debug
 ./cli/devx debug:dap
 ./cli/devx debug:tui
 ```
 
-`debug:dap` starts `dlv dap` on `127.0.0.1:38697`; the DAP client must then send
-the launch request. `debug:tui` connects to `.verifoxx/debug.sock` and therefore
-requires a running `debug-worker`. Use `./cli/devx debug` to host the worker
-through Delve, or start both semantic-debug processes directly as shown below.
+`debug` and `debug:dap` are aliases: both start `dlv dap` on
+`127.0.0.1:38697`, then wait for a DAP client to send the launch request. They do
+not start `debug-worker` before that request. Normal Neovim use does not need
+either command because nvim-dap starts an ephemeral Delve server itself.
+`debug:tui` connects to `.verifoxx/debug.sock` and therefore requires the
+launched `debug-worker` to be running.
 
 ## Debug Build
 
@@ -63,7 +67,7 @@ launches `verifoxx debug-worker` from the repository root with the required
 build tag and compiler flags. The worker compiles the embedded policy and batch,
 then listens at `.verifoxx/debug.sock` for one semantic TUI client at a time.
 
-Register Delve and load that file from the repository-local Neovim setup:
+Register Delve in the Neovim setup:
 
 ```lua
 local dap = require("dap")
@@ -78,18 +82,25 @@ dap.adapters.go = {
   },
 }
 
-require("dap.ext.vscode").load_launchjs(nil, { go = { "go" } })
 ```
 
-Open the repository as Neovim's working directory, run `:DapContinue`, and
-select `Debug Verifoxx`. Source breakpoints work in every debug launch. To stop
-at semantic instruction boundaries, set a breakpoint inside
-`debugtrap.Reached`, connect the TUI to `.verifoxx/debug.sock`, and issue a step
-or continue command. The current node and instruction IDs are the function
-arguments.
+Current nvim-dap automatically reads `.vscode/launch.json` through its built-in
+configuration provider when a session starts; do not call the deprecated
+`dap.ext.vscode.load_launchjs`. Open the repository, run `:DapContinue`, and
+select `Debug Verifoxx`; nvim-dap starts ephemeral Delve and the launch request
+starts `debug-worker`. Source breakpoints work in every debug launch.
 
-To use the fixed server started by `./cli/devx debug:dap` instead of having
-nvim-dap launch an ephemeral Delve process, register it as:
+Once `.verifoxx/debug.sock` exists, run `./cli/devx debug:tui` in a terminal.
+The full-screen dashboard has AST/Program tabs, bounded Requests, Graph,
+Runtime, and Breakpoints/Watches panes, and Session/Persisted history. To stop at
+semantic instruction boundaries, set a breakpoint inside `debugtrap.Reached`
+and issue a semantic step or continue command in the TUI. A native breakpoint
+pauses the process, so semantic replies also pause until Neovim resumes it. The
+current node and instruction IDs are the hook's function arguments.
+
+To use the fixed server started by `./cli/devx debug` or
+`./cli/devx debug:dap` instead of having nvim-dap launch an ephemeral Delve
+process, register it as:
 
 ```lua
 local dap = require("dap")
@@ -100,7 +111,6 @@ dap.adapters.go = {
   port = 38697,
 }
 
-require("dap.ext.vscode").load_launchjs(nil, { go = { "go" } })
 ```
 
 Start the devx command in one terminal before `:DapContinue`. Use only one of
@@ -181,6 +191,13 @@ IDs/nodes, and watch IDs/instructions. It does not expose request text, evidence
 payloads, or policy source bytes. The server accepts only `GET` and `HEAD` for
 `/` and `/state`, sends restrictive browser headers, and stops with the TUI.
 
+Tab enters the active graph. Left/right move between nodes at the same depth;
+up/down follow incoming/outgoing relationships. Enter or Space selects the
+focused node. The inspector lists every typed incoming and outgoing relationship
+for that node, including labels suppressed because they would overlap another
+label or node. Pointer pan, wheel zoom, Fit, AST, and Program controls remain
+available, and the inspector moves below the graph on narrow screens.
+
 ## Semantic Graph Export
 
 Export the same bounded AST or compiled Program graph without starting a debug
@@ -196,8 +213,8 @@ timeout 120s go run ./cmd/verifoxx graph \
 The command accepts the same `--policy`, `--requests`, and `--evidence` sources
 as evaluation. It validates and compiles all inputs before rendering. `dot` is a
 deterministic Graphviz document, `svg` is standalone, and `html` embeds both
-graphs with pan, zoom, fit, view switching, node details, and source spans. HTML
-opens on the requested view.
+graphs with pan, zoom, fit, view switching, arrow-key node navigation, complete
+relationship details, and source spans. HTML opens on the requested view.
 
 Output is written through a mode-`0600` temporary sibling and installed only
 after it is synced and closed. Existing files require `--force`; input, render,

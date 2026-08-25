@@ -233,6 +233,17 @@ func (l *Lowerer) internInstructionCandidate(dst *program.Program, doc *ast.Docu
 	}
 	var candidate instructionCandidate
 	switch kind {
+	case ast.NodeKindBoolean:
+		value, ok := doc.Boolean(node)
+		if !ok {
+			return ErrInvalidDocument
+		}
+		canonical, err := l.canonicalValue(value)
+		if err != nil {
+			return err
+		}
+		candidate.opcode = program.OpcodeBoolean
+		candidate.value = canonical
 	case ast.NodeKindCompare:
 		field, op, value, ok := doc.Compare(node)
 		if !ok {

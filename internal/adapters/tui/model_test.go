@@ -169,14 +169,155 @@ func TestModelLoadsSelectedRequestHistory(t *testing.T) {
 	}}
 	model := newTestModel(t, &stubTarget{}, history)
 	model = updateModel(t, model, tea.KeyMsg{Type: tea.KeyDown})
-	var command tea.Cmd
-	model, command = updateModelCommand(t, model, runeKey('h'))
-	model = runModelCommand(t, model, command)
-	if history.request != 2 || len(model.historyEntries) != 1 {
-		t.Fatalf("history request = %d, entries = %+v", history.request, model.historyEntries)
+	updated, command := model.Update(runeKey('h'))
+	model = updated.(*Model)
+	if command != nil || !model.historyVisible {
+		t.Fatalf("opening session history = command %v visible %v", command, model.historyVisible)
 	}
-	if got := model.View(); !containsAll(got, "HISTORY", "2026-08-24 12:30", "policy@2.1.0", "Revise") {
+	model, command = updateModelCommand(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	model = runModelCommand(t, model, command)
+	if history.request.ID != 2 || history.request.Name != "R2" || len(model.historyEntries) != 1 {
+		t.Fatalf("history request = %+v, entries = %+v", history.request, model.historyEntries)
+	}
+	if got := model.View(); !containsAll(got, "HISTORY", "[PERSISTED]", "2026-08-24 12:30", "policy@2.1.0", "Revise") {
 		t.Fatalf("history view:\n%s", got)
+	}
+}
+
+func TestModelSessionHistoryTogglesAndRetainsBoundedStops(t *testing.T) {
+	model := newTestModel(t, &stubTarget{}, nil)
+	updated, command := model.Update(runeKey('h'))
+	model = updated.(*Model)
+	if command != nil || !model.historyVisible || model.historyTab != historySession {
+		t.Fatalf("session history open = visible %v tab %v command %v", model.historyVisible, model.historyTab, command)
+	}
+
+	for sequence := uint64(1); sequence <= maxSessionHistoryEntries+1; sequence++ {
+		state := debug.State{
+			Positive:    []uint64{1},
+			OutcomeIDs:  []schema.OutcomeID{2},
+			Instruction: schema.InstructionID(sequence),
+			Node:        schema.NodeID(sequence),
+			Rows:        1,
+			Status:      debug.StatusPaused,
+			Stop:        debug.StopInstruction,
+		}
+		updated, command = model.Update(stateMessage{state: state, sequence: sequence, action: actionStepInstruction})
+		model = updated.(*Model)
+		if command != nil {
+			t.Fatalf("state %d returned command", sequence)
+		}
+	}
+	if len(model.sessionHistory) != maxSessionHistoryEntries {
+		t.Fatalf("session history entries = %d, want %d", len(model.sessionHistory), maxSessionHistoryEntries)
+	}
+	if first, last := model.sessionHistory[0], model.sessionHistory[len(model.sessionHistory)-1]; first.instruction != 2 || last.instruction != maxSessionHistoryEntries+1 || last.truth != debug.TruthTrue ||
+		last.outcome != 2 || last.atUnixMilli == 0 {
+		t.Fatalf("bounded session history first=%+v last=%+v", first, last)
+	}
+	before := len(model.sessionHistory)
+	updated, _ = model.Update(stateMessage{err: errors.New("step failed"), sequence: maxSessionHistoryEntries + 2, action: actionStepInstruction})
+	model = updated.(*Model)
+	updated, _ = model.Update(stateMessage{
+		state:    debug.State{Instruction: 1, Status: debug.StatusPaused, Stop: debug.StopInstruction},
+		sequence: 1,
+		action:   actionStepInstruction,
+	})
+	model = updated.(*Model)
+	if len(model.sessionHistory) != before {
+		t.Fatalf("failed or stale state changed session history length to %d", len(model.sessionHistory))
+	}
+	if view := model.View(); !containsAll(view, "HISTORY  [SESSION]", "Instruction", "#65") {
+		t.Fatalf("session history dock:\n%s", view)
+	}
+	model.historySelection = len(model.sessionHistory) - 1
+	model = updateModel(t, model, tea.KeyMsg{Type: tea.KeyUp})
+	if model.historySelection != len(model.sessionHistory)-2 || model.selectedRequest != 0 {
+		t.Fatalf("history up selected history=%d request=%d", model.historySelection, model.selectedRequest)
+	}
+	model = updateModel(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+	model = updateModel(t, model, tea.KeyMsg{Type: tea.KeyDown})
+	if model.selectedRequest != 1 {
+		t.Fatalf("request focus after escape selected request=%d", model.selectedRequest)
+	}
+
+	updated, command = model.Update(runeKey('h'))
+	model = updated.(*Model)
+	if command != nil || model.historyVisible {
+		t.Fatalf("session history close = visible %v command %v", model.historyVisible, command)
+	}
+}
+
+func TestModelPersistedHistoryFailureIsVisibleAndNonFatal(t *testing.T) {
+	model := newTestModel(t, &stubTarget{}, &stubHistory{err: errors.New("persisted history unavailable")})
+	model = updateModel(t, model, runeKey('h'))
+	var command tea.Cmd
+	model, command = updateModelCommand(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	model = runModelCommand(t, model, command)
+	if model.disconnected || model.historyPending {
+		t.Fatalf("history failure disconnected=%v pending=%v", model.disconnected, model.historyPending)
+	}
+	if view := model.View(); !containsAll(view, "[PERSISTED]", "Persisted history error: persisted history unavailable") {
+		t.Fatalf("persisted history failure is not visible in its pane:\n%s", view)
+	}
+	model = updateModel(t, model, runeKey('p'))
+	if model.graphMode != graphProgram {
+		t.Fatal("persisted history failure prevented graph interaction")
+	}
+}
+
+func TestModelPersistedHistoryReportsUnavailableConfiguration(t *testing.T) {
+	model := newTestModel(t, &stubTarget{}, nil)
+	model = updateModel(t, model, runeKey('h'))
+	updated, command := model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = updated.(*Model)
+	if command != nil {
+		t.Fatal("unconfigured persisted history returned a command")
+	}
+	if view := model.View(); !strings.Contains(view, "Persisted history is not configured.") {
+		t.Fatalf("unconfigured persisted history pane:\n%s", view)
+	}
+}
+
+func TestModelSessionHistoryRecordsSuccessfulStopActions(t *testing.T) {
+	model := newTestModel(t, &stubTarget{}, nil)
+	tests := []struct {
+		action semanticAction
+		stop   debug.StopReason
+	}{
+		{actionSnapshot, debug.StopNone},
+		{actionStepInstruction, debug.StopInstruction},
+		{actionStepNode, debug.StopNode},
+		{actionStepOver, debug.StopOver},
+		{actionContinue, debug.StopBreakpoint},
+		{actionPause, debug.StopPause},
+		{actionRestart, debug.StopRestart},
+		{actionReplay, debug.StopReplay},
+		{actionContinue, debug.StopComplete},
+	}
+	for index, test := range tests {
+		sequence := uint64(index + 1)
+		updated, command := model.Update(stateMessage{
+			state: debug.State{
+				Instruction: schema.InstructionID(sequence),
+				Status:      debug.StatusPaused,
+				Stop:        test.stop,
+			},
+			sequence: sequence,
+			action:   test.action,
+		})
+		model = updated.(*Model)
+		if command != nil {
+			t.Fatalf("history action %v returned follow-up command", test.action)
+		}
+	}
+	if len(model.sessionHistory) != len(tests) {
+		t.Fatalf("session history entries = %d, want %d", len(model.sessionHistory), len(tests))
+	}
+	for index, test := range tests {
+		if entry := model.sessionHistory[index]; entry.action != test.action || entry.stop != test.stop {
+			t.Fatalf("session history[%d] = %+v, want action=%v stop=%v", index, entry, test.action, test.stop)
+		}
 	}
 }
 
@@ -250,6 +391,58 @@ func TestModelResizeRendersBoundedResponsivePanes(t *testing.T) {
 	}
 	if !containsAll(narrow, "REQUESTS", "AST GRAPH", "RUNTIME STATE") {
 		t.Fatalf("narrow panes:\n%s", narrow)
+	}
+}
+
+func TestModelRendersFullScreenDAPDashboardAndGraphTabs(t *testing.T) {
+	model := newTestModel(t, &stubTarget{}, nil)
+	model.state = debug.State{
+		Instruction: 2,
+		Node:        2,
+		Rows:        2,
+		Status:      debug.StatusPaused,
+		Stop:        debug.StopInstruction,
+	}
+	for _, size := range []tea.WindowSizeMsg{{Width: 120, Height: 40}, {Width: 160, Height: 50}} {
+		model = updateModel(t, model, size)
+		view := model.View()
+		if width, height := lipgloss.Width(view), lipgloss.Height(view); width != size.Width || height != size.Height {
+			t.Fatalf("dashboard = %dx%d, want %dx%d:\n%s", width, height, size.Width, size.Height, view)
+		}
+		lines := strings.Split(view, "\n")
+		if !strings.HasPrefix(lines[len(lines)-3], "STATUS  ") ||
+			!strings.Contains(lines[len(lines)-2], "[s] step") ||
+			!strings.Contains(lines[len(lines)-1], "[h] history") {
+			t.Fatalf("dashboard lacks one status and two key rows:\n%s", view)
+		}
+	}
+	model = updateModel(t, model, tea.WindowSizeMsg{Width: 140, Height: 42})
+
+	view := model.View()
+	if width, height := lipgloss.Width(view), lipgloss.Height(view); width != 140 || height != 42 {
+		t.Fatalf("dashboard = %dx%d, want 140x42:\n%s", width, height, view)
+	}
+	if !containsAll(view,
+		"VERIFOXX SEMANTIC DEBUGGER", "REQUESTS", "AST GRAPH", "[AST]", "PROGRAM",
+		"RUNTIME STATE", "BREAKPOINTS / WATCHES", "Paused / Instruction",
+	) {
+		t.Fatalf("dashboard lacks DAP panes or active AST tab:\n%s", view)
+	}
+
+	model = updateModel(t, model, runeKey('p'))
+	view = model.View()
+	if !containsAll(view, "PROGRAM GRAPH", "AST", "[PROGRAM]", "Program graph active") {
+		t.Fatalf("program tab did not become visibly active:\n%s", view)
+	}
+	model = updateModel(t, model, runeKey('p'))
+	view = model.View()
+	lines := strings.Split(view, "\n")
+	if !strings.HasPrefix(lines[len(lines)-3], "STATUS  Program graph active") {
+		t.Fatalf("repeated program key was not observable:\n%s", view)
+	}
+	model = updateModel(t, model, runeKey('a'))
+	if view = model.View(); !containsAll(view, "AST GRAPH", "[AST]", "PROGRAM", "AST graph active") {
+		t.Fatalf("AST tab did not become visibly active:\n%s", view)
 	}
 }
 
@@ -403,17 +596,20 @@ func TestModelQueuesHistoryForNewSelection(t *testing.T) {
 	}}
 	model := newTestModel(t, &stubTarget{}, history)
 	var first tea.Cmd
-	model, first = updateModelCommand(t, model, runeKey('h'))
+	model = updateModel(t, model, runeKey('h'))
+	model, first = updateModelCommand(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	model = updateModel(t, model, tea.KeyMsg{Type: tea.KeyEsc})
 	model = updateModel(t, model, tea.KeyMsg{Type: tea.KeyDown})
-	updated, immediate := model.Update(runeKey('h'))
+	model = updateModel(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	updated, immediate := model.Update(tea.KeyMsg{Type: tea.KeyTab})
 	model = updated.(*Model)
 	if immediate != nil {
 		t.Fatal("second history load started concurrently")
 	}
 	model, queued := updateModelCommand(t, model, first())
 	model = runModelCommand(t, model, queued)
-	if history.request != 2 || len(model.historyEntries) != 1 {
-		t.Fatalf("history request = %d, entries = %+v", history.request, model.historyEntries)
+	if history.request.ID != 2 || history.request.Name != "R2" || len(model.historyEntries) != 1 {
+		t.Fatalf("history request = %+v, entries = %+v", history.request, model.historyEntries)
 	}
 }
 
@@ -703,12 +899,12 @@ func (target *failedContinueTarget) Continue(context.Context) (debug.State, erro
 }
 
 type stubHistory struct {
-	request schema.RequestID
+	request RequestItem
 	entries []HistoryEntry
 	err     error
 }
 
-func (history *stubHistory) LoadHistory(_ context.Context, request schema.RequestID) ([]HistoryEntry, error) {
+func (history *stubHistory) LoadHistory(_ context.Context, request RequestItem) ([]HistoryEntry, error) {
 	history.request = request
 	return history.entries, history.err
 }

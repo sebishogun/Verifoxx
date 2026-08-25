@@ -309,6 +309,8 @@ func compareOpcode(op ast.CompareOp) (program.Opcode, bool) {
 		return program.OpcodeGreater, true
 	case ast.CompareOpGreaterEqual:
 		return program.OpcodeGreaterEqual, true
+	case ast.CompareOpDefined:
+		return program.OpcodeDefined, true
 	}
 	return 0, false
 }

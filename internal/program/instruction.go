@@ -22,11 +22,13 @@ const (
 	OpcodeAll
 	OpcodeAny
 	OpcodeNot
+	OpcodeBoolean
+	OpcodeDefined
 )
 
-// Valid reports whether op is one of the twelve defined opcodes.
+// Valid reports whether op is one of the fourteen defined opcodes.
 func (op Opcode) Valid() bool {
-	return op >= OpcodeEqual && op <= OpcodeNot
+	return op >= OpcodeEqual && op <= OpcodeDefined
 }
 
 // IsGroup reports whether op is a variadic Boolean group (All or Any).

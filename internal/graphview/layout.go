@@ -103,6 +103,10 @@ func (layouter *Layouter) Layout(graph *Graph, options LayoutOptions) (Layout, e
 	if err := layouter.validator.Validate(graph, DefaultLimits()); err != nil {
 		return Layout{}, err
 	}
+	return layouter.layoutValidated(graph, options)
+}
+
+func (layouter *Layouter) layoutValidated(graph *Graph, options LayoutOptions) (Layout, error) {
 	nodeCount := len(graph.Kinds)
 	layouter.layers = resizeClear(layouter.layers, nodeCount)
 	layouter.indegree = resizeClear(layouter.indegree, nodeCount)

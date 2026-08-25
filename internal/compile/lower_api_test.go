@@ -82,6 +82,61 @@ func TestLowerAPI(t *testing.T) {
 	assertExactProgramSlices(t, reflect.ValueOf(got).Elem(), "Program")
 }
 
+func TestLowerBooleanConstantsUseCSEScheduleAndSlots(t *testing.T) {
+	doc, fields, syms := lowerFixture(t)
+	doc.ValueKinds = append(doc.ValueKinds, schema.ValueKindBoolean)
+	doc.ValueRefs = append(doc.ValueRefs, uint32(len(doc.BooleanValues)))
+	doc.BooleanValues = append(doc.BooleanValues, 1)
+	booleanID := schema.ValueID(len(doc.ValueKinds))
+	doc.NodeKinds[0], doc.NodeRefs[0] = ast.NodeKindBoolean, uint32(booleanID)
+	doc.NodeKinds[1], doc.NodeRefs[1] = ast.NodeKindBoolean, uint32(booleanID)
+	if diagnostics := Validate(nil, doc, fields); len(diagnostics) != 0 {
+		t.Fatalf("Boolean fixture diagnostics = %+v", diagnostics)
+	}
+
+	got, err := Lower(doc, fields, syms)
+	if err != nil {
+		t.Fatalf("Lower: %v", err)
+	}
+	booleanInstructions := 0
+	var booleanInstruction schema.InstructionID
+	for row, opcode := range got.Opcodes {
+		if opcode == program.OpcodeBoolean {
+			booleanInstructions++
+			booleanInstruction = schema.InstructionID(row + 1)
+		}
+	}
+	if booleanInstructions != 1 {
+		t.Fatalf("Boolean instruction count = %d, want CSE to retain one", booleanInstructions)
+	}
+	for _, node := range []schema.NodeID{1, 2} {
+		start := got.NodeInstructionStarts[node-1]
+		count := got.NodeInstructionCounts[node-1]
+		if count != 1 || got.NodeInstructionIDs[start] != booleanInstruction {
+			t.Fatalf("node %d instruction map = start %d count %d IDs %v", node, start, count, got.NodeInstructionIDs)
+		}
+	}
+	row := int(booleanInstruction - 1)
+	value := got.Values[row]
+	if value == 0 || got.ValueKinds[value-1] != schema.ValueKindBoolean {
+		t.Fatalf("Boolean instruction value = %d kinds=%v", value, got.ValueKinds)
+	}
+	ref := got.ValueRefs[value-1]
+	if ref == 0 || uint64(ref) > uint64(len(got.BooleanValues)) || got.BooleanValues[ref-1] != 1 {
+		t.Fatalf("Boolean payload ref/value = %d/%v", ref, got.BooleanValues)
+	}
+	if got.TruthSlots[row] == 0 || got.ReasonSlots[row] == 0 {
+		t.Fatalf("Boolean slots = truth %d reason %d", got.TruthSlots[row], got.ReasonSlots[row])
+	}
+	foundRun := false
+	for _, opcode := range got.OpcodeRunOpcodes {
+		foundRun = foundRun || opcode == program.OpcodeBoolean
+	}
+	if !foundRun {
+		t.Fatalf("Boolean opcode absent from schedule runs %v", got.OpcodeRunOpcodes)
+	}
+}
+
 func TestLowerErrorsAreAtomic(t *testing.T) {
 	doc, fields, syms := lowerFixture(t)
 	bad := *doc

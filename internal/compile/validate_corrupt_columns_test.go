@@ -191,3 +191,58 @@ func TestValidateCorruptNotChildrenNoPanic(t *testing.T) {
 	var v Validator
 	_ = validateCorruptColumn(t, "NotChildren", 0, &v, nil, &doc, fields)
 }
+
+func TestValidateBooleanNodeRequiresBooleanValue(t *testing.T) {
+	booleanDocument := func(t *testing.T) (*ast.Document, *schema.Schema, schema.ValueID, schema.ValueID) {
+		t.Helper()
+		doc, fields := buildMinimal(t)
+		var booleanID, symbolID schema.ValueID
+		for row, kind := range doc.ValueKinds {
+			switch kind {
+			case schema.ValueKindBoolean:
+				if booleanID == 0 {
+					booleanID = schema.ValueID(row + 1)
+				}
+			case schema.ValueKindSymbol:
+				if symbolID == 0 {
+					symbolID = schema.ValueID(row + 1)
+				}
+			}
+		}
+		if booleanID == 0 || symbolID == 0 {
+			t.Fatal("minimal fixture lacks Boolean or symbol values")
+		}
+		doc.NodeKinds[0] = ast.NodeKindBoolean
+		doc.NodeRefs[0] = uint32(booleanID)
+		return doc, fields, booleanID, symbolID
+	}
+
+	doc, fields, _, _ := booleanDocument(t)
+	if diagnostics := Validate(nil, doc, fields); len(diagnostics) != 0 {
+		t.Fatalf("valid Boolean node diagnostics = %+v", diagnostics)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*ast.Document, schema.ValueID, schema.ValueID)
+	}{
+		{"missing value", func(doc *ast.Document, _, _ schema.ValueID) { doc.NodeRefs[0] = 0 }},
+		{"out of range value", func(doc *ast.Document, _, _ schema.ValueID) { doc.NodeRefs[0] = uint32(len(doc.ValueKinds) + 1) }},
+		{"non Boolean value", func(doc *ast.Document, _, symbol schema.ValueID) { doc.NodeRefs[0] = uint32(symbol) }},
+		{"bad Boolean payload ref", func(doc *ast.Document, boolean, _ schema.ValueID) {
+			doc.ValueRefs[boolean-1] = uint32(len(doc.BooleanValues))
+		}},
+		{"bad Boolean payload", func(doc *ast.Document, boolean, _ schema.ValueID) {
+			doc.BooleanValues[doc.ValueRefs[boolean-1]] = 2
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			doc, fields, booleanID, symbolID := booleanDocument(t)
+			test.mutate(doc, booleanID, symbolID)
+			if diagnostics := Validate(nil, doc, fields); len(diagnostics) == 0 {
+				t.Fatal("invalid Boolean node produced no diagnostics")
+			}
+		})
+	}
+}

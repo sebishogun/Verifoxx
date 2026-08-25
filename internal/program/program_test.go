@@ -8,14 +8,14 @@ import (
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
 
-func TestOpcodeInvalidZeroAndTwelveValid(t *testing.T) {
+func TestOpcodeInvalidZeroAndAppendOnlyValues(t *testing.T) {
 	if OpcodeInvalid != 0 {
 		t.Fatalf("OpcodeInvalid = %d, want 0", OpcodeInvalid)
 	}
 	valid := []Opcode{
 		OpcodeEqual, OpcodeNotEqual, OpcodeIn, OpcodeExists,
 		OpcodeLess, OpcodeLessEqual, OpcodeGreater, OpcodeGreaterEqual,
-		OpcodeEvidence, OpcodeAll, OpcodeAny, OpcodeNot,
+		OpcodeEvidence, OpcodeAll, OpcodeAny, OpcodeNot, OpcodeBoolean, OpcodeDefined,
 	}
 	for _, op := range valid {
 		if !op.Valid() {
@@ -28,8 +28,11 @@ func TestOpcodeInvalidZeroAndTwelveValid(t *testing.T) {
 			count++
 		}
 	}
-	if count != 12 {
-		t.Fatalf("valid opcode count = %d, want exactly 12", count)
+	if OpcodeNot != 12 || OpcodeBoolean != 13 || OpcodeDefined != 14 {
+		t.Fatalf("append-only opcode values changed: not=%d boolean=%d defined=%d", OpcodeNot, OpcodeBoolean, OpcodeDefined)
+	}
+	if count != 14 {
+		t.Fatalf("valid opcode count = %d, want exactly 14", count)
 	}
 	if OpcodeInvalid.Valid() {
 		t.Fatal("OpcodeInvalid must not be valid")

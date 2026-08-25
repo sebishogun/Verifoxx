@@ -58,10 +58,118 @@ func TestRenderSVGProducesParseableLabeledGraph(t *testing.T) {
 		`class="edge kind-evidence"`, `stroke="#f59e0b"`,
 		`stroke-dasharray="8 6"`, `>requires evidence</text>`,
 		`data-source-start="0"`, `data-source-end="0"`, `data-detail="policy detail"`,
+		`data-kind="evidence"`, `data-label="requires evidence"`,
+		`<g class="edge-label" aria-hidden="true"><rect`, `class="edge-path"`,
+		`role="button"`, `tabindex="0"`, `aria-selected="false"`, `data-layer="0"`,
 	} {
 		if !strings.Contains(text, required) {
 			t.Errorf("SVG output lacks %q:\n%s", required, text)
 		}
+	}
+
+	type group struct {
+		Class    string `xml:"class,attr"`
+		TabIndex string `xml:"tabindex,attr"`
+		Label    struct {
+			Rect struct {
+				Width  int `xml:"width,attr"`
+				Height int `xml:"height,attr"`
+			} `xml:"rect"`
+		} `xml:"g"`
+	}
+	var document struct {
+		Viewport struct {
+			Groups []group `xml:"g"`
+		} `xml:"g"`
+	}
+	if err := xml.Unmarshal(output, &document); err != nil {
+		t.Fatalf("decode SVG structure: %v", err)
+	}
+	tabStops := 0
+	edgeLabels := 0
+	for _, item := range document.Viewport.Groups {
+		switch {
+		case strings.HasPrefix(item.Class, "node "):
+			if item.TabIndex == "0" {
+				tabStops++
+			} else if item.TabIndex != "-1" {
+				t.Errorf("node tabindex = %q, want 0 or -1", item.TabIndex)
+			}
+		case strings.HasPrefix(item.Class, "edge "):
+			edgeLabels++
+			if item.Label.Rect.Width <= 0 || item.Label.Rect.Height <= 0 {
+				t.Errorf("edge label backplate = %dx%d, want positive size", item.Label.Rect.Width, item.Label.Rect.Height)
+			}
+		}
+	}
+	if tabStops != 1 {
+		t.Errorf("SVG tab stops = %d, want 1", tabStops)
+	}
+	if edgeLabels != len(graph.Edges) {
+		t.Errorf("SVG edge labels = %d, want %d", edgeLabels, len(graph.Edges))
+	}
+}
+
+func TestRenderSVGWrapsNodeLabelWithinItsBounds(t *testing.T) {
+	graph := sharedTestGraph()
+	graph.Labels[0] = strings.Repeat("bounded semantic label ", 8)
+	var renderer Renderer
+
+	output, err := renderer.AppendSVG(nil, &graph)
+	if err != nil {
+		t.Fatalf("AppendSVG() error = %v", err)
+	}
+	type span struct {
+		Text string `xml:",chardata"`
+		Y    int    `xml:"y,attr"`
+	}
+	type group struct {
+		ID   string `xml:"id,attr"`
+		Rect struct {
+			Y      int `xml:"y,attr"`
+			Height int `xml:"height,attr"`
+		} `xml:"rect"`
+		Text struct {
+			Spans []span `xml:"tspan"`
+		} `xml:"text"`
+	}
+	var document struct {
+		Viewport struct {
+			Groups []group `xml:"g"`
+		} `xml:"g"`
+	}
+	if err := xml.Unmarshal(output, &document); err != nil {
+		t.Fatalf("decode SVG: %v", err)
+	}
+
+	var node *group
+	for row := range document.Viewport.Groups {
+		if document.Viewport.Groups[row].ID == "graph-node-1" {
+			node = &document.Viewport.Groups[row]
+			break
+		}
+	}
+	if node == nil {
+		t.Fatal("SVG has no graph-node-1")
+	}
+	if len(node.Text.Spans) < 2 {
+		t.Fatalf("node label has %d lines, want wrapped text", len(node.Text.Spans))
+	}
+	var joined strings.Builder
+	for row, line := range node.Text.Spans {
+		joined.WriteString(line.Text)
+		if len(line.Text) > DefaultLayoutOptions().NodeWidth-2 {
+			t.Errorf("line %d width = %d cells, node interior is %d", row+1, len(line.Text), DefaultLayoutOptions().NodeWidth-2)
+		}
+		if line.Y <= node.Rect.Y || line.Y >= node.Rect.Y+node.Rect.Height {
+			t.Errorf("line %d baseline y=%d outside node [%d,%d]", row+1, line.Y, node.Rect.Y, node.Rect.Y+node.Rect.Height)
+		}
+	}
+	if want := "#1 " + graph.Labels[0]; joined.String() != want {
+		t.Errorf("wrapped text = %q, want %q", joined.String(), want)
+	}
+	if node.Rect.Height <= DefaultLayoutOptions().NodeHeight*svgCellHeight {
+		t.Errorf("wrapped node height = %d, want more than %d", node.Rect.Height, DefaultLayoutOptions().NodeHeight*svgCellHeight)
 	}
 }
 
@@ -89,6 +197,18 @@ func TestRenderHTMLIncludesBothInteractiveGraphsWithoutExternalAssets(t *testing
 		`id="ast-graph"`, `id="program-graph"`, "AST sentinel", "Program sentinel",
 		`data-action="zoom-in"`, `data-action="zoom-out"`, `data-action="fit"`,
 		"wheel", "pointerdown", "pointermove", "source span", "node details",
+		`id="relationships"`, `class="keyboard-help"`, `function boxesOverlap(`,
+		`function resolveLabels(`, `dataset.colliding`, `function selectNode(`,
+		`classList.toggle('related'`, `replaceChildren()`, `edge.dataset.label`,
+		`function clearInspector(`, `const changed=active!==next`,
+		`if(changed)requestAnimationFrame(()=>resolveLabels(svg()))`,
+		`.edge-label[data-colliding=true]{display:none}`,
+		`.edge.related .edge-path{stroke-width:4}`,
+		`.has-selection .edge:not(.related){opacity:.28}`,
+		`.node:focus-visible rect`,
+		`function moveNode(`, `case 'ArrowLeft':`, `case 'ArrowRight':`,
+		`case 'ArrowUp':`, `case 'ArrowDown':`, `e.key==='Enter'||e.key===' '`,
+		`@media(max-width:800px)`, `grid-template-rows:minmax(0,1fr)`,
 	} {
 		if !strings.Contains(text, required) {
 			t.Errorf("HTML output lacks %q", required)

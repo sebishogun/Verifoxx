@@ -3,6 +3,7 @@ package tui
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -15,6 +16,7 @@ const (
 	defaultWidth  = 100
 	defaultHeight = 24
 	wideWidth     = 90
+	headerHeight  = 1
 	footerHeight  = 3
 )
 
@@ -42,14 +44,19 @@ func (model *Model) View() string {
 		return model.cacheView("")
 	}
 	footerRows := footerHeight
-	if model.browserStatus != "" {
-		footerRows++
-	}
 	footerRows = min(footerRows, height)
 	if height <= footerRows {
 		return model.cacheView(model.renderFooter(width, footerRows))
 	}
-	mainHeight := height - footerRows
+	availableHeight := height - footerRows - headerHeight
+	historyHeight := 0
+	if model.historyVisible && availableHeight >= 9 {
+		historyHeight = min(12, max(6, availableHeight/3))
+	}
+	mainHeight := availableHeight - historyHeight
+	if mainHeight <= 0 {
+		return model.cacheView(model.renderFooter(width, height))
+	}
 	requests := model.requestsView()
 	graphTitle, graph, current := model.graphView()
 	runtime := model.runtimeView()
@@ -58,19 +65,20 @@ func (model *Model) View() string {
 		main = renderCompact(width, mainHeight)
 	} else if width >= wideWidth {
 		available := width - 2
-		requestWidth := max(20, available/5)
-		graphWidth := max(30, available/2)
-		if requestWidth+graphWidth >= available {
-			requestWidth = available / 4
-			graphWidth = available / 2
+		requestWidth := min(24, max(18, width/6))
+		stateWidth := min(38, max(32, width/4))
+		graphWidth := available - requestWidth - stateWidth
+		if graphWidth < 30 {
+			requestWidth = max(16, available/5)
+			stateWidth = max(24, available/3)
+			graphWidth = available - requestWidth - stateWidth
 		}
-		stateWidth := available - requestWidth - graphWidth
 		main = lipgloss.JoinHorizontal(lipgloss.Top,
 			renderPane("REQUESTS", requests, requestWidth, mainHeight),
 			" ",
 			renderPane(graphTitle, model.renderGraph(graph, current, graphWidth-4, mainHeight-3), graphWidth, mainHeight),
 			" ",
-			renderPane("RUNTIME STATE", runtime, stateWidth, mainHeight),
+			model.renderStateColumn(runtime, stateWidth, mainHeight),
 		)
 	} else {
 		requestHeight := max(1, mainHeight/4)
@@ -80,10 +88,169 @@ func (model *Model) View() string {
 		main = lipgloss.JoinVertical(lipgloss.Left,
 			renderPane("REQUESTS", requests, width, requestHeight),
 			renderPane(graphTitle, model.renderGraph(graph, current, width-4, graphHeight-3), width, graphHeight),
-			renderPane("RUNTIME STATE", runtime, width, stateHeight),
+			renderPane("RUNTIME STATE / BREAKPOINTS / WATCHES", runtime+"\n"+model.bindingsView(), width, stateHeight),
 		)
 	}
-	return model.cacheView(main + "\n" + model.renderFooter(width, footerRows))
+	view := model.renderHeader(width) + "\n" + main
+	if historyHeight != 0 {
+		view += "\n" + model.renderHistory(width, historyHeight)
+	}
+	return model.cacheView(view + "\n" + model.renderFooter(width, footerRows))
+}
+
+func (model *Model) renderHeader(width int) string {
+	mode := "AST"
+	if model.graphMode == graphProgram {
+		mode = "PROGRAM"
+	}
+	request := model.data.Requests[model.selectedRequest]
+	header := "VERIFOXX SEMANTIC DEBUGGER  |  " + mode + "  |  " + request.Name + " " + request.Decision +
+		"  |  " + statusName(model.state.Status) + " / " + stopName(model.state.Stop)
+	return fitLine(header, width)
+}
+
+func (model *Model) renderStateColumn(runtime string, width, height int) string {
+	bindingsHeight := min(7, max(5, height/4))
+	runtimeHeight := height - bindingsHeight
+	if runtimeHeight < 3 {
+		return renderPane("RUNTIME STATE / BREAKPOINTS / WATCHES", runtime+"\n"+model.bindingsView(), width, height)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left,
+		renderPane("RUNTIME STATE", runtime, width, runtimeHeight),
+		renderPane("BREAKPOINTS / WATCHES", model.bindingsView(), width, bindingsHeight),
+	)
+}
+
+func (model *Model) bindingsView() string {
+	var output strings.Builder
+	output.WriteString("Breakpoints: ")
+	output.WriteString(strconv.Itoa(len(model.breakpoints)))
+	for _, binding := range model.breakpoints {
+		output.WriteString("  #")
+		output.WriteString(strconv.FormatUint(uint64(binding.node), 10))
+	}
+	output.WriteString("\nWatches: ")
+	output.WriteString(strconv.Itoa(len(model.watches)))
+	for _, binding := range model.watches {
+		output.WriteString("  #")
+		output.WriteString(strconv.FormatUint(uint64(binding.instruction), 10))
+		output.WriteString(" row ")
+		output.WriteString(strconv.FormatUint(uint64(binding.row+1), 10))
+	}
+	return output.String()
+}
+
+func (model *Model) renderHistory(width, height int) string {
+	title := "HISTORY  [SESSION]  PERSISTED"
+	if model.historyTab == historyPersisted {
+		title = "HISTORY  SESSION  [PERSISTED]"
+	}
+	var output strings.Builder
+	rows := max(1, height-3)
+	if model.historyTab == historySession {
+		if len(model.sessionHistory) == 0 {
+			output.WriteString("No debugger stops recorded.")
+		} else {
+			start := max(0, len(model.sessionHistory)-rows)
+			for index := start; index < len(model.sessionHistory); index++ {
+				if index != start {
+					output.WriteByte('\n')
+				}
+				entry := model.sessionHistory[index]
+				if model.historyFocus && index == model.historySelection {
+					output.WriteString("> ")
+				} else {
+					output.WriteString("  ")
+				}
+				output.WriteString(time.UnixMilli(entry.atUnixMilli).UTC().Format("15:04:05"))
+				output.WriteByte(' ')
+				output.WriteString(sessionActionName(entry.action))
+				output.WriteString(" / ")
+				output.WriteString(stopName(entry.stop))
+				output.WriteString("  I#")
+				output.WriteString(strconv.FormatUint(uint64(entry.instruction), 10))
+				output.WriteString(" N#")
+				output.WriteString(strconv.FormatUint(uint64(entry.node), 10))
+				output.WriteString(" R")
+				output.WriteString(strconv.FormatUint(uint64(entry.row+1), 10))
+				output.WriteByte(' ')
+				output.WriteString(truthStateName(entry.truth))
+				output.WriteString(" O#")
+				output.WriteString(strconv.FormatUint(uint64(entry.outcome), 10))
+			}
+		}
+	} else {
+		switch {
+		case model.historyPending:
+			output.WriteString("Loading persisted history...")
+		case model.historyError != "":
+			output.WriteString("Persisted history error: ")
+			output.WriteString(model.historyError)
+		case model.history == nil:
+			output.WriteString("Persisted history is not configured.")
+		case len(model.historyEntries) == 0:
+			output.WriteString("No persisted decisions.")
+		default:
+			start := max(0, len(model.historyEntries)-rows)
+			for index := start; index < len(model.historyEntries); index++ {
+				if index != start {
+					output.WriteByte('\n')
+				}
+				entry := model.historyEntries[index]
+				if model.historyFocus && index == model.historySelection {
+					output.WriteString("> ")
+				} else {
+					output.WriteString("  ")
+				}
+				output.WriteString(entry.At.UTC().Format("2006-01-02 15:04"))
+				output.WriteByte(' ')
+				output.WriteString(entry.Policy)
+				if entry.Version != "" {
+					output.WriteByte('@')
+					output.WriteString(entry.Version)
+				}
+				output.WriteByte(' ')
+				output.WriteString(entry.Decision)
+			}
+		}
+	}
+	return renderPane(title, output.String(), width, height)
+}
+
+func sessionActionName(action semanticAction) string {
+	switch action {
+	case actionSnapshot:
+		return "Snapshot"
+	case actionStepInstruction:
+		return "Step"
+	case actionStepNode:
+		return "Node"
+	case actionStepOver:
+		return "Over"
+	case actionContinue:
+		return "Continue"
+	case actionPause:
+		return "Pause"
+	case actionRestart:
+		return "Restart"
+	case actionReplay:
+		return "Replay"
+	default:
+		return "Unknown"
+	}
+}
+
+func truthStateName(state debug.TruthState) string {
+	switch state {
+	case debug.TruthTrue:
+		return "True"
+	case debug.TruthFalse:
+		return "False"
+	case debug.TruthBoth:
+		return "Both"
+	default:
+		return "Neither"
+	}
 }
 
 func (model *Model) cacheView(view string) string {
@@ -110,9 +277,9 @@ func (model *Model) requestsView() string {
 
 func (model *Model) graphView() (string, Graph, uint32) {
 	if model.graphMode == graphProgram {
-		return "PROGRAM GRAPH", model.data.Program, uint32(model.state.Instruction)
+		return "PROGRAM GRAPH  AST  [PROGRAM]", model.data.Program, uint32(model.state.Instruction)
 	}
-	return "AST GRAPH", model.data.AST, uint32(model.state.Node)
+	return "AST GRAPH  [AST]  PROGRAM", model.data.AST, uint32(model.state.Node)
 }
 
 func (model *Model) renderGraph(graph Graph, current uint32, width, height int) string {
@@ -210,17 +377,6 @@ func (model *Model) runtimeView() string {
 		output.WriteString("\nMessage: ")
 		output.WriteString(model.status)
 	}
-	if len(model.historyEntries) != 0 {
-		output.WriteString("\nHISTORY")
-		for _, entry := range model.historyEntries {
-			output.WriteString("\nAt: ")
-			output.WriteString(entry.At.UTC().Format("2006-01-02 15:04"))
-			output.WriteString("\nPolicy: ")
-			output.WriteString(entry.Policy)
-			output.WriteString("\nDecision: ")
-			output.WriteString(entry.Decision)
-		}
-	}
 	return output.String()
 }
 
@@ -263,18 +419,7 @@ func stopName(stop debug.StopReason) string {
 }
 
 func rowTruthName(state *debug.State, row uint32) string {
-	positive := rowMaskBit(state.Positive, row)
-	negative := rowMaskBit(state.Negative, row)
-	switch {
-	case positive && negative:
-		return "Both"
-	case positive:
-		return "True"
-	case negative:
-		return "False"
-	default:
-		return "Neither"
-	}
+	return truthStateName(stateRowTruth(state, row))
 }
 
 func rowMaskBit(words []uint64, row uint32) bool {
@@ -325,27 +470,25 @@ func renderPane(title, body string, width, height int) string {
 	return paneStyle.Copy().Width(width - 2).Height(height - 2).Render(content)
 }
 
-func renderFooter(width, height int) string {
+func (model *Model) renderFooter(width, height int) string {
 	if height <= 0 {
 		return ""
 	}
-	if height == 1 {
-		return fitLine(footerActions, width)
+	status := model.status
+	if status == "" {
+		status = statusName(model.state.Status) + " / " + stopName(model.state.Stop)
 	}
-	if height == 2 {
-		return strings.Repeat("-", width) + "\n" + fitLine(footerActions, width)
+	if model.browserStatus != "" {
+		status += "  |  " + model.browserStatus
 	}
-	return strings.Repeat("-", width) + "\n" + fitLine(footerActions, width) + "\n" + fitLine(footerTools, width)
-}
-
-func (model *Model) renderFooter(width, height int) string {
-	if model.browserStatus == "" {
-		return renderFooter(width, height)
+	footer := fitLine("STATUS  "+status, width)
+	if height > 1 {
+		footer += "\n" + fitLine(footerActions, width)
 	}
-	if height <= 1 {
-		return fitLine(model.browserStatus, width)
+	if height > 2 {
+		footer += "\n" + fitLine(footerTools, width)
 	}
-	return fitLine(model.browserStatus, width) + "\n" + renderFooter(width, height-1)
+	return footer
 }
 
 func fitLine(value string, width int) string {

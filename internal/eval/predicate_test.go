@@ -247,6 +247,22 @@ func TestEvalPredicateExists(t *testing.T) {
 	}
 }
 
+func TestEvalPredicateDefinedDistinguishesAbsentFromExistsUnknown(t *testing.T) {
+	p := predicateTestProgram(t)
+	batch := predicateTestBatch(t, p)
+	defined := appendExecutorInstruction(p, program.OpcodeDefined, 3, 0, nil, 0, 0)
+	dst, reasons := makeLeafOutputs(batch.Rows)
+	for row := range dst.Positive {
+		dst.Positive[row] = math.MaxUint64
+		dst.Negative[row] = math.MaxUint64
+	}
+	for row := range reasons.Words {
+		reasons.Words[row] = math.MaxUint64
+	}
+	evalPredicate(dst, reasons, batch, p, defined)
+	assertLeafWord(t, dst, reasons, batch.Rows, 1<<0|1<<1, 1<<2, 0)
+}
+
 func TestEvalPredicateAcceptsEmptyBatch(t *testing.T) {
 	p := predicateTestProgram(t)
 	instruction := appendPredicateInstruction(p, program.OpcodeEqual, 2, 2)

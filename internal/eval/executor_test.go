@@ -2,6 +2,7 @@ package eval
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"reflect"
 	"slices"
@@ -235,6 +236,172 @@ func TestExecuteScheduleEvidenceLeaf(t *testing.T) {
 		!slices.Equal(gotTruth.Negative, wantTruth.Negative) ||
 		!slices.Equal(gotReasons.Words, wantReasons.Words) {
 		t.Fatal("Evidence result differs from scalar reference")
+	}
+}
+
+func booleanExecutorFixture(t testing.TB, value bool, rows uint32) (*program.Program, Batch, *Executor) {
+	t.Helper()
+	encoded := uint64(0)
+	if value {
+		encoded = 1
+	}
+	p := &program.Program{
+		ValueKinds:    []schema.ValueKind{schema.ValueKindBoolean},
+		ValueRefs:     []uint32{1},
+		BooleanValues: []uint64{encoded},
+	}
+	root := appendExecutorInstruction(p, program.OpcodeBoolean, 0, 1, nil, 0, 0)
+	p.RootFlags[root-1] = program.RootAssertion
+	p.TruthSlots = []schema.SlotID{1}
+	p.ReasonSlots = []schema.SlotID{1}
+	p.TruthSlotCount = 1
+	p.ReasonSlotCount = 1
+	batch := Batch{Rows: rows, RequestIDs: make([]schema.RequestID, rows)}
+	executor := new(Executor)
+	if err := executor.prepare(p, batch); err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	return p, batch, executor
+}
+
+func TestExecuteScheduleBooleanConstants(t *testing.T) {
+	for _, rows := range []uint32{0, 1, 63, 64, 65, 1024} {
+		for _, value := range []bool{false, true} {
+			t.Run(fmt.Sprintf("rows=%d/value=%t", rows, value), func(t *testing.T) {
+				p, batch, executor := booleanExecutorFixture(t, value, rows)
+				for row := range executor.reasonWords {
+					executor.reasonWords[row] = math.MaxUint64
+				}
+				executor.executeSchedule(p, batch)
+				got := executor.truthSlot(1, rows)
+				for row := uint32(0); row < rows; row++ {
+					positive, negative := bitAt(got.Positive, row), bitAt(got.Negative, row)
+					if positive != value || negative == value {
+						t.Fatalf("row %d truth = %v/%v, want %v/%v", row, positive, negative, value, !value)
+					}
+				}
+				for row, word := range executor.reasonWords {
+					if word != 0 {
+						t.Fatalf("reason word %d = %#x, want zero", row, word)
+					}
+				}
+				if allocations := testing.AllocsPerRun(100, func() { executor.executeSchedule(p, batch) }); allocations != 0 {
+					t.Fatalf("warm Boolean schedule allocations = %v, want 0", allocations)
+				}
+			})
+		}
+	}
+}
+
+func definedExecutorFixture(t testing.TB, rows uint32) (*program.Program, Batch, *Executor) {
+	t.Helper()
+	p := predicateTestProgram(t)
+	root := appendExecutorInstruction(p, program.OpcodeDefined, 3, 0, nil, 0, 0)
+	p.RootFlags[root-1] = program.RootAssertion
+	p.TruthSlots = []schema.SlotID{1}
+	p.ReasonSlots = []schema.SlotID{1}
+	p.TruthSlotCount = 1
+	p.ReasonSlotCount = 1
+	var builder Builder
+	if err := builder.Begin(p, rows, 0, 0); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	for row := uint32(0); row < rows; row++ {
+		if err := builder.SetRequestID(row, schema.RequestID(row+1)); err != nil {
+			t.Fatal(err)
+		}
+		if row&1 == 0 {
+			if err := builder.SetBoolean(row, 3, false); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	batch, err := builder.Finish()
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	executor := new(Executor)
+	if err := executor.prepare(p, batch); err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	return p, batch, executor
+}
+
+func TestExecuteScheduleDefined(t *testing.T) {
+	for _, rows := range []uint32{0, 1, 63, 64, 65, 1024} {
+		t.Run(fmt.Sprintf("rows=%d", rows), func(t *testing.T) {
+			p, batch, executor := definedExecutorFixture(t, rows)
+			for row := range executor.truthWords {
+				executor.truthWords[row] = math.MaxUint64
+			}
+			for row := range executor.reasonWords {
+				executor.reasonWords[row] = math.MaxUint64
+			}
+			executor.executeSchedule(p, batch)
+			got := executor.truthSlot(1, rows)
+			for row := uint32(0); row < rows; row++ {
+				present := row&1 == 0
+				if bitAt(got.Positive, row) != present || bitAt(got.Negative, row) == present {
+					t.Fatalf("row %d truth = %v/%v, want %v/%v", row, bitAt(got.Positive, row), bitAt(got.Negative, row), present, !present)
+				}
+			}
+			if rows&63 != 0 {
+				mask := (uint64(1) << (rows & 63)) - 1
+				last := len(got.Positive) - 1
+				if got.Positive[last]&^mask != 0 || got.Negative[last]&^mask != 0 {
+					t.Fatalf("dirty tail = %#x/%#x mask %#x", got.Positive[last], got.Negative[last], mask)
+				}
+			}
+			for row, word := range executor.reasonWords {
+				if word != 0 {
+					t.Fatalf("reason word %d = %#x, want zero", row, word)
+				}
+			}
+			if allocations := testing.AllocsPerRun(100, func() { executor.executeSchedule(p, batch) }); allocations != 0 {
+				t.Fatalf("warm Defined schedule allocations = %v, want 0", allocations)
+			}
+		})
+	}
+}
+
+func bitAt(words []uint64, row uint32) bool {
+	return words[row>>6]&(uint64(1)<<(row&63)) != 0
+}
+
+func TestExecuteBooleanConstantResolvesClauseOutcome(t *testing.T) {
+	for _, test := range []struct {
+		value bool
+		want  schema.OutcomeID
+	}{{true, 1}, {false, 2}} {
+		t.Run(fmt.Sprintf("value=%t", test.value), func(t *testing.T) {
+			p := executionTestProgram(t, 1)
+			encoded := uint64(0)
+			if test.value {
+				encoded = 1
+			}
+			p.ValueKinds = append(p.ValueKinds, schema.ValueKindBoolean)
+			p.ValueRefs = append(p.ValueRefs, uint32(len(p.BooleanValues)+1))
+			p.BooleanValues = append(p.BooleanValues, encoded)
+			value := schema.ValueID(len(p.ValueKinds))
+			constant := appendExecutorInstruction(p, program.OpcodeBoolean, 0, value, nil, 0, 0)
+			p.RootFlags[constant-1] = program.RootAssertion
+			p.TruthSlots = append(p.TruthSlots, schema.SlotID(len(p.TruthSlots)+1))
+			p.ReasonSlots = append(p.ReasonSlots, schema.SlotID(len(p.ReasonSlots)+1))
+			p.TruthSlotCount++
+			p.ReasonSlotCount++
+			p.ClauseAssertionRoots[0] = constant
+			p.ClauseAssertionSourceNodeIDs[0] = schema.NodeID(constant)
+
+			batch := singleExecutionBatch(t, p)
+			var executor Executor
+			var got result.Batch
+			if err := executor.Execute(&got, p, batch); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			if !slices.Equal(got.OutcomeIDs, []schema.OutcomeID{test.want}) || len(got.ReasonIDs) != 0 {
+				t.Fatalf("outcomes/reasons = %v/%v, want [%d]/[]", got.OutcomeIDs, got.ReasonIDs, test.want)
+			}
+		})
 	}
 }
 

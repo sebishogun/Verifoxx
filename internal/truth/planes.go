@@ -32,6 +32,21 @@ func requireShape(planes Planes, words int) {
 	}
 }
 
+// Set writes the same exact Boolean value to every logical row.
+func Set(dst Planes, value bool, rows uint32) {
+	words := WordCount(rows)
+	requireShape(dst, words)
+	positive, negative := uint64(0), ^uint64(0)
+	if value {
+		positive, negative = negative, positive
+	}
+	for word := 0; word < words; word++ {
+		dst.Positive[word] = positive
+		dst.Negative[word] = negative
+	}
+	maskTail(dst, rows)
+}
+
 // Not writes the negation of src into dst: the positive output plane is the
 // source's negative plane and vice versa, so each row's state flips polarity.
 // dst may exactly alias src.

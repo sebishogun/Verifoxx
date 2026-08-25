@@ -196,6 +196,12 @@ func (e *Executor) executeInstructionMode(p *program.Program, batch Batch, row i
 	dstTruth := e.truthSlot(p.TruthSlots[row], batch.Rows)
 	dstReasons := e.reasonSlot(p.ReasonSlots[row], batch.Rows)
 	switch opcode {
+	case program.OpcodeBoolean:
+		value := programPredicateValue(p, p.Values[row], schema.ValueKindBoolean)
+		truth.Set(dstTruth, value.boolean, batch.Rows)
+		clear(dstReasons.Words)
+	case program.OpcodeDefined:
+		evalPredicate(dstTruth, dstReasons, batch, p, instruction)
 	case program.OpcodeEqual, program.OpcodeNotEqual, program.OpcodeIn, program.OpcodeExists,
 		program.OpcodeLess, program.OpcodeLessEqual, program.OpcodeGreater, program.OpcodeGreaterEqual:
 		if !e.evalPredicateIndex(dstTruth, dstReasons, batch, p, instruction, mode) &&

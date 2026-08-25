@@ -19,6 +19,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
+
+	"github.com/sebishogun/verifoxx/internal/persistence"
 )
 
 const (
@@ -146,6 +148,11 @@ func TestPostgreSQLMigrations(t *testing.T) {
 		applySchemaMigrations(t, ctx, &environment)
 		testDecisionAuditJournal(t, ctx, &environment)
 	})
+	t.Run("decision_history", func(t *testing.T) {
+		resetDatabase(t, ctx, environment.migrator)
+		applySchemaMigrations(t, ctx, &environment)
+		testDecisionHistoryStoreIntegration(t, ctx, &environment)
+	})
 	t.Run("policy_graph_schema", func(t *testing.T) {
 		resetDatabase(t, ctx, environment.migrator)
 		applySchemaMigrations(t, ctx, &environment)
@@ -174,6 +181,61 @@ func TestPostgreSQLMigrations(t *testing.T) {
 		resetDatabase(t, ctx, environment.migrator)
 		testMigratorWithoutRuntimeRole(t, ctx, &environment)
 	})
+}
+
+func testDecisionHistoryStoreIntegration(
+	t *testing.T,
+	ctx context.Context,
+	environment *postgresTestEnvironment,
+) {
+	t.Helper()
+	policyStore, err := NewPolicyStore(environment.runtime)
+	if err != nil {
+		t.Fatalf("construct policy store: %v", err)
+	}
+	version, err := policyStore.PublishActive(ctx, policyCandidate(
+		"history-policy",
+		"1.0.0",
+		"history-compiler",
+		[]byte(`{"name":"history-policy","version":"1.0.0"}`),
+	))
+	if err != nil {
+		t.Fatalf("publish history policy: %v", err)
+	}
+	auditStore, err := NewAuditStore(environment.runtime)
+	if err != nil {
+		t.Fatalf("construct audit store: %v", err)
+	}
+	batch := testWriterBatch()
+	batch.PolicyVersionID = version.ID
+	if err := auditStore.Append(ctx, &batch); err != nil {
+		t.Fatalf("append first history decision: %v", err)
+	}
+	setAuditKey(t, &batch, "audit-2")
+	batch.StartedAt = batch.StartedAt.Add(time.Hour)
+	batch.CompletedAt = batch.CompletedAt.Add(time.Hour)
+	batch.Findings.Decisions[0] = persistence.DecisionReject
+	if err := auditStore.Append(ctx, &batch); err != nil {
+		t.Fatalf("append second history decision: %v", err)
+	}
+
+	history, err := NewDecisionHistoryStore(environment.runtime)
+	if err != nil {
+		t.Fatalf("construct decision history store: %v", err)
+	}
+	entries, err := history.Load(ctx, "R1", nil)
+	if err != nil {
+		t.Fatalf("load decision history: %v", err)
+	}
+	if len(entries) != 2 || entries[0].Decision != "Reject" || entries[1].Decision != "Approve" ||
+		entries[0].Policy != "history-policy" || entries[0].Version != "1.0.0" ||
+		!entries[0].CompletedAt.After(entries[1].CompletedAt) {
+		t.Fatalf("decision history = %+v", entries)
+	}
+	entries, err = history.Load(ctx, "missing-request", entries[:0])
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("missing decision history = (%+v, %v)", entries, err)
+	}
 }
 
 func openTestPool(t *testing.T, ctx context.Context, adminURL, role, password string) *pgxpool.Pool {

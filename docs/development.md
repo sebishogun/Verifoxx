@@ -71,6 +71,24 @@ semantically equivalent. Hot-path changes also require `-benchmem`, escape
 analysis where relevant, and review of the pinned `fieldalignment` analyzer's
 recommendations rather than blind field reordering.
 
+Debugger dashboard changes require the focused graph, terminal, and PostgreSQL
+adapter suites in addition to the default tests:
+
+```bash
+timeout 150s go test -count=1 -timeout 120s \
+  ./internal/graphview ./internal/adapters/tui \
+  ./internal/adapters/cli ./internal/adapters/postgres
+timeout 120s go test -timeout 90s -run '^$' \
+  -bench 'BenchmarkGraphRenderer|BenchmarkLayout' -benchmem -count=6 \
+  ./internal/adapters/tui ./internal/graphview
+```
+
+Run the semantic worker and TUI in separate terminals for resize and
+alternate-screen checks. Exercise `[AST]`/`[PROGRAM]`, Session/Persisted
+history, request focus, stepping, restart, and clean exit. PostgreSQL history is
+optional and reads `VERIFOXX_DATABASE_URL`; the Session timeline remains usable
+without it.
+
 ## Generated And Canonical Files
 
 Check policy, result, and protobuf drift with:

@@ -541,6 +541,8 @@ func appendGraphEdge(graph *graphview.Graph, source, destination uint32, kind gr
 
 func astGraphNodeKind(kind ast.NodeKind) graphview.NodeKind {
 	switch kind {
+	case ast.NodeKindBoolean:
+		return graphview.NodeCompare
 	case ast.NodeKindCompare:
 		return graphview.NodeCompare
 	case ast.NodeKindAll:
@@ -558,6 +560,12 @@ func astGraphNodeKind(kind ast.NodeKind) graphview.NodeKind {
 
 func astGraphNodeLabel(document *ast.Document, compiled *program.Program, id schema.NodeID, kind ast.NodeKind) (string, bool) {
 	switch kind {
+	case ast.NodeKindBoolean:
+		value, ok := document.Boolean(id)
+		if !ok {
+			return "", false
+		}
+		return astGraphValue(document, value)
 	case ast.NodeKindCompare:
 		field, op, value, ok := document.Compare(id)
 		name, nameOK := programGraphField(compiled, field)
@@ -605,14 +613,16 @@ func programGraphInstructionLabel(compiled *program.Program, row int, opcode pro
 		return "", false
 	}
 	switch opcode {
-	case program.OpcodeEqual, program.OpcodeNotEqual, program.OpcodeExists,
+	case program.OpcodeBoolean:
+		return programGraphValue(compiled, compiled.Values[row])
+	case program.OpcodeEqual, program.OpcodeNotEqual, program.OpcodeExists, program.OpcodeDefined,
 		program.OpcodeLess, program.OpcodeLessEqual, program.OpcodeGreater, program.OpcodeGreaterEqual:
 		field, ok := programGraphField(compiled, compiled.Fields[row])
 		if !ok {
 			return "", false
 		}
 		label := field + " " + programOpcodeName(opcode)
-		if opcode == program.OpcodeExists {
+		if opcode == program.OpcodeExists || opcode == program.OpcodeDefined {
 			return label, true
 		}
 		value, ok := programGraphValue(compiled, compiled.Values[row])

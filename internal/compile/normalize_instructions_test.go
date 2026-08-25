@@ -8,6 +8,13 @@ import (
 	"github.com/sebishogun/verifoxx/internal/schema"
 )
 
+func TestCompareOpcodeMapsDefined(t *testing.T) {
+	opcode, ok := compareOpcode(ast.CompareOpDefined)
+	if !ok || opcode != program.OpcodeDefined {
+		t.Fatalf("compareOpcode(Defined) = (%v,%v), want (%v,true)", opcode, ok, program.OpcodeDefined)
+	}
+}
+
 type normalizeFixture struct {
 	doc    *ast.Document
 	fields *schema.Schema

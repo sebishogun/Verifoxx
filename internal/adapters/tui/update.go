@@ -18,6 +18,7 @@ const (
 	commandTimeout    = 5 * time.Second
 	maxHistoryEntries = 64
 	maxHistoryPolicy  = 128
+	maxHistoryVersion = 64
 	maxStatusText     = 256
 )
 
@@ -45,15 +46,25 @@ func (model *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return model, tea.Quit
 		case "up", "k":
+			if model.historyVisible && model.historyFocus {
+				model.moveHistorySelection(-1)
+				break
+			}
 			if model.selectedRequest > 0 {
 				model.selectedRequest--
 				model.historyEntries = model.historyEntries[:0]
+				model.historyError = ""
 				model.historyQueued = false
 			}
 		case "down", "j":
+			if model.historyVisible && model.historyFocus {
+				model.moveHistorySelection(1)
+				break
+			}
 			if model.selectedRequest+1 < len(model.data.Requests) {
 				model.selectedRequest++
 				model.historyEntries = model.historyEntries[:0]
+				model.historyError = ""
 				model.historyQueued = false
 			}
 		case "a":
@@ -62,6 +73,34 @@ func (model *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "p":
 			model.graphMode = graphProgram
 			model.status = "Program graph active"
+		case "h":
+			model.historyVisible = !model.historyVisible
+			model.historyFocus = model.historyVisible
+			model.historyTab = historySession
+			model.historySelection = max(0, len(model.sessionHistory)-1)
+			if model.historyVisible {
+				model.status = "Session history active"
+			} else {
+				model.status = "History closed"
+			}
+		case "tab":
+			if model.historyVisible {
+				model.historyFocus = true
+				if model.historyTab == historySession {
+					model.historyTab = historyPersisted
+					model.historySelection = max(0, len(model.historyEntries)-1)
+					model.status = "Persisted history active"
+					return model, model.historyCommand()
+				}
+				model.historyTab = historySession
+				model.historySelection = max(0, len(model.sessionHistory)-1)
+				model.status = "Session history active"
+			}
+		case "esc":
+			if model.historyVisible {
+				model.historyFocus = false
+				model.status = "Request focus active"
+			}
 		case "x":
 			model.expandShared = !model.expandShared
 		case "s":
@@ -82,8 +121,6 @@ func (model *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return model, model.breakpointCommand()
 		case "w":
 			return model, model.watchCommand()
-		case "h":
-			return model, model.historyCommand()
 		}
 	}
 	return model, nil
@@ -161,6 +198,7 @@ func (model *Model) applyState(message stateMessage) tea.Cmd {
 				model.appliedSequence = message.sequence
 				model.state = message.state
 				model.status = ""
+				model.appendSessionHistory(message)
 				if message.state.Status == debug.StatusRunning {
 					return model.stateCommand(actionPause)
 				}
@@ -183,7 +221,64 @@ func (model *Model) applyState(message stateMessage) tea.Cmd {
 	model.appliedSequence = message.sequence
 	model.state = message.state
 	model.status = ""
+	model.appendSessionHistory(message)
 	return nil
+}
+
+func (model *Model) appendSessionHistory(message stateMessage) {
+	if message.action != actionSnapshot && message.state.Stop == debug.StopNone {
+		return
+	}
+	row := uint32(model.selectedRequest)
+	entry := sessionHistoryEntry{
+		atUnixMilli: time.Now().UnixMilli(),
+		sequence:    message.sequence,
+		instruction: message.state.Instruction,
+		node:        message.state.Node,
+		row:         row,
+		action:      message.action,
+		stop:        message.state.Stop,
+		truth:       stateRowTruth(&message.state, row),
+	}
+	if uint64(row) < uint64(len(message.state.OutcomeIDs)) {
+		entry.outcome = message.state.OutcomeIDs[row]
+	}
+	if len(model.sessionHistory) < maxSessionHistoryEntries {
+		model.sessionHistory = append(model.sessionHistory, entry)
+	} else {
+		copy(model.sessionHistory, model.sessionHistory[1:])
+		model.sessionHistory[len(model.sessionHistory)-1] = entry
+	}
+	if model.historyVisible && model.historyFocus && model.historyTab == historySession {
+		model.historySelection = len(model.sessionHistory) - 1
+	}
+}
+
+func stateRowTruth(state *debug.State, row uint32) debug.TruthState {
+	positive := rowMaskBit(state.Positive, row)
+	negative := rowMaskBit(state.Negative, row)
+	switch {
+	case positive && negative:
+		return debug.TruthBoth
+	case positive:
+		return debug.TruthTrue
+	case negative:
+		return debug.TruthFalse
+	default:
+		return debug.TruthNeither
+	}
+}
+
+func (model *Model) moveHistorySelection(delta int) {
+	entries := len(model.sessionHistory)
+	if model.historyTab == historyPersisted {
+		entries = len(model.historyEntries)
+	}
+	if entries == 0 {
+		model.historySelection = 0
+		return
+	}
+	model.historySelection = min(entries-1, max(0, model.historySelection+delta))
 }
 
 func (model *Model) breakpointCommand() tea.Cmd {
@@ -309,13 +404,14 @@ func (model *Model) historyCommand() tea.Cmd {
 		return nil
 	}
 	model.historyPending = true
-	request := model.data.Requests[model.selectedRequest].ID
+	model.historyError = ""
+	request := model.data.Requests[model.selectedRequest]
 	history := model.history
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 		defer cancel()
 		entries, err := history.LoadHistory(ctx, request)
-		return historyMessage{entries: entries, request: request, err: err}
+		return historyMessage{entries: entries, request: request.ID, err: err}
 	}
 }
 
@@ -324,11 +420,17 @@ func (model *Model) applyHistory(message historyMessage) tea.Cmd {
 	if model.data.Requests[model.selectedRequest].ID == message.request {
 		switch {
 		case message.err != nil:
+			model.historyError = boundedText(message.err.Error(), maxStatusText)
 			model.setError(message.err)
 		case len(message.entries) > maxHistoryEntries || !validHistory(message.entries):
+			model.historyError = ErrInvalidHistory.Error()
 			model.setError(ErrInvalidHistory)
 		default:
 			model.historyEntries = slices.Clone(message.entries)
+			model.historyError = ""
+			if model.historyTab == historyPersisted {
+				model.historySelection = max(0, len(model.historyEntries)-1)
+			}
 			model.status = ""
 		}
 	}
@@ -342,8 +444,10 @@ func (model *Model) applyHistory(message historyMessage) tea.Cmd {
 func validHistory(entries []HistoryEntry) bool {
 	for _, entry := range entries {
 		if entry.At.IsZero() || entry.Policy == "" || len(entry.Policy) > maxHistoryPolicy ||
+			len(entry.Version) > maxHistoryVersion ||
 			entry.Decision == "" || len(entry.Decision) > MaxDecisionText ||
-			!validDisplayText(entry.Policy, false) || !validDisplayText(entry.Decision, false) {
+			!validDisplayText(entry.Policy, false) || !validDisplayText(entry.Version, false) ||
+			!validDisplayText(entry.Decision, false) {
 			return false
 		}
 	}

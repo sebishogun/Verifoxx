@@ -244,8 +244,8 @@ func (b *Builder) addNode(kind NodeKind, ref uint32, span SourceSpan) schema.Nod
 }
 
 // AddCompare appends a typed compare payload and returns its stable NodeID.
-// Exists is the sole operation that accepts ValueID zero; every other
-// operation requires a nonzero literal value.
+// Exists and Defined accept ValueID zero; every other operation requires a
+// nonzero literal value.
 func (b *Builder) AddCompare(field schema.FieldID, op CompareOp, value schema.ValueID, span SourceSpan) (schema.NodeID, error) {
 	if field == 0 {
 		return 0, ErrInvalidField
@@ -256,7 +256,7 @@ func (b *Builder) AddCompare(field schema.FieldID, op CompareOp, value schema.Va
 	if op == CompareOpIn {
 		return 0, ErrInvalidValue
 	}
-	if (op == CompareOpExists && value != 0) || (op.RequiresValue() && value == 0) {
+	if (!op.RequiresValue() && value != 0) || (op.RequiresValue() && value == 0) {
 		return 0, ErrInvalidValue
 	}
 	if err := b.validateNode(span); err != nil {
@@ -274,6 +274,29 @@ func (b *Builder) AddCompare(field schema.FieldID, op CompareOp, value schema.Va
 // AddExists appends an existence test, which has no literal ValueID.
 func (b *Builder) AddExists(field schema.FieldID, span SourceSpan) (schema.NodeID, error) {
 	return b.AddCompare(field, CompareOpExists, 0, span)
+}
+
+// AddDefined appends a classical field-definedness test with no literal ValueID.
+func (b *Builder) AddDefined(field schema.FieldID, span SourceSpan) (schema.NodeID, error) {
+	return b.AddCompare(field, CompareOpDefined, 0, span)
+}
+
+// AddBoolean appends one exact Boolean literal and constant node atomically.
+func (b *Builder) AddBoolean(value bool, span SourceSpan) (schema.NodeID, error) {
+	if err := b.validateNode(span); err != nil {
+		return 0, err
+	}
+	if err := b.validateValue(); err != nil {
+		return 0, err
+	}
+	ref := uint32(len(b.doc.BooleanValues))
+	encoded := uint8(0)
+	if value {
+		encoded = 1
+	}
+	b.doc.BooleanValues = append(b.doc.BooleanValues, encoded)
+	valueID := b.addValue(schema.ValueKindBoolean, ref)
+	return b.addNode(NodeKindBoolean, uint32(valueID), span), nil
 }
 
 // AddIn appends an In comparison and copies its ValueIDs into one CSR edge

@@ -53,25 +53,104 @@ func TestCompareAndExistsNodes(t *testing.T) {
 	}
 }
 
+func TestDefinedNodeUsesAValueFreeCompareRow(t *testing.T) {
+	b := NewBuilder(Hints{Nodes: 1, CompareNodes: 1, SourceBytes: 13})
+	if err := b.SetSource([]byte("input.enabled")); err != nil {
+		t.Fatal(err)
+	}
+	defined, err := b.AddDefined(3, SourceSpan{End: 13})
+	if err != nil {
+		t.Fatal(err)
+	}
+	field, op, value, ok := b.Document().Compare(defined)
+	if !ok || field != 3 || op != CompareOpDefined || value != 0 {
+		t.Fatalf("Compare(defined) = (%d, %d, %d, %v)", field, op, value, ok)
+	}
+	if len(b.Document().ListValueIDs) != 0 {
+		t.Fatalf("defined appended list values: %v", b.Document().ListValueIDs)
+	}
+}
+
 func TestNodeKindsAndCompareOpsAreBounded(t *testing.T) {
-	for _, kind := range []NodeKind{NodeKindCompare, NodeKindAll, NodeKindAny, NodeKindNot, NodeKindEvidence} {
+	for _, kind := range []NodeKind{NodeKindCompare, NodeKindAll, NodeKindAny, NodeKindNot, NodeKindEvidence, NodeKindBoolean} {
 		if !kind.Valid() {
 			t.Errorf("NodeKind(%d) must be valid", kind)
 		}
 	}
-	if NodeKindInvalid.Valid() || NodeKind(6).Valid() || NodeKind(255).Valid() {
+	if NodeKindEvidence != 5 || NodeKindBoolean != 6 {
+		t.Fatalf("append-only node values changed: evidence=%d boolean=%d", NodeKindEvidence, NodeKindBoolean)
+	}
+	if NodeKindInvalid.Valid() || NodeKind(7).Valid() || NodeKind(255).Valid() {
 		t.Fatal("invalid or out-of-range NodeKind reported valid")
 	}
 	for _, op := range []CompareOp{
 		CompareOpEqual, CompareOpNotEqual, CompareOpIn, CompareOpExists,
-		CompareOpLess, CompareOpLessEqual, CompareOpGreater, CompareOpGreaterEqual,
+		CompareOpLess, CompareOpLessEqual, CompareOpGreater, CompareOpGreaterEqual, CompareOpDefined,
 	} {
 		if !op.Valid() {
 			t.Errorf("CompareOp(%d) must be valid", op)
 		}
 	}
-	if CompareOpInvalid.Valid() || CompareOp(9).Valid() || CompareOp(255).Valid() {
+	if CompareOpDefined != 9 {
+		t.Fatalf("CompareOpDefined = %d, want append-only value 9", CompareOpDefined)
+	}
+	if CompareOpInvalid.Valid() || CompareOp(10).Valid() || CompareOp(255).Valid() {
 		t.Fatal("invalid or out-of-range CompareOp reported valid")
+	}
+}
+
+func TestBooleanNodesOwnTypedValuesAndRejectedAddsAreAtomic(t *testing.T) {
+	b := NewBuilder(Hints{Nodes: 2, Values: 2, BooleanValues: 2, SourceBytes: 10})
+	if err := b.SetSource([]byte("true false")); err != nil {
+		t.Fatal(err)
+	}
+	trueNode, err := b.AddBoolean(true, SourceSpan{Start: 0, End: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	falseNode, err := b.AddBoolean(false, SourceSpan{Start: 5, End: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := b.Document()
+	if trueNode != 1 || falseNode != 2 ||
+		!reflect.DeepEqual(doc.NodeKinds, []NodeKind{NodeKindBoolean, NodeKindBoolean}) ||
+		!reflect.DeepEqual(doc.NodeRefs, []uint32{1, 2}) ||
+		!reflect.DeepEqual(doc.ValueKinds, []schema.ValueKind{schema.ValueKindBoolean, schema.ValueKindBoolean}) ||
+		!reflect.DeepEqual(doc.ValueRefs, []uint32{0, 1}) ||
+		!reflect.DeepEqual(doc.BooleanValues, []uint8{1, 0}) {
+		t.Fatalf("Boolean columns = nodes %v refs %v kinds %v value refs %v values %v",
+			doc.NodeKinds, doc.NodeRefs, doc.ValueKinds, doc.ValueRefs, doc.BooleanValues)
+	}
+	for _, test := range []struct {
+		node schema.NodeID
+		want bool
+	}{
+		{trueNode, true},
+		{falseNode, false},
+	} {
+		value, ok := doc.Boolean(test.node)
+		if !ok {
+			t.Fatalf("Boolean(%d) is missing", test.node)
+		}
+		got, ok := doc.BooleanValue(value)
+		if !ok || got != test.want {
+			t.Fatalf("BooleanValue(Boolean(%d)) = (%v, %v), want (%v, true)", test.node, got, ok, test.want)
+		}
+	}
+
+	wantKinds := append([]schema.ValueKind(nil), doc.ValueKinds...)
+	wantRefs := append([]uint32(nil), doc.ValueRefs...)
+	wantValues := append([]uint8(nil), doc.BooleanValues...)
+	wantNodes := append([]NodeKind(nil), doc.NodeKinds...)
+	wantNodeRefs := append([]uint32(nil), doc.NodeRefs...)
+	if _, err := b.AddBoolean(true, SourceSpan{End: 11}); !errors.Is(err, ErrInvalidSourceSpan) {
+		t.Fatalf("AddBoolean invalid span error = %v, want ErrInvalidSourceSpan", err)
+	}
+	if !reflect.DeepEqual(doc.ValueKinds, wantKinds) || !reflect.DeepEqual(doc.ValueRefs, wantRefs) ||
+		!reflect.DeepEqual(doc.BooleanValues, wantValues) || !reflect.DeepEqual(doc.NodeKinds, wantNodes) ||
+		!reflect.DeepEqual(doc.NodeRefs, wantNodeRefs) {
+		t.Fatal("rejected AddBoolean mutated document")
 	}
 }
 
@@ -205,6 +284,7 @@ func TestRejectedAddsDoNotMutateDocument(t *testing.T) {
 		{"invalid op", addCompareError(b, 1, CompareOpInvalid, 1, SourceSpan{})},
 		{"missing value", addCompareError(b, 1, CompareOpEqual, 0, SourceSpan{})},
 		{"exists value", addCompareError(b, 1, CompareOpExists, 1, SourceSpan{})},
+		{"defined value", addCompareError(b, 1, CompareOpDefined, 1, SourceSpan{})},
 		{"bad span", addCompareError(b, 1, CompareOpEqual, 1, SourceSpan{End: 2})},
 		{"bad group kind", addGroupError(b, NodeKindCompare, []schema.NodeID{1})},
 		{"zero child", addGroupError(b, NodeKindAll, []schema.NodeID{1, 0})},

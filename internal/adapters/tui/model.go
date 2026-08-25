@@ -30,6 +30,8 @@ const (
 	MaxDecisionText = 64
 	MaxRequestText  = 4096
 	MaxGraphLabel   = 256
+
+	maxSessionHistoryEntries = 64
 )
 
 // Target is the semantic command subset used by the debugger model.
@@ -50,13 +52,14 @@ type Target interface {
 
 // HistoryLoader loads bounded historical decisions for the selected request.
 type HistoryLoader interface {
-	LoadHistory(context.Context, schema.RequestID) ([]HistoryEntry, error)
+	LoadHistory(context.Context, RequestItem) ([]HistoryEntry, error)
 }
 
 // HistoryEntry is one display-ready historical decision.
 type HistoryEntry struct {
 	At       time.Time
 	Policy   string
+	Version  string
 	Decision string
 }
 
@@ -85,6 +88,25 @@ const (
 	graphProgram
 )
 
+type historyKind uint8
+
+const (
+	historySession historyKind = iota
+	historyPersisted
+)
+
+type sessionHistoryEntry struct {
+	atUnixMilli int64
+	sequence    uint64
+	instruction schema.InstructionID
+	node        schema.NodeID
+	outcome     schema.OutcomeID
+	row         uint32
+	action      semanticAction
+	stop        debug.StopReason
+	truth       debug.TruthState
+}
+
 // Model owns serialized terminal interaction state. Target calls are issued as
 // Bubble Tea commands and feed immutable snapshots back into Update.
 type Model struct {
@@ -94,23 +116,29 @@ type Model struct {
 	continueCancel     context.CancelFunc
 	browserStatus      string
 	status             string
+	historyError       string
 	viewCache          string
 	data               Data
 	graphRenderer      graphRenderer
 	graphBuffer        []byte
 	breakpoints        []breakpointBinding
 	watches            []watchBinding
+	sessionHistory     []sessionHistoryEntry
 	historyEntries     []HistoryEntry
 	state              debug.State
 	height             int
 	width              int
 	selectedRequest    int
+	historySelection   int
 	nextSequence       uint64
 	appliedSequence    uint64
 	pending            uint32
 	graphMode          graphKind
+	historyTab         historyKind
 	expandShared       bool
 	disconnected       bool
+	historyVisible     bool
+	historyFocus       bool
 	historyPending     bool
 	historyQueued      bool
 	commandPending     bool
@@ -163,8 +191,9 @@ func NewModel(target Target, history HistoryLoader, data Data) (*Model, error) {
 	}
 	return &Model{
 		target: target, history: history, data: data,
-		graphColor: lipgloss.ColorProfile() != termenv.Ascii,
-		viewDirty:  true,
+		sessionHistory: make([]sessionHistoryEntry, 0, maxSessionHistoryEntries),
+		graphColor:     lipgloss.ColorProfile() != termenv.Ascii,
+		viewDirty:      true,
 	}, nil
 }
 

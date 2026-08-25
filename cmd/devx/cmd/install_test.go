@@ -392,6 +392,21 @@ func TestDevxWrapperFallbackRunsGoFromRepositoryRoot(t *testing.T) {
 	}
 }
 
+func TestWriteInstallTestExecutablePublishesClosedInode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "executable")
+	held, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		t.Fatalf("OpenFile(%s) error = %v", path, err)
+	}
+	defer held.Close()
+
+	writeInstallTestExecutable(t, path, []byte("#!/bin/sh\nprintf 'ready\\n'\n"))
+	output, err := runInstallTestScript(t, path, nil, []string{"PATH=/usr/bin:/bin"})
+	if err != nil || output != "ready\n" {
+		t.Fatalf("published executable = (%q, %v), want ready", output, err)
+	}
+}
+
 func TestUninstallCommandRunsPackagedInstallerWithExactArguments(t *testing.T) {
 	t.Parallel()
 
@@ -493,10 +508,24 @@ func assertInstallTestFilesEqual(t *testing.T, gotPath, wantPath string) {
 
 func writeInstallTestExecutable(t *testing.T, path string, contents []byte) {
 	t.Helper()
-	if err := os.WriteFile(path, contents, 0o600); err != nil {
-		t.Fatalf("WriteFile(%s) error = %v", path, err)
+	temporary, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
+	if err != nil {
+		t.Fatalf("CreateTemp(%s) error = %v", path, err)
 	}
-	if err := os.Chmod(path, 0o700); err != nil {
-		t.Fatalf("Chmod(%s) error = %v", path, err)
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if _, err := temporary.Write(contents); err != nil {
+		_ = temporary.Close()
+		t.Fatalf("Write(%s) error = %v", temporaryPath, err)
+	}
+	if err := temporary.Chmod(0o700); err != nil {
+		_ = temporary.Close()
+		t.Fatalf("Chmod(%s) error = %v", temporaryPath, err)
+	}
+	if err := temporary.Close(); err != nil {
+		t.Fatalf("Close(%s) error = %v", temporaryPath, err)
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		t.Fatalf("Rename(%s, %s) error = %v", temporaryPath, path, err)
 	}
 }

@@ -159,18 +159,105 @@ func TestGraphRendererCompactSharedReferenceToggle(t *testing.T) {
 	}
 }
 
-func TestGraphRendererCentersCurrentNodeInClippedViewport(t *testing.T) {
-	graph := rendererChainGraph(8)
+func TestGraphRendererFitsCompleteOverviewForOversizedGraph(t *testing.T) {
+	graph := rendererWideLayerGraph(20)
 	var renderer graphRenderer
 	output, err := renderer.Append(nil, &graph, graphRenderOptions{
-		Width: 24, Height: 7, Current: 8, Truth: debug.TruthBoth,
+		Width: 48, Height: 14, Current: 10, Truth: debug.TruthBoth,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	view := string(output)
-	if !strings.Contains(view, "▶! #8 node-8") || strings.Contains(view, "#1 node-1") {
-		t.Fatalf("viewport did not center current node:\n%s", view)
+	view := ansi.Strip(string(output))
+	lines := strings.Split(view, "\n")
+	if len(lines) != 14 {
+		t.Fatalf("overview height = %d, want 14:\n%s", len(lines), view)
+	}
+	topology := strings.Join(lines[:10], "\n")
+	if markers := graphOverviewMarkerCount(topology); markers != len(graph.Kinds) {
+		t.Fatalf("overview markers = %d, want %d nodes:\n%s", markers, len(graph.Kinds), view)
+	}
+	if strings.Contains(topology, "branch") {
+		t.Fatalf("edge label was drawn over overview routes:\n%s", view)
+	}
+	if !strings.Contains(view, "▶! #10 node-10") {
+		t.Fatalf("overview lacks current-node detail:\n%s", view)
+	}
+	for row, line := range lines {
+		if width := ansi.StringWidth(line); width > 48 {
+			t.Fatalf("overview line %d width = %d, want <=48: %q", row+1, width, line)
+		}
+	}
+
+	output, err = renderer.Append(output[:0], &graph, graphRenderOptions{Width: 48, Height: 14})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view = ansi.Strip(string(output))
+	lines = strings.Split(view, "\n")
+	if markers := graphOverviewMarkerCount(strings.Join(lines[:10], "\n")); markers != len(graph.Kinds) ||
+		!strings.Contains(view, "#1 root") {
+		t.Fatalf("pre-step overview does not show the complete graph and root detail:\n%s", view)
+	}
+
+	plain := view
+	output, err = renderer.Append(output[:0], &graph, graphRenderOptions{
+		Width: 48, Height: 14, Color: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stripped := ansi.Strip(string(output)); stripped != plain {
+		t.Fatalf("overview color changed topology text:\nplain=%q\ncolor=%q", plain, stripped)
+	}
+}
+
+func TestGraphRendererOverviewGroupsCrowdedCellsAndShowsTypedRelationships(t *testing.T) {
+	graph := rendererWideLayerGraph(82)
+	var renderer graphRenderer
+	output, err := renderer.Append(nil, &graph, graphRenderOptions{
+		Width: 48, Height: 14, Current: 10, Truth: debug.TruthTrue,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ansi.Strip(string(output))
+	if !containsAll(view, "◆", "cluster ", "82 nodes", "branch 9←#1", "out: none", "◆ group") {
+		t.Fatalf("crowded overview lacks collision or relationship details:\n%s", view)
+	}
+	total := 0
+	for _, count := range renderer.overviewCounts {
+		total += int(count)
+	}
+	if total != len(graph.Kinds) {
+		t.Fatalf("overview cell population = %d, want %d", total, len(graph.Kinds))
+	}
+
+	graph = rendererSharedGraph()
+	output, err = renderer.Append(output[:0], &graph, graphRenderOptions{
+		Width: 48, Height: 9, Current: 4, Truth: debug.TruthBoth,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view = ansi.Strip(string(output))
+	if !containsAll(view, "arg 1←#2", "arg 2←#3", "out: none") {
+		t.Fatalf("overview lacks typed incoming relationships:\n%s", view)
+	}
+}
+
+func TestGraphRendererCompactTraversalStartsAtRoot(t *testing.T) {
+	graph := rendererSharedGraph()
+	var renderer graphRenderer
+	output, err := renderer.Append(nil, &graph, graphRenderOptions{
+		Width: 18, Height: 4, Current: 4, Truth: debug.TruthTrue,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _, _ := strings.Cut(string(output), "\n")
+	if !strings.Contains(first, "#1 root") {
+		t.Fatalf("compact traversal starts at %q, want graph root:\n%s", first, output)
 	}
 }
 
@@ -205,6 +292,20 @@ func TestGraphRendererWarmPathDoesNotAllocate(t *testing.T) {
 		_, renderErr = renderer.Append(destination[:0], &graph, options)
 	}); allocations != 0 || renderErr != nil {
 		t.Fatalf("warmed compact terminal render = %.2f allocs/run, error=%v", allocations, renderErr)
+	}
+
+	overview := rendererWideLayerGraph(20)
+	options.Width = 48
+	options.Height = 14
+	options.Current = 10
+	options.ExpandShared = false
+	if _, err := renderer.Append(destination[:0], &overview, options); err != nil {
+		t.Fatal(err)
+	}
+	if allocations := testing.AllocsPerRun(100, func() {
+		_, renderErr = renderer.Append(destination[:0], &overview, options)
+	}); allocations != 0 || renderErr != nil {
+		t.Fatalf("warmed overview terminal render = %.2f allocs/run, error=%v", allocations, renderErr)
 	}
 }
 
@@ -270,4 +371,45 @@ func rendererChainGraph(nodes int) Graph {
 		EdgeStarts: starts, EdgeCounts: counts, Edges: edges,
 		EdgeKinds: edgeKinds, EdgeLabels: edgeLabels, Roots: []uint32{1},
 	}
+}
+
+func rendererWideLayerGraph(nodes int) Graph {
+	graph := Graph{
+		Labels:       make([]string, nodes),
+		Details:      make([]string, nodes),
+		Kinds:        make([]graphview.NodeKind, nodes),
+		SourceStarts: make([]uint32, nodes),
+		SourceEnds:   make([]uint32, nodes),
+		EdgeStarts:   make([]uint32, nodes),
+		EdgeCounts:   make([]uint16, nodes),
+		Edges:        make([]uint32, 0, nodes-1),
+		EdgeKinds:    make([]graphview.EdgeKind, 0, nodes-1),
+		EdgeLabels:   make([]string, 0, nodes-1),
+		Roots:        []uint32{1},
+	}
+	graph.Labels[0] = "root"
+	graph.Details[0] = "wide root"
+	graph.Kinds[0] = graphview.NodePolicy
+	graph.EdgeCounts[0] = uint16(nodes - 1)
+	for row := 1; row < nodes; row++ {
+		graph.Labels[row] = "node-" + strconv.Itoa(row+1)
+		graph.Details[row] = "wide child"
+		graph.Kinds[row] = graphview.NodeInstruction
+		graph.EdgeStarts[row] = uint32(nodes - 1)
+		graph.Edges = append(graph.Edges, uint32(row+1))
+		graph.EdgeKinds = append(graph.EdgeKinds, graphview.EdgeOperand)
+		graph.EdgeLabels = append(graph.EdgeLabels, "branch "+strconv.Itoa(row))
+	}
+	return graph
+}
+
+func graphOverviewMarkerCount(view string) int {
+	markers := 0
+	for _, character := range view {
+		switch character {
+		case '▶', '•', '·', 'B', 'W':
+			markers++
+		}
+	}
+	return markers
 }

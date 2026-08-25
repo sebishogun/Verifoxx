@@ -4,8 +4,9 @@ import "github.com/sebishogun/verifoxx/internal/schema"
 
 // Document owns a policy AST as parallel typed columns. NodeID n indexes the
 // top-level columns at n-1. NodeRefs selects a row in the payload table named
-// by NodeKinds. Relationships are integer IDs; group edges share one CSR edge
-// column rather than allocating a child slice per node.
+// by NodeKinds. Boolean node refs are one-based ValueIDs; all other refs are
+// zero-based payload rows. Relationships are integer IDs; group edges share one
+// CSR edge column rather than allocating a child slice per node.
 //
 // A Document returned by Builder.Document remains mutable and is valid until
 // that builder is reset or reused.
@@ -156,6 +157,19 @@ func (d *Document) Compare(id schema.NodeID) (schema.FieldID, CompareOp, schema.
 		return 0, CompareOpInvalid, 0, false
 	}
 	return d.CompareFields[r], d.CompareOps[r], d.CompareValues[r], true
+}
+
+// Boolean returns the Boolean ValueID referenced by a constant node.
+func (d *Document) Boolean(id schema.NodeID) (schema.ValueID, bool) {
+	i, ok := d.nodeIndex(id)
+	if !ok || d.NodeKinds[i] != NodeKindBoolean {
+		return 0, false
+	}
+	value := schema.ValueID(d.NodeRefs[i])
+	if _, ok := d.BooleanValue(value); !ok {
+		return 0, false
+	}
+	return value, true
 }
 
 // CompareListRange returns the compare row's half-open range in ListValueIDs.

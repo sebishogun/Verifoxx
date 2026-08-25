@@ -15,6 +15,7 @@ import (
 
 	tuiadapter "github.com/sebishogun/verifoxx/internal/adapters/tui"
 	"github.com/sebishogun/verifoxx/internal/ast"
+	"github.com/sebishogun/verifoxx/internal/config"
 	"github.com/sebishogun/verifoxx/internal/debug"
 	"github.com/sebishogun/verifoxx/internal/eval"
 	"github.com/sebishogun/verifoxx/internal/program"
@@ -27,8 +28,18 @@ var errInvalidTUIData = errors.New("tui: invalid semantic display data")
 type tuiRunOptions struct {
 	openBrowser func(context.Context, string) error
 	socketPath  string
+	databaseURL config.SecretURL
 	browser     bool
 }
+
+type tuiTerminalOutput struct {
+	io.Writer
+	fd uintptr
+}
+
+func (*tuiTerminalOutput) Read([]byte) (int, error) { return 0, io.EOF }
+func (*tuiTerminalOutput) Close() error             { return nil }
+func (output *tuiTerminalOutput) Fd() uintptr       { return output.fd }
 
 func newTUICommand(deps dependencies) *cobra.Command {
 	var flags sourceFlags
@@ -49,9 +60,14 @@ func newTUICommand(deps dependencies) *cobra.Command {
 			if deps.runTUI == nil {
 				return operationalError(errors.New("semantic TUI runner unavailable"))
 			}
+			var databaseURL config.SecretURL
+			if deps.databaseURL != nil {
+				databaseURL = deps.databaseURL()
+			}
 			return operationalError(deps.runTUI(cmd.Context(), tuiRunOptions{
 				openBrowser: deps.openBrowser,
 				socketPath:  socketPath,
+				databaseURL: databaseURL,
 				browser:     browser,
 			}, inputs, cmd.InOrStdin(), cmd.OutOrStdout()))
 		},
@@ -92,7 +108,11 @@ func runSemanticTUI(ctx context.Context, options tuiRunOptions, inputs sources, 
 		return pipelineFailure("connect semantic debugger", err)
 	}
 	defer client.Close()
-	model, err := tuiadapter.NewModel(client, nil, data)
+	history := newTUIHistoryLoader(options.databaseURL)
+	if history != nil {
+		defer history.Close()
+	}
+	model, err := tuiadapter.NewModel(client, history, data)
 	if err != nil {
 		return pipelineFailure("prepare tui", err)
 	}
@@ -111,7 +131,12 @@ func runSemanticTUI(ctx context.Context, options tuiRunOptions, inputs sources, 
 			return pipelineFailure("prepare browser viewer", err)
 		}
 	}
-	program := tea.NewProgram(model, tea.WithContext(ctx), tea.WithInput(stdin), tea.WithOutput(stdout))
+	program := tea.NewProgram(model,
+		tea.WithContext(ctx),
+		tea.WithInput(stdin),
+		tea.WithOutput(tuiProgramOutput(stdout)),
+		tea.WithAltScreen(),
+	)
 	_, runErr := program.Run()
 	if browser != nil {
 		if closeErr := browser.Close(); runErr == nil && closeErr != nil {
@@ -122,6 +147,18 @@ func runSemanticTUI(ctx context.Context, options tuiRunOptions, inputs sources, 
 		return pipelineFailure("run tui", runErr)
 	}
 	return nil
+}
+
+func tuiProgramOutput(output io.Writer) io.Writer {
+	tracked, ok := output.(*trackingWriter)
+	if !ok {
+		return output
+	}
+	descriptor, ok := tracked.w.(interface{ Fd() uintptr })
+	if !ok {
+		return output
+	}
+	return &tuiTerminalOutput{Writer: output, fd: descriptor.Fd()}
 }
 
 func openBrowserURL(ctx context.Context, address string) error {
@@ -272,6 +309,8 @@ func compareOpName(op ast.CompareOp) string {
 		return "greater"
 	case ast.CompareOpGreaterEqual:
 		return "greater_equal"
+	case ast.CompareOpDefined:
+		return "defined"
 	default:
 		return "invalid"
 	}
@@ -279,6 +318,10 @@ func compareOpName(op ast.CompareOp) string {
 
 func programOpcodeName(opcode program.Opcode) string {
 	switch opcode {
+	case program.OpcodeBoolean:
+		return "boolean"
+	case program.OpcodeDefined:
+		return "defined"
 	case program.OpcodeEqual:
 		return "equal"
 	case program.OpcodeNotEqual:

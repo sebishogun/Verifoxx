@@ -298,6 +298,55 @@ func TestOperationsClearTailBits(t *testing.T) {
 	}
 }
 
+func TestSetWritesExactBooleanAndClearsDirtyTail(t *testing.T) {
+	for _, rows := range []uint32{0, 1, 63, 64, 65, 1024} {
+		for _, value := range []bool{false, true} {
+			t.Run(fmt.Sprintf("rows=%d/value=%t", rows, value), func(t *testing.T) {
+				words := WordCount(rows)
+				dst := Planes{Positive: make([]uint64, words), Negative: make([]uint64, words)}
+				for word := range words {
+					dst.Positive[word] = math.MaxUint64
+					dst.Negative[word] = math.MaxUint64
+				}
+				Set(dst, value, rows)
+				for row := uint32(0); row < rows; row++ {
+					want := stFalse
+					if value {
+						want = stTrue
+					}
+					if got := rowStateAt(&dst, row); got != want {
+						t.Fatalf("row %d = %s, want %s", row, stateNames[got], stateNames[want])
+					}
+				}
+				if words != 0 && rows&63 != 0 {
+					mask := uint64(1)<<(rows&63) - 1
+					if dst.Positive[words-1]&^mask != 0 || dst.Negative[words-1]&^mask != 0 {
+						t.Fatalf("dirty tail remains: positive=%#x negative=%#x", dst.Positive, dst.Negative)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestSetRejectsMalformedShapeBeforeWrite(t *testing.T) {
+	positive := []uint64{11, 12, 13}
+	negative := []uint64{21, 22, 23}
+	wantPositive := slices.Clone(positive)
+	wantNegative := slices.Clone(negative)
+	panicked := false
+	func() {
+		defer func() { panicked = recover() != nil }()
+		Set(Planes{Positive: positive[:1], Negative: negative[:2]}, true, 65)
+	}()
+	if !panicked {
+		t.Fatal("Set accepted malformed shape")
+	}
+	if !slices.Equal(positive, wantPositive) || !slices.Equal(negative, wantNegative) {
+		t.Fatalf("Set wrote before shape validation: positive=%v negative=%v", positive, negative)
+	}
+}
+
 // TestOperationsRejectMalformedShapesBeforeWrite drives every plane of every
 // operand of every operation with one malformed length at a time: one word
 // short and one word long, at rows=65 where the valid length is two words.

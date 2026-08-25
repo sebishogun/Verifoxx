@@ -11,11 +11,12 @@ const (
 	NodeKindAny
 	NodeKindNot
 	NodeKindEvidence
+	NodeKindBoolean
 )
 
 // Valid reports whether k identifies a supported AST node kind.
 func (k NodeKind) Valid() bool {
-	return k >= NodeKindCompare && k <= NodeKindEvidence
+	return k >= NodeKindCompare && k <= NodeKindBoolean
 }
 
 func (k NodeKind) group() bool {
@@ -35,14 +36,15 @@ const (
 	CompareOpLessEqual
 	CompareOpGreater
 	CompareOpGreaterEqual
+	CompareOpDefined
 )
 
 // Valid reports whether op is supported by the policy language.
 func (op CompareOp) Valid() bool {
-	return op >= CompareOpEqual && op <= CompareOpGreaterEqual
+	return op >= CompareOpEqual && op <= CompareOpDefined
 }
 
 // RequiresValue reports whether op requires a nonzero literal ValueID.
 func (op CompareOp) RequiresValue() bool {
-	return op.Valid() && op != CompareOpExists
+	return op.Valid() && op != CompareOpExists && op != CompareOpDefined
 }

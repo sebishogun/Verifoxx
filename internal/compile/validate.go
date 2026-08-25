@@ -206,6 +206,12 @@ func (v *Validator) checkExpressionSemantics(dst []Diagnostic, doc *ast.Document
 			}
 		}
 		switch doc.NodeKinds[i] {
+		case ast.NodeKindBoolean:
+			value := schema.ValueID(ref)
+			kind, ok := literalValueKind(doc, value)
+			if !ok || kind != schema.ValueKindBoolean {
+				dst = append(dst, Diagnostic{Code: CodeInvalidValue, Table: TableNode, Member: MemberValue, Row: uint32(id), Node: id, Value: value, Span: span})
+			}
 		case ast.NodeKindCompare:
 			if ref < uint64(compareRows) {
 				dst = checkCompareRowSemantics(dst, doc, fields, id, uint32(ref), span)
@@ -250,7 +256,7 @@ func checkCompareRowSemantics(dst []Diagnostic, doc *ast.Document, fields *schem
 	count := uint32(doc.CompareListCounts[ref])
 	listOK := validRange(doc.CompareListStarts[ref], count, len(doc.ListValueIDs))
 	switch op {
-	case ast.CompareOpExists:
+	case ast.CompareOpExists, ast.CompareOpDefined:
 		if value != 0 {
 			dst = append(dst, Diagnostic{Code: CodeInvalidArity, Table: TableCompare, Member: MemberValue, Row: row, Node: id, Span: span, Value: value})
 		}
@@ -895,7 +901,7 @@ func valueRefValid(doc *ast.Document, kind schema.ValueKind, ref uint32) bool {
 	case schema.ValueKindInteger:
 		return uint64(ref) < uint64(len(doc.IntegerValues))
 	case schema.ValueKindBoolean:
-		return uint64(ref) < uint64(len(doc.BooleanValues))
+		return uint64(ref) < uint64(len(doc.BooleanValues)) && doc.BooleanValues[ref] <= 1
 	case schema.ValueKindTimestamp:
 		return uint64(ref) < uint64(len(doc.TimestampValues))
 	}
@@ -1031,6 +1037,8 @@ func (v *Validator) checkEvidenceRows(dst []Diagnostic, doc *ast.Document) []Dia
 // parallel columns, so a corrupt column never makes a bound unsound.
 func nodeRefValid(doc *ast.Document, kind ast.NodeKind, ref uint32) bool {
 	switch kind {
+	case ast.NodeKindBoolean:
+		return ref != 0 && uint64(ref) <= uint64(len(doc.ValueKinds)) && uint64(ref) <= uint64(len(doc.ValueRefs))
 	case ast.NodeKindCompare:
 		return uint64(ref) < uint64(safeMin(
 			len(doc.CompareFields), len(doc.CompareOps), len(doc.CompareValues),
@@ -1489,7 +1497,7 @@ func (v *Validator) walkGraph(dst []Diagnostic, doc *ast.Document, root schema.N
 }
 
 // graphEdgeCount returns the number of outgoing graph edges of a structurally
-// safe node: zero for Compare and Evidence leaves, one for Not, and the
+// safe node: zero for Boolean, Compare, and Evidence leaves, one for Not, and the
 // structurally valid child CSR count for All and Any groups.
 func graphEdgeCount(doc *ast.Document, node schema.NodeID) uint32 {
 	i := int(node - 1)
