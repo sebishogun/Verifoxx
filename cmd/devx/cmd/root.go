@@ -1,4 +1,4 @@
-// Package cmd implements the Verifoxx developer workflow CLI.
+// Package cmd implements the NornRune developer workflow CLI.
 package cmd
 
 import (
@@ -25,7 +25,7 @@ var (
 
 var (
 	moduleKeyword   = []byte("module")
-	moduleDirective = []byte("github.com/sebishogun/verifoxx")
+	moduleDirective = []byte("github.com/sebishogun/nornrune")
 )
 
 type commandSpec struct {
@@ -71,7 +71,7 @@ func (huhMenu) Select(ctx context.Context, options []menuOption, input io.Reader
 	var selected string
 	form := huh.NewForm(huh.NewGroup(
 		huh.NewSelect[string]().
-			Title("Verifoxx workflows").
+			Title("NornRune workflows").
 			Description("Press / to fuzzy-filter").
 			Options(selectOptions...).
 			Value(&selected),
@@ -164,7 +164,7 @@ var commandDefinitions = [...]commandDefinition{
 func newRoot(deps dependencies) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "devx",
-		Short:         "Verifoxx developer workflows",
+		Short:         "NornRune developer workflows",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,

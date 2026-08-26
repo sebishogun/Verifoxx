@@ -1,11 +1,11 @@
-// Command devx runs Verifoxx developer workflows.
+// Command devx runs NornRune developer workflows.
 package main
 
 import (
 	"fmt"
 	"os"
 
-	devx "github.com/sebishogun/verifoxx/cmd/devx/cmd"
+	devx "github.com/sebishogun/nornrune/cmd/devx/cmd"
 )
 
 func main() {

@@ -44,7 +44,7 @@ func TestCIAndReleaseConfigurationCoversRequiredLanes(t *testing.T) {
 		{
 			path: ".goreleaser.yaml",
 			required: []string{
-				"version: 2", "main: ./cmd/verifoxx", "CGO_ENABLED=0", "-trimpath",
+				"version: 2", "main: ./cmd/nornrune", "CGO_ENABLED=0", "-trimpath",
 				"goos:", "- linux", "- darwin", "goarch:", "- amd64", "- arm64",
 				"internal/buildinfo.version={{.Version}}", "archives:", "checksum:", "changelog:",
 			},

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/debug"
+	"github.com/sebishogun/nornrune/internal/debug"
 )
 
 func TestDebugWorkerServesSemanticSocket(t *testing.T) {

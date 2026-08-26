@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	verifoxxv1 "github.com/sebishogun/verifoxx/api/gen/verifoxx/v1"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
+	nornrunev1 "github.com/sebishogun/nornrune/api/gen/nornrune/v1"
+	"github.com/sebishogun/nornrune/internal/fixtures"
 	"google.golang.org/grpc"
 )
 
@@ -74,7 +74,7 @@ func TestExecuteGRPCCompletesFixedBudget(t *testing.T) {
 	}
 	service := &loadTestPolicyServer{}
 	server := grpc.NewServer()
-	verifoxxv1.RegisterPolicyServiceServer(server, service)
+	nornrunev1.RegisterPolicyServiceServer(server, service)
 	serveDone := make(chan struct{})
 	go func() {
 		_ = server.Serve(listener)
@@ -204,19 +204,19 @@ func updateMaximum(maximum *atomic.Int32, value int32) {
 }
 
 type loadTestPolicyServer struct {
-	verifoxxv1.UnimplementedPolicyServiceServer
+	nornrunev1.UnimplementedPolicyServiceServer
 	calls   atomic.Uint64
 	invalid atomic.Bool
 }
 
 func (server *loadTestPolicyServer) EvaluateBatch(
 	_ context.Context,
-	request *verifoxxv1.EvaluateBatchRequest,
-) (*verifoxxv1.EvaluateBatchResponse, error) {
+	request *nornrunev1.EvaluateBatchRequest,
+) (*nornrunev1.EvaluateBatchResponse, error) {
 	server.calls.Add(1)
 	if !bytes.Equal(request.GetRequestsJson(), []byte(fixtures.RequestsJSON())) ||
 		!bytes.Equal(request.GetEvidenceJson(), []byte(fixtures.EvidenceJSON())) {
 		server.invalid.Store(true)
 	}
-	return &verifoxxv1.EvaluateBatchResponse{ResultJson: []byte(`{}`)}, nil
+	return &nornrunev1.EvaluateBatchResponse{ResultJson: []byte(`{}`)}, nil
 }

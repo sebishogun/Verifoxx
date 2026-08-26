@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	"github.com/sebishogun/verifoxx/internal/observability"
-	coreservice "github.com/sebishogun/verifoxx/internal/service"
+	"github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/observability"
+	coreservice "github.com/sebishogun/nornrune/internal/service"
 )
 
 func TestPolicyValidateAndCompileHandlers(t *testing.T) {
@@ -265,7 +265,7 @@ func TestMetricsReadinessAndLivenessHandlers(t *testing.T) {
 
 	scrape := serveRequest(server, http.MethodGet, "/metrics", "", "")
 	if scrape.Code != http.StatusOK || !strings.HasPrefix(scrape.Header().Get("Content-Type"), "text/plain") ||
-		!strings.Contains(scrape.Body.String(), "verifoxx_evaluation_workers 2\n") {
+		!strings.Contains(scrape.Body.String(), "nornrune_evaluation_workers 2\n") {
 		t.Fatalf("metrics response = %d %q %s", scrape.Code, scrape.Header(), scrape.Body.String())
 	}
 	ready := serveRequest(server, http.MethodGet, "/readyz", "", "")

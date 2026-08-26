@@ -363,7 +363,7 @@ Expected: all pass.
 
 **Files:**
 - Create: `internal/compile/validate_bench_test.go`
-- Modify: `docs/plans/2026-08-20-verifoxx-policy-engine-design.md`
+- Modify: `docs/plans/2026-08-20-nornrune-policy-engine-design.md`
 
 ### Step 1: Add benchmark document builder
 
@@ -405,7 +405,7 @@ go test -count=1 -timeout 60s ./internal/compile
 go test -count=1 -timeout 60s ./...
 go test -race -count=1 -timeout 120s ./internal/compile
 timeout 120s go vet ./...
-timeout 120s go build ./cmd/verifoxx
+timeout 120s go build ./cmd/nornrune
 timeout 120s go build -gcflags=-m ./internal/compile
 timeout 30s gofmt -l .
 timeout 60s go mod tidy -diff

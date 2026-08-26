@@ -3,14 +3,14 @@ package server
 import (
 	"fmt"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonpolicy"
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/security"
-	"github.com/sebishogun/verifoxx/internal/service"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonpolicy"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/security"
+	"github.com/sebishogun/nornrune/internal/service"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 func policyDecoderLimits(limits security.Limits) jsonpolicy.Limits {
@@ -73,7 +73,7 @@ func decodeAndValidatePolicy(source []byte, limits jsonpolicy.Limits) (
 	[]compile.Diagnostic,
 	error,
 ) {
-	fields, symbols, err := verifoxx.NewSchema()
+	fields, symbols, err := nornrune.NewSchema()
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("%w: schema: %v", service.ErrInvalidPolicy, err)
 	}

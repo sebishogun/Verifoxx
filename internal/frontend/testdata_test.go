@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	public "github.com/sebishogun/verifoxx/frontend"
+	public "github.com/sebishogun/nornrune/frontend"
 )
 
 func TestCompiledProgramUsesExactCapacityAndSourceSpans(t *testing.T) {

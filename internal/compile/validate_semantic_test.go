@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 // semFields is the fixed five-kind field schema used by the semantic tests:

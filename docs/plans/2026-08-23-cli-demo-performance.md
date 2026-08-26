@@ -1,8 +1,8 @@
-# Verifoxx CLI Demo Performance Implementation Plan
+# NornRune CLI Demo Performance Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add a comprehensive plain-text `verifoxx demo` command that compiles and decodes once, presents all baseline decisions, runs two bounded simulations, and reports the selected SIMD tier and in-process timings.
+**Goal:** Add a comprehensive plain-text `nornrune demo` command that compiles and decodes once, presents all baseline decisions, runs two bounded simulations, and reports the selected SIMD tier and in-process timings.
 
 **Architecture:** A demo runner composes the existing CLI engine, row selector, typed override parser, and policy-authored result explainer. It appends one report in memory and writes stdout once; existing JSON commands and evaluator kernels remain unchanged.
 
@@ -167,8 +167,8 @@ Expected: both benchmarks complete; record ns/op, B/op, and allocs/op.
 Run:
 
 ```bash
-timeout 120s go build -trimpath -o /tmp/opencode/verifoxx-task26 ./cmd/verifoxx
-bash -c 'TIMEFORMAT="elapsed=%R user=%U sys=%S"; time /tmp/opencode/verifoxx-task26 demo >/dev/null'
+timeout 120s go build -trimpath -o /tmp/opencode/nornrune-task26 ./cmd/nornrune
+bash -c 'TIMEFORMAT="elapsed=%R user=%U sys=%S"; time /tmp/opencode/nornrune-task26 demo >/dev/null'
 ```
 
 Expected: successful demo execution in the same millisecond order of magnitude
@@ -187,7 +187,7 @@ claim a speedup without comparable before/after measurements.
 **Step 1: Run focused and full tests**
 
 ```bash
-timeout 120s go test -count=1 -timeout 60s ./internal/adapters/cli ./internal/app ./cmd/verifoxx
+timeout 120s go test -count=1 -timeout 60s ./internal/adapters/cli ./internal/app ./cmd/nornrune
 timeout 180s go test -count=1 -timeout 120s ./...
 timeout 180s go test -count=1 -timeout 120s -tags=purego ./...
 timeout 180s env GOARCH=386 go test -count=1 -timeout 120s ./...
@@ -211,7 +211,7 @@ Expected: no diagnostics or listed files.
 **Step 3: Recheck the machine-readable golden contract**
 
 ```bash
-timeout 120s go run ./cmd/verifoxx evaluate > /tmp/opencode/task26-results.json
+timeout 120s go run ./cmd/nornrune evaluate > /tmp/opencode/task26-results.json
 cmp /tmp/opencode/task26-results.json results/requests.json
 ```
 
@@ -220,7 +220,7 @@ Expected: byte-identical output.
 **Step 4: Inspect the presentation command**
 
 ```bash
-timeout 120s go run ./cmd/verifoxx demo
+timeout 120s go run ./cmd/nornrune demo
 ```
 
 Expected: one complete plain-text report with five baseline decisions, two

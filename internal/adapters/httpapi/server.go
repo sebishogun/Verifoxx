@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/sebishogun/verifoxx/internal/observability"
-	coreservice "github.com/sebishogun/verifoxx/internal/service"
+	"github.com/sebishogun/nornrune/internal/observability"
+	coreservice "github.com/sebishogun/nornrune/internal/service"
 )
 
 const policyPathPrefix = "/v1/policies/"

@@ -1,4 +1,4 @@
-module github.com/sebishogun/verifoxx
+module github.com/sebishogun/nornrune
 
 go 1.27.0
 

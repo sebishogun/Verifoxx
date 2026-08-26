@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 // accumulationFixture is the combined Task 7.3.8 defect document: every

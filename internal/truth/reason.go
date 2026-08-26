@@ -1,6 +1,6 @@
 package truth
 
-import "github.com/sebishogun/verifoxx/internal/schema"
+import "github.com/sebishogun/nornrune/internal/schema"
 
 // ReasonCount is the number of engine uncertainty reasons, one per bit of a
 // ReasonMask.

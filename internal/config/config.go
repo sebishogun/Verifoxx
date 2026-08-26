@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/security"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/security"
 )
 
 var ErrInvalidConfig = errors.New("config: invalid configuration")
@@ -102,7 +102,7 @@ func Default() Config {
 	return Config{
 		HTTPAddress:            "127.0.0.1:8080",
 		GRPCAddress:            "127.0.0.1:9090",
-		PolicyName:             "verifoxx",
+		PolicyName:             "nornrune",
 		RequestTimeout:         30 * time.Second,
 		ShutdownTimeout:        30 * time.Second,
 		AuditWriteTimeout:      5 * time.Second,
@@ -313,7 +313,7 @@ func fileDuration(current time.Duration, source *string, name string) (time.Dura
 }
 
 func applyFlags(config *Config, arguments []string) error {
-	flags := flag.NewFlagSet("verifoxx", flag.ContinueOnError)
+	flags := flag.NewFlagSet("nornrune", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	var ignoredPath string
 	auditMode := auditModeString(config.AuditMode)

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 var (

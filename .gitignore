@@ -1,5 +1,5 @@
 # Build output
-/verifoxx
+/nornrune
 /__debug_bin
 /bin/
 *.exe
@@ -10,7 +10,7 @@
 
 # Local development secrets
 /.env
-/.verifoxx/
+/.nornrune/
 
 # Test and coverage artifacts
 *.out

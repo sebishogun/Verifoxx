@@ -22,7 +22,7 @@ func TestPolicyNotificationEncoding(t *testing.T) {
 		}
 	}
 
-	first := policyNotificationChannel("verifoxx")
+	first := policyNotificationChannel("nornrune")
 	second := policyNotificationChannel("other-policy")
 	if first == second || len(first) > 63 || !strings.HasPrefix(first, policyNotificationChannelPrefix) {
 		t.Fatalf("policy notification channels = (%q, %q)", first, second)

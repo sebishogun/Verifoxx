@@ -4,7 +4,7 @@
 
 **Goal:** Route ordinary production evaluation through the fixed-worker scheduler, add a bounded offline benchmark command, and enforce one pinned field-alignment gate locally and in CI.
 
-**Architecture:** `server.Engine` retains bounded request workspaces for decode/encode/audit ownership but delegates evaluation to one process-wide scheduler. The standalone `evaluate` command uses one command-lifetime scheduler while deterministic debugger and single-row tools stay serial. A no-input `verifoxx bench` command measures a repeated embedded typed fixture, and one pinned shell script is the only field-alignment entry point.
+**Architecture:** `server.Engine` retains bounded request workspaces for decode/encode/audit ownership but delegates evaluation to one process-wide scheduler. The standalone `evaluate` command uses one command-lifetime scheduler while deterministic debugger and single-row tools stay serial. A no-input `nornrune bench` command measures a repeated embedded typed fixture, and one pinned shell script is the only field-alignment entry point.
 
 **Tech Stack:** Go 1.27, Cobra, existing SoA/CSR evaluator and fixed-worker scheduler, `runtime.MemStats`, POSIX shell, GitHub Actions, pinned `fieldalignment` analyzer.
 
@@ -258,7 +258,7 @@ flags or stdin payload.
 
 ```bash
 timeout 120s go test -count=1 -timeout 60s -run='TestBench' ./internal/adapters/cli
-timeout 120s go run ./cmd/verifoxx bench --rows 1024 --iterations 10 --workers 4
+timeout 120s go run ./cmd/nornrune bench --rows 1024 --iterations 10 --workers 4
 ```
 
 Expected: tests pass; smoke output is one JSON object reporting parallel mode
@@ -321,7 +321,7 @@ Expected: pass with no analyzer diagnostics.
 
 ```bash
 timeout 240s go test -run='^$' -bench='^BenchmarkScheduler$' -benchmem -benchtime=300ms -count=6 -timeout=180s ./internal/scheduler
-timeout 120s go run ./cmd/verifoxx bench --rows 4096 --iterations 100 --workers 4
+timeout 120s go run ./cmd/nornrune bench --rows 4096 --iterations 100 --workers 4
 ```
 
 Record actual output only. Confirm scheduler benchmark cases remain zero
@@ -329,7 +329,7 @@ allocation and retain the 256-row crossover before documenting it.
 
 **Step 2: Update user and architecture documentation**
 
-Document `verifoxx bench`, its no-input contract and JSON fields, the shared
+Document `nornrune bench`, its no-input contract and JSON fields, the shared
 field-alignment command, process-wide scheduler ownership, global token budget,
 shutdown order, crossover, and measured output. Remove statements that the
 production server does not use the scheduler.
@@ -367,7 +367,7 @@ timeout 300s go test -count=1 -timeout 240s -tags=purego ./...
 timeout 360s go test -count=1 -timeout 300s -tags=integration ./...
 timeout 300s go run ./cmd/devx policy:check
 timeout 300s go run ./cmd/devx results:check
-timeout 300s env PATH="/tmp/opencode/verifoxx-tools:$PATH" go run ./cmd/devx proto:check
+timeout 300s env PATH="/tmp/opencode/nornrune-tools:$PATH" go run ./cmd/devx proto:check
 timeout 300s go run ./cmd/devx build
 timeout 300s go run github.com/goreleaser/goreleaser/v2@v2.12.3 check
 timeout 120s go mod tidy -diff

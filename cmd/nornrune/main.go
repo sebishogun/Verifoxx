@@ -1,4 +1,4 @@
-// Command verifoxx is the entry point for the Verifoxx policy engine.
+// Command nornrune is the entry point for the NornRune policy engine.
 package main
 
 import (
@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/sebishogun/verifoxx/internal/app"
+	"github.com/sebishogun/nornrune/internal/app"
 )
 
 func main() {

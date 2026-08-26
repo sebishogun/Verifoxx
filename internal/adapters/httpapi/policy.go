@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/wire"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	coreservice "github.com/sebishogun/verifoxx/internal/service"
+	"github.com/sebishogun/nornrune/internal/adapters/wire"
+	"github.com/sebishogun/nornrune/internal/compile"
+	coreservice "github.com/sebishogun/nornrune/internal/service"
 )
 
 func (server *Server) handleValidate(response http.ResponseWriter, request *http.Request) {

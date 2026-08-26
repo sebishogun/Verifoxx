@@ -4,7 +4,7 @@ package benchdata
 import (
 	"errors"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 const (

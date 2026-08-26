@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/persistence"
 )
 
 // JournalConfig fixes all writer concurrency and slot storage at construction.

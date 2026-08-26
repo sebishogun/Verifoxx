@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonpolicy"
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonpolicy"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func TestValidateNilInputsAppendOnce(t *testing.T) {

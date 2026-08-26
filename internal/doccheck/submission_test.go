@@ -28,10 +28,10 @@ func TestReadmeDocumentsRunnableModesAndDataContract(t *testing.T) {
 
 	readme := readDocument(t, "README.md")
 	for _, required := range []string{
-		"go run ./cmd/verifoxx demo",
-		"go run ./cmd/verifoxx tui",
-		"docker build -t verifoxx:local .",
-		"docker run --rm verifoxx:local demo",
+		"go run ./cmd/nornrune demo",
+		"go run ./cmd/nornrune tui",
+		"docker build -t nornrune:local .",
+		"docker run --rm nornrune:local demo",
 		"docker compose --profile full up --build --wait",
 		"--policy",
 		"--requests",

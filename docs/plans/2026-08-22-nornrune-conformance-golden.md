@@ -1,4 +1,4 @@
-# Verifoxx Conformance And Golden Implementation Plan
+# NornRune Conformance And Golden Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -47,8 +47,8 @@ Commit: `feat: compile evidence qualifiers`
 ### Task 2: Add End-To-End Conformance And Golden JSON
 
 **Files:**
-- Create: `policies/verifoxx/policy.json`
-- Create: `internal/conformance/verifoxx_test.go`
+- Create: `policies/nornrune/policy.json`
+- Create: `internal/conformance/nornrune_test.go`
 - Create: `results/requests.json`
 - Create: `testdata/golden/requests.json`
 
@@ -87,4 +87,4 @@ timeout 30s gofmt -l .
 git diff --check
 ```
 
-Commit: `feat: add verifoxx policy conformance`
+Commit: `feat: add nornrune policy conformance`

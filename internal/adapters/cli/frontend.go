@@ -9,12 +9,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/frontend/cedar"
-	"github.com/sebishogun/verifoxx/frontend/cel"
-	"github.com/sebishogun/verifoxx/frontend/rego"
-	internalfrontend "github.com/sebishogun/verifoxx/internal/frontend"
-	"github.com/sebishogun/verifoxx/internal/program"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/frontend/cedar"
+	"github.com/sebishogun/nornrune/frontend/cel"
+	"github.com/sebishogun/nornrune/frontend/rego"
+	internalfrontend "github.com/sebishogun/nornrune/internal/frontend"
+	"github.com/sebishogun/nornrune/internal/program"
 )
 
 var (

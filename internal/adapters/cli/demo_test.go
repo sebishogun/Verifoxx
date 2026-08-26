@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	"github.com/sebishogun/verifoxx/internal/simdops"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/simdops"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 func TestDemoRunsCompleteEmbeddedWorkflow(t *testing.T) {
@@ -22,9 +22,9 @@ func TestDemoRunsCompleteEmbeddedWorkflow(t *testing.T) {
 	}
 
 	wantText := []string{
-		"VERIFOXX POLICY ENGINE DEMO\n",
-		"Policy: verifoxx 1.0.0\n",
-		"SHA-256: a92ffd1c00e823652bed47acf3955f5559543eeba4f02ebf16965bc2966d0a22\n",
+		"NORNRUNE POLICY ENGINE DEMO\n",
+		"Policy: nornrune 1.0.0\n",
+		"SHA-256: 2b26fdb9304cb045f4490039061090da01e10e0140e7e16a22e3b71816fc8245\n",
 		"Engine: test-engine\n",
 		"SIMD: ",
 		"Program: 14 instructions | 3 requirements | 5 clauses\n",
@@ -124,7 +124,7 @@ func TestDemoUsesInjectedRuntimeAndClock(t *testing.T) {
 		return current
 	}
 	output, err := runDemo(sources{
-		policy:   []byte(verifoxx.Source()),
+		policy:   []byte(nornrune.Source()),
 		requests: []byte(fixtures.RequestsJSON()),
 		evidence: []byte(fixtures.EvidenceJSON()),
 	}, "test-engine", simdops.RuntimeInfo{Tier: "test-simd", Description: "test vector backend"}, now)

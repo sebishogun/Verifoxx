@@ -22,8 +22,8 @@ The local container initializes two non-superuser roles:
 
 | Role | Responsibility |
 |---|---|
-| `verifoxx_migrator` | owns schema changes and the migration ledger |
-| `verifoxx_runtime` | selects and inserts runtime data and updates only `policies.active_version_id` |
+| `nornrune_migrator` | owns schema changes and the migration ledger |
+| `nornrune_runtime` | selects and inserts runtime data and updates only `policies.active_version_id` |
 
 Public schema, table, sequence, function, and graph privileges are revoked.
 Published policy versions, request snapshots, evidence snapshots, evaluation
@@ -41,7 +41,7 @@ one. The migrator:
 
 1. begins one transaction;
 2. takes a fixed `pg_advisory_xact_lock`;
-3. creates or reads `public.verifoxx_schema_migrations`;
+3. creates or reads `public.nornrune_schema_migrations`;
 4. reconciles every applied version, name, and SHA-256 checksum;
 5. applies all pending migrations in order; and
 6. commits the ledger and schema together.
@@ -69,8 +69,8 @@ service. To apply them manually to the local Compose database, use the migration
 role:
 
 ```bash
-VERIFOXX_DATABASE_URL='postgresql://verifoxx_migrator:verifoxx-migrator-local@127.0.0.1:5432/verifoxx?sslmode=disable' \
-  timeout 120s go run ./cmd/verifoxx migrate
+NORNRUNE_DATABASE_URL='postgresql://nornrune_migrator:nornrune-migrator-local@127.0.0.1:5432/nornrune?sslmode=disable' \
+  timeout 120s go run ./cmd/nornrune migrate
 ```
 
 Create a new exclusive pair with:
@@ -100,7 +100,7 @@ Migration 000001 creates:
 | `benchmark_runs` | optional retained measurement metadata |
 
 Migration 000002 adds immutable `policy_nodes` and `policy_edges`, typed views,
-and the `verifoxx.policy_graph` property graph.
+and the `nornrune.policy_graph` property graph.
 
 ## Policy Publication
 
@@ -175,7 +175,7 @@ Back up canonical tables and the migration ledger before image upgrades or
 schema changes. For the local stack, a logical dump can be captured with:
 
 ```bash
-timeout 120s docker compose exec -T postgres pg_dump -U postgres -d verifoxx -Fc > verifoxx.dump
+timeout 120s docker compose exec -T postgres pg_dump -U postgres -d nornrune -Fc > nornrune.dump
 ```
 
 Restore into a newly initialized cluster whose roles exist, then run the product

@@ -19,8 +19,8 @@ import (
 	"syscall"
 	"time"
 
-	verifoxxv1 "github.com/sebishogun/verifoxx/api/gen/verifoxx/v1"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
+	nornrunev1 "github.com/sebishogun/nornrune/api/gen/nornrune/v1"
+	"github.com/sebishogun/nornrune/internal/fixtures"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -238,9 +238,9 @@ func newRequester(config options) (requester, error) {
 		return nil, fmt.Errorf("loadgen: create gRPC client: %w", err)
 	}
 	return &grpcRequester{
-		client:     verifoxxv1.NewPolicyServiceClient(connection),
+		client:     nornrunev1.NewPolicyServiceClient(connection),
 		connection: connection,
-		payload: &verifoxxv1.EvaluateBatchRequest{
+		payload: &nornrunev1.EvaluateBatchRequest{
 			RequestsJson: []byte(fixtures.RequestsJSON()),
 			EvidenceJson: []byte(fixtures.EvidenceJSON()),
 		},
@@ -286,9 +286,9 @@ func (client *httpRequester) close() error {
 }
 
 type grpcRequester struct {
-	client     verifoxxv1.PolicyServiceClient
+	client     nornrunev1.PolicyServiceClient
 	connection *grpc.ClientConn
-	payload    *verifoxxv1.EvaluateBatchRequest
+	payload    *nornrunev1.EvaluateBatchRequest
 }
 
 func (client *grpcRequester) request(ctx context.Context) error {

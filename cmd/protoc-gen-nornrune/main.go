@@ -1,7 +1,7 @@
 package main
 
 import (
-	frontproto "github.com/sebishogun/verifoxx/frontend/proto"
+	frontproto "github.com/sebishogun/nornrune/frontend/proto"
 	"google.golang.org/protobuf/compiler/protogen"
 )
 

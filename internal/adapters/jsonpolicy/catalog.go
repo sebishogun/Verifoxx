@@ -3,8 +3,8 @@ package jsonpolicy
 import (
 	"bytes"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func findCatalogName(doc *ast.Document, names []schema.ValueID, name []byte) (uint32, bool) {

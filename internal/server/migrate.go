@@ -11,9 +11,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/postgres"
-	"github.com/sebishogun/verifoxx/internal/config"
-	"github.com/sebishogun/verifoxx/migrations"
+	"github.com/sebishogun/nornrune/internal/adapters/postgres"
+	"github.com/sebishogun/nornrune/internal/config"
+	"github.com/sebishogun/nornrune/migrations"
 )
 
 var ErrInvalidRuntime = errors.New("server: invalid runtime configuration")
@@ -77,7 +77,7 @@ func MigrationHealth(ctx context.Context, cfg config.Config) error {
 	}
 	defer pool.Close()
 	var applied int
-	if err := pool.QueryRow(probeContext, "SELECT count(*) FROM public.verifoxx_schema_migrations").Scan(&applied); err != nil {
+	if err := pool.QueryRow(probeContext, "SELECT count(*) FROM public.nornrune_schema_migrations").Scan(&applied); err != nil {
 		return fmt.Errorf("server: read migration health: %w", err)
 	}
 	if applied != len(expected) {

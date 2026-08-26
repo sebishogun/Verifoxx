@@ -44,7 +44,7 @@ build_target() {
 	timeout "$build_timeout" env CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
 		go build -trimpath -ldflags="-s -w" -o "bin/devx-$goos-$goarch$suffix" ./cmd/devx
 	timeout "$build_timeout" env CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-		go build -trimpath -ldflags="-s -w" -o "bin/verifoxx-$goos-$goarch$suffix" ./cmd/verifoxx
+		go build -trimpath -ldflags="-s -w" -o "bin/nornrune-$goos-$goarch$suffix" ./cmd/nornrune
 }
 
 if [ "$host_only" -eq 1 ]; then

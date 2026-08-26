@@ -6,9 +6,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
 )
 
 var (

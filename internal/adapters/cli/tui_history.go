@@ -6,9 +6,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	postgresadapter "github.com/sebishogun/verifoxx/internal/adapters/postgres"
-	tuiadapter "github.com/sebishogun/verifoxx/internal/adapters/tui"
-	"github.com/sebishogun/verifoxx/internal/config"
+	postgresadapter "github.com/sebishogun/nornrune/internal/adapters/postgres"
+	tuiadapter "github.com/sebishogun/nornrune/internal/adapters/tui"
+	"github.com/sebishogun/nornrune/internal/config"
 )
 
 var errPersistedHistoryUnavailable = errors.New("persisted history unavailable")

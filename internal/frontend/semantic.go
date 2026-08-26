@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"unicode/utf8"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func (compiler *Compiler) validate(policy *public.Policy) []public.Diagnostic {

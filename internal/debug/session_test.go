@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonbatch"
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonpolicy"
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonbatch"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonpolicy"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 func TestSessionStepsRestartsAndReplaysDeterministically(t *testing.T) {
@@ -450,11 +450,11 @@ func TestSessionCanceledPausedCommandDoesNotMutateState(t *testing.T) {
 
 func debugFixture(t testing.TB) (*program.Program, eval.Batch, result.Batch) {
 	t.Helper()
-	fields, symbols, err := verifoxx.NewSchema()
+	fields, symbols, err := nornrune.NewSchema()
 	if err != nil {
 		t.Fatalf("build policy schema: %v", err)
 	}
-	policySource := []byte(verifoxx.Source())
+	policySource := []byte(nornrune.Source())
 	builder := ast.NewBuilder(ast.Hints{
 		Nodes: 48, CompareNodes: 32, GroupNodes: 12, ChildEdges: 48, EvidenceNodes: 8,
 		Values: 96, SymbolValues: 96, SymbolBytes: 4096, EvidenceKinds: 8, EvidenceStates: 16,

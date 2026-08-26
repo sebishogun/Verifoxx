@@ -3,8 +3,8 @@ package cel
 import (
 	"testing"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	internalfrontend "github.com/sebishogun/verifoxx/internal/frontend"
+	public "github.com/sebishogun/nornrune/frontend"
+	internalfrontend "github.com/sebishogun/nornrune/internal/frontend"
 )
 
 func FuzzCompile(f *testing.F) {

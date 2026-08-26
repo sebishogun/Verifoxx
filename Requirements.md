@@ -1,4 +1,4 @@
-Verifoxx AI Engineer Test | Semantic Decision Representation Exercise
+NornRune AI Engineer Test | Semantic Decision Representation Exercise
 __________________________________________________________________________________________________________________________
 Timebox 4-5 hours. Use of AI tools is permitted; please state briefly where they were used.
 Objective
@@ -41,7 +41,7 @@ approval exists. Disclosure restrictions and pre-execution approval
 conditions cannot be relaxed. If approval evidence is unclear, stale or
 conflicting, the case should be escalated rather than assumed safe.
 
-Verifoxx - Candidate Exercise
+NornRune - Candidate Exercise
 
 Candidate input pack
 Request pack

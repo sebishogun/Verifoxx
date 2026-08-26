@@ -4,7 +4,7 @@ import (
 	"math"
 	"slices"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 // FactSpec is immutable compiler-selected metadata for reused symbol fields.

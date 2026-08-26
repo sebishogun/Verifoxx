@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"math/bits"
 
-	"github.com/sebishogun/verifoxx/internal/arena"
+	"github.com/sebishogun/nornrune/internal/arena"
 )
 
 // FNV-1a 64-bit offset and prime.

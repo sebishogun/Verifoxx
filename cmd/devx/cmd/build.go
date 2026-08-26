@@ -33,35 +33,35 @@ func buildCommandPlan(name string) ([]commandSpec, bool) {
 	case "build":
 		return []commandSpec{{
 			executable: "go",
-			arguments:  []string{"build", "-trimpath", "-o", "bin/verifoxx", "./cmd/verifoxx"},
+			arguments:  []string{"build", "-trimpath", "-o", "bin/nornrune", "./cmd/nornrune"},
 			timeout:    2 * time.Minute,
 		}}, true
 	case "build:exp":
 		return []commandSpec{{
 			executable:  "go",
-			arguments:   []string{"build", "-trimpath", "-o", "bin/verifoxx-exp", "./cmd/verifoxx"},
+			arguments:   []string{"build", "-trimpath", "-o", "bin/nornrune-exp", "./cmd/nornrune"},
 			environment: []string{"GOEXPERIMENT=simd"},
 			timeout:     2 * time.Minute,
 		}}, true
 	case "build:purego":
 		return []commandSpec{{
 			executable: "go",
-			arguments:  []string{"build", "-trimpath", "-tags=purego", "-o", "bin/verifoxx-purego", "./cmd/verifoxx"},
+			arguments:  []string{"build", "-trimpath", "-tags=purego", "-o", "bin/nornrune-purego", "./cmd/nornrune"},
 			timeout:    2 * time.Minute,
 		}}, true
 	case "demo":
-		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/verifoxx", "demo"}, timeout: 2 * time.Minute}}, true
+		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/nornrune", "demo"}, timeout: 2 * time.Minute}}, true
 	case "tui":
-		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/verifoxx", "tui"}, timeout: 30 * time.Minute}}, true
+		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/nornrune", "tui"}, timeout: 30 * time.Minute}}, true
 	case "serve":
-		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/verifoxx", "serve"}, timeout: 30 * time.Minute}}, true
+		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/nornrune", "serve"}, timeout: 30 * time.Minute}}, true
 	case "full":
 		return []commandSpec{{
 			executable: "docker", arguments: []string{"compose", "--profile", "full", "up", "--build", "--wait"}, timeout: 10 * time.Minute,
 		}}, true
 	case "proto:gen":
 		return []commandSpec{
-			{executable: "go", arguments: []string{"build", "-trimpath", "-o", ".verifoxx/tools/protoc-gen-verifoxx", "./cmd/protoc-gen-verifoxx"}, timeout: 2 * time.Minute},
+			{executable: "go", arguments: []string{"build", "-trimpath", "-o", ".nornrune/tools/protoc-gen-nornrune", "./cmd/protoc-gen-nornrune"}, timeout: 2 * time.Minute},
 			{executable: "buf", arguments: []string{"generate"}, timeout: 2 * time.Minute},
 			{executable: "buf", arguments: []string{"generate", "--template", "buf.frontend.gen.yaml"}, timeout: 2 * time.Minute},
 		}, true
@@ -71,16 +71,16 @@ func buildCommandPlan(name string) ([]commandSpec, bool) {
 			{
 				executable:  "go",
 				arguments:   []string{"test", "-count=1", "-timeout", "150s", "-run", "^(TestGeneratedCodeIsCurrent|TestBufImageIsPinned)$", "./internal/adapters/grpcapi"},
-				environment: []string{"VERIFOXX_CHECK_GENERATED=1"},
+				environment: []string{"NORNRUNE_CHECK_GENERATED=1"},
 				timeout:     3 * time.Minute,
 			},
 		}, true
 	case "policy:compile":
-		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/verifoxx", "compile"}, timeout: 2 * time.Minute}}, true
+		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/nornrune", "compile"}, timeout: 2 * time.Minute}}, true
 	case "policy:check":
-		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/verifoxx", "validate"}, timeout: 2 * time.Minute}}, true
+		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/nornrune", "validate"}, timeout: 2 * time.Minute}}, true
 	case "results:gen":
-		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/verifoxx", "evaluate"}, timeout: 2 * time.Minute}}, true
+		return []commandSpec{{executable: "go", arguments: []string{"run", "./cmd/nornrune", "evaluate"}, timeout: 2 * time.Minute}}, true
 	case "results:check":
 		return []commandSpec{{
 			executable: "go", arguments: []string{"test", "-count=1", "-timeout", "60s", "./internal/conformance"}, timeout: 90 * time.Second,
@@ -98,7 +98,7 @@ func runClean(deps dependencies) error {
 	if err != nil {
 		return err
 	}
-	for _, relative := range []string{"bin", ".verifoxx", "cpu.pprof"} {
+	for _, relative := range []string{"bin", ".nornrune", "cpu.pprof"} {
 		if err := deps.removeAll(filepath.Join(repository, relative)); err != nil {
 			return errors.Join(errors.New("devx: clean generated path"), err)
 		}

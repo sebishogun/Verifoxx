@@ -11,18 +11,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonpolicy"
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	"github.com/sebishogun/verifoxx/internal/observability"
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/security"
-	"github.com/sebishogun/verifoxx/internal/server"
-	"github.com/sebishogun/verifoxx/internal/service"
-	"github.com/sebishogun/verifoxx/internal/simdops"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonpolicy"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/observability"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/security"
+	"github.com/sebishogun/nornrune/internal/server"
+	"github.com/sebishogun/nornrune/internal/service"
+	"github.com/sebishogun/nornrune/internal/simdops"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 func TestPolicyReloadDuringEvaluationKeepsCapturedProgram(t *testing.T) {
@@ -51,12 +51,12 @@ func TestPolicyReloadDuringEvaluationKeepsCapturedProgram(t *testing.T) {
 	waitFailureSignal(t, secondContext.observed, "second evaluation worker wait")
 
 	sourceV2 := bytes.Replace(
-		[]byte(verifoxx.Source()),
+		[]byte(nornrune.Source()),
 		[]byte(`"version": "1.0.0"`),
 		[]byte(`"version": "2.0.0"`),
 		1,
 	)
-	if bytes.Equal(sourceV2, []byte(verifoxx.Source())) {
+	if bytes.Equal(sourceV2, []byte(nornrune.Source())) {
 		t.Fatal("policy version fixture was not replaced")
 	}
 	if _, err := engine.CompilePolicy(context.Background(), sourceV2); err != nil {
@@ -216,14 +216,14 @@ func newFailureEngine(t *testing.T, mode persistence.AuditMode, journal *failure
 			t.Errorf("Engine.Close() error = %v", err)
 		}
 	})
-	if _, err := engine.CompilePolicy(context.Background(), []byte(verifoxx.Source())); err != nil {
+	if _, err := engine.CompilePolicy(context.Background(), []byte(nornrune.Source())); err != nil {
 		t.Fatalf("CompilePolicy(v1) error = %v", err)
 	}
 	return engine
 }
 
 func compileFailurePolicy(source []byte) (*program.Program, error) {
-	fields, symbols, err := verifoxx.NewSchema()
+	fields, symbols, err := nornrune.NewSchema()
 	if err != nil {
 		return nil, err
 	}

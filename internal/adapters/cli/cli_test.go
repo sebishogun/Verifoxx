@@ -10,14 +10,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/buildinfo"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	policyindex "github.com/sebishogun/verifoxx/internal/index"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/buildinfo"
+	"github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	policyindex "github.com/sebishogun/nornrune/internal/index"
+	"github.com/sebishogun/nornrune/internal/schema"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 type errorWriter struct{}
@@ -229,7 +229,7 @@ func TestSourcesReturnFileErrors(t *testing.T) {
 
 func TestPipelineCompilesAndEvaluatesEmbeddedInputs(t *testing.T) {
 	var engine engine
-	compiled, err := engine.compilePolicy([]byte(verifoxx.Source()))
+	compiled, err := engine.compilePolicy([]byte(nornrune.Source()))
 	if err != nil {
 		t.Fatalf("compilePolicy: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestPipelineCompilesAndEvaluatesEmbeddedInputs(t *testing.T) {
 
 func TestPipelineScheduledEvaluation(t *testing.T) {
 	var direct engine
-	compiled, err := direct.compilePolicy([]byte(verifoxx.Source()))
+	compiled, err := direct.compilePolicy([]byte(nornrune.Source()))
 	if err != nil {
 		t.Fatalf("compilePolicy: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestPipelineScheduledParallelEvaluation(t *testing.T) {
 	previousProcs := runtime.GOMAXPROCS(2)
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 	var fixture engine
-	compiled, err := fixture.compilePolicy([]byte(verifoxx.Source()))
+	compiled, err := fixture.compilePolicy([]byte(nornrune.Source()))
 	if err != nil {
 		t.Fatalf("compilePolicy: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestPipelineScheduledParallelEvaluation(t *testing.T) {
 
 func TestPipelineScheduledCancellation(t *testing.T) {
 	var pipeline engine
-	compiled, err := pipeline.compilePolicy([]byte(verifoxx.Source()))
+	compiled, err := pipeline.compilePolicy([]byte(nornrune.Source()))
 	if err != nil {
 		t.Fatalf("compilePolicy: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestPipelineSeparatesDecodeAndSemanticFailures(t *testing.T) {
 		t.Fatal("decodePolicy accepted malformed JSON")
 	}
 
-	decoded, err := engine.decodePolicy([]byte(verifoxx.Source()))
+	decoded, err := engine.decodePolicy([]byte(nornrune.Source()))
 	if err != nil {
 		t.Fatalf("decode valid policy: %v", err)
 	}
@@ -391,7 +391,7 @@ func TestPipelineSeparatesDecodeAndSemanticFailures(t *testing.T) {
 }
 
 func productTestDependencies() dependencies {
-	validPolicy := verifoxx.Source()
+	validPolicy := nornrune.Source()
 	return dependencies{
 		readFile: func(path string) ([]byte, error) {
 			switch path {
@@ -488,7 +488,7 @@ func TestCompileEmbeddedPolicy(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty", stderr)
 	}
 	for _, fragment := range []string{
-		`{"name":"verifoxx","version":"1.0.0","sha256":"a92ffd1c00e823652bed47acf3955f5559543eeba4f02ebf16965bc2966d0a22"`,
+		`{"name":"nornrune","version":"1.0.0","sha256":"2b26fdb9304cb045f4490039061090da01e10e0140e7e16a22e3b71816fc8245"`,
 		`"instructions":`,
 		`"requirements":3`,
 		`"clauses":`,
@@ -516,7 +516,7 @@ func TestCompileEmbeddedPolicy(t *testing.T) {
 func TestCompileUsesExternalPolicyAndRejectsArguments(t *testing.T) {
 	deps := productTestDependencies()
 	code, stdout, stderr := runCLIWithDependencies(t, deps, "compile", "--policy", "valid-policy.json")
-	if code != 0 || !strings.Contains(stdout, `"name":"verifoxx"`) || stderr != "" {
+	if code != 0 || !strings.Contains(stdout, `"name":"nornrune"`) || stderr != "" {
 		t.Fatalf("compile external = (%d, %q, %q)", code, stdout, stderr)
 	}
 
@@ -629,7 +629,7 @@ func TestParseRequestID(t *testing.T) {
 
 func TestCompactRowCopiesTypedFactsAndReferencedEvidence(t *testing.T) {
 	var pipeline engine
-	compiled, err := pipeline.compilePolicy([]byte(verifoxx.Source()))
+	compiled, err := pipeline.compilePolicy([]byte(nornrune.Source()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -735,7 +735,7 @@ func TestCompactRowCopiesTypedFactsAndReferencedEvidence(t *testing.T) {
 
 func TestCompactRowWithoutEvidence(t *testing.T) {
 	var pipeline engine
-	compiled, err := pipeline.compilePolicy([]byte(verifoxx.Source()))
+	compiled, err := pipeline.compilePolicy([]byte(nornrune.Source()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -823,7 +823,7 @@ func TestExplainReturnsOneForStdoutFailure(t *testing.T) {
 
 func TestParseOverridesResolvesAndTypesFields(t *testing.T) {
 	var pipeline engine
-	compiled, err := pipeline.compilePolicy([]byte(verifoxx.Source()))
+	compiled, err := pipeline.compilePolicy([]byte(nornrune.Source()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -869,7 +869,7 @@ func TestParseOverridesResolvesAndTypesFields(t *testing.T) {
 
 func TestParseOverridesRejectsInvalidAssignments(t *testing.T) {
 	var pipeline engine
-	compiled, err := pipeline.compilePolicy([]byte(verifoxx.Source()))
+	compiled, err := pipeline.compilePolicy([]byte(nornrune.Source()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -904,7 +904,7 @@ func TestParseOverridesRejectsInvalidAssignments(t *testing.T) {
 
 func TestCompactRowAppliesTypedOverrides(t *testing.T) {
 	var pipeline engine
-	compiled, err := pipeline.compilePolicy([]byte(verifoxx.Source()))
+	compiled, err := pipeline.compilePolicy([]byte(nornrune.Source()))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,7 +2,7 @@
 .gitignore
 .worktrees
 .env
-.verifoxx
+.nornrune
 bin
 *.out
 *.test
@@ -12,7 +12,7 @@ AGENTS.md
 CLAUDE.md
 README.md
 Requirements.md
-Verifoxx_AI_Engineer_Assignment.pdf
+NornRune_AI_Engineer_Assignment.pdf
 docs
 results
 testdata

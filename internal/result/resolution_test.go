@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/truth"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/truth"
 )
 
 // Package-level typed scalar sinks absorb the fields of a Resolve result so

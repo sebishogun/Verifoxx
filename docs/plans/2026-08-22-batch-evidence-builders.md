@@ -300,7 +300,7 @@ Run: `go test -timeout 60s ./...`
 
 Run: `go vet -timeout 60s ./...`
 
-Run: `timeout 60s go build ./cmd/verifoxx`
+Run: `timeout 60s go build ./cmd/nornrune`
 
 Expected: PASS.
 

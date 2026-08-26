@@ -14,26 +14,26 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/truth"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/truth"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 func testPolicyGraphSchema(t *testing.T, ctx context.Context, environment *postgresTestEnvironment) {
 	t.Helper()
 
 	for _, relation := range []string{
-		"verifoxx.policy_nodes",
-		"verifoxx.policy_edges",
-		"verifoxx.policy_version_vertices",
-		"verifoxx.requirement_vertices",
-		"verifoxx.clause_vertices",
-		"verifoxx.expression_vertices",
-		"verifoxx.evidence_requirement_vertices",
-		"verifoxx.outcome_vertices",
-		"verifoxx.remediation_vertices",
+		"nornrune.policy_nodes",
+		"nornrune.policy_edges",
+		"nornrune.policy_version_vertices",
+		"nornrune.requirement_vertices",
+		"nornrune.clause_vertices",
+		"nornrune.expression_vertices",
+		"nornrune.evidence_requirement_vertices",
+		"nornrune.outcome_vertices",
+		"nornrune.remediation_vertices",
 	} {
 		assertRelationExists(t, ctx, environment.migrator, relation, true)
 	}
@@ -42,7 +42,7 @@ func testPolicyGraphSchema(t *testing.T, ctx context.Context, environment *postg
 	if err := environment.runtime.QueryRow(ctx, `
 		SELECT count(*)
 		FROM GRAPH_TABLE (
-			verifoxx.policy_graph
+			nornrune.policy_graph
 			MATCH (vertex)
 			COLUMNS (vertex.policy_version_id AS policy_version_id)
 		)
@@ -61,7 +61,7 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	if err != nil {
 		t.Fatalf("construct policy store: %v", err)
 	}
-	source := []byte(verifoxx.Source())
+	source := []byte(nornrune.Source())
 	compiled, err := compileIntegrationPolicy(source)
 	if err != nil {
 		t.Fatalf("compile graph policy: %v", err)
@@ -92,7 +92,7 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	}
 	for _, count := range nodeCounts {
 		if got := queryCount(t, ctx, environment.runtime, `
-			SELECT count(*) FROM verifoxx.policy_nodes
+			SELECT count(*) FROM nornrune.policy_nodes
 			WHERE policy_version_id = $1 AND node_kind = $2
 		`, version.ID, count.kind); got != count.want {
 			t.Fatalf("%s node count = %d, want %d", count.kind, got, count.want)
@@ -114,7 +114,7 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	for _, count := range edgeCounts {
 		totalEdges += count.want
 		if got := queryCount(t, ctx, environment.runtime, `
-			SELECT count(*) FROM verifoxx.policy_edges
+			SELECT count(*) FROM nornrune.policy_edges
 			WHERE policy_version_id = $1 AND edge_kind = $2
 		`, version.ID, count.kind); got != count.want {
 			t.Fatalf("%s edge count = %d, want %d", count.kind, got, count.want)
@@ -130,7 +130,7 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	)
 	if err := environment.runtime.QueryRow(ctx, `
 		SELECT name, detail, content_hash, projected_node_count, projected_edge_count
-		FROM verifoxx.policy_nodes
+		FROM nornrune.policy_nodes
 		WHERE policy_version_id = $1 AND node_kind = 'policy_version' AND local_id = 1
 	`, version.ID).Scan(
 		&storedName, &storedVersion, &storedHash, &projectedNodeCount, &projectedEdgeCount,
@@ -149,7 +149,7 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 
 	outcomes := queryStrings(t, ctx, environment.runtime, `
 		SELECT name
-		FROM verifoxx.policy_nodes
+		FROM nornrune.policy_nodes
 		WHERE policy_version_id = $1 AND node_kind = 'outcome'
 		ORDER BY local_id
 	`, version.ID)
@@ -158,7 +158,7 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	}
 	if got := queryCount(t, ctx, environment.runtime, `
 		SELECT count(*)
-		FROM verifoxx.policy_nodes
+		FROM nornrune.policy_nodes
 		WHERE policy_version_id = $1
 		  AND node_kind = 'outcome'
 		  AND (name, precedence, terminal) IN (
@@ -174,8 +174,8 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	lastClauseID := len(compiled.ClauseAssertionRoots)
 	resolutionPairs := queryStrings(t, ctx, environment.runtime, `
 		SELECT edge.branch || ':' || outcome.name
-		FROM verifoxx.policy_edges AS edge
-		JOIN verifoxx.policy_nodes AS outcome
+		FROM nornrune.policy_edges AS edge
+		JOIN nornrune.policy_nodes AS outcome
 		  ON outcome.policy_version_id = edge.policy_version_id
 		 AND outcome.node_kind = edge.target_kind
 		 AND outcome.local_id = edge.target_id
@@ -198,8 +198,8 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	}
 	remediations := queryStrings(t, ctx, environment.runtime, `
 		SELECT remediation.name || ':' || remediation.detail
-		FROM verifoxx.policy_edges AS edge
-		JOIN verifoxx.policy_nodes AS remediation
+		FROM nornrune.policy_edges AS edge
+		JOIN nornrune.policy_nodes AS remediation
 		  ON remediation.policy_version_id = edge.policy_version_id
 		 AND remediation.node_kind = edge.target_kind
 		 AND remediation.local_id = edge.target_id
@@ -215,7 +215,7 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	var requirementStart, requirementEnd int64
 	if err := environment.runtime.QueryRow(ctx, `
 		SELECT source_start, source_end
-		FROM verifoxx.policy_nodes
+		FROM nornrune.policy_nodes
 		WHERE policy_version_id = $1 AND node_kind = 'requirement' AND local_id = $2
 	`, version.ID, compiled.RequirementIDs[0]).Scan(&requirementStart, &requirementEnd); err != nil {
 		t.Fatalf("query requirement source span: %v", err)
@@ -228,12 +228,12 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	}
 	if got := queryCount(t, ctx, environment.runtime, `
 		SELECT count(*)
-		FROM verifoxx.policy_edges AS edge
-		LEFT JOIN verifoxx.policy_nodes AS source
+		FROM nornrune.policy_edges AS edge
+		LEFT JOIN nornrune.policy_nodes AS source
 		  ON source.policy_version_id = edge.policy_version_id
 		 AND source.node_kind = edge.source_kind
 		 AND source.local_id = edge.source_id
-		LEFT JOIN verifoxx.policy_nodes AS target
+		LEFT JOIN nornrune.policy_nodes AS target
 		  ON target.policy_version_id = edge.policy_version_id
 		 AND target.node_kind = edge.target_kind
 		 AND target.local_id = edge.target_id
@@ -249,13 +249,13 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	}
 	assertPolicyVersionEqual(t, duplicate, version)
 	if got := queryCount(t, ctx, environment.runtime,
-		"SELECT count(*) FROM verifoxx.policy_nodes WHERE policy_version_id = $1", version.ID,
+		"SELECT count(*) FROM nornrune.policy_nodes WHERE policy_version_id = $1", version.ID,
 	); got != len(compiled.Opcodes)+len(compiled.RequirementIDs)+len(compiled.ClauseAssertionRoots)+
 		len(compiled.Outcomes.Names)+len(compiled.Remediations.Kinds)+1 {
 		t.Fatalf("node count after duplicate publication = %d", got)
 	}
 	if got := queryCount(t, ctx, environment.runtime,
-		"SELECT count(*) FROM verifoxx.policy_edges WHERE policy_version_id = $1", version.ID,
+		"SELECT count(*) FROM nornrune.policy_edges WHERE policy_version_id = $1", version.ID,
 	); got != totalEdges {
 		t.Fatalf("edge count after duplicate publication = %d, want %d", got, totalEdges)
 	}
@@ -273,16 +273,16 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 	})
 
 	for _, statement := range []string{
-		"UPDATE verifoxx.policy_nodes SET name = name",
-		"DELETE FROM verifoxx.policy_nodes",
-		"UPDATE verifoxx.policy_edges SET ordinal = ordinal",
-		"DELETE FROM verifoxx.policy_edges",
+		"UPDATE nornrune.policy_nodes SET name = name",
+		"DELETE FROM nornrune.policy_nodes",
+		"UPDATE nornrune.policy_edges SET ordinal = ordinal",
+		"DELETE FROM nornrune.policy_edges",
 	} {
 		assertSQLState(t, execError(ctx, environment.runtime, statement), "42501")
 		assertSQLState(t, execError(ctx, environment.migrator, statement), "55000")
 	}
 
-	invalidSource := verifoxxSourceVersion(t, "2.0.0")
+	invalidSource := nornruneSourceVersion(t, "2.0.0")
 	invalidProgram, err := compileIntegrationPolicy(invalidSource)
 	if err != nil {
 		t.Fatalf("compile invalid graph fixture: %v", err)
@@ -293,12 +293,12 @@ func testPolicyGraphProjection(t *testing.T, ctx context.Context, environment *p
 		t.Fatalf("publish invalid graph error = %v, want %v", err, persistence.ErrInvalidPolicyPersistence)
 	}
 	if got := queryCount(t, ctx, environment.runtime,
-		"SELECT count(*) FROM verifoxx.policy_versions WHERE content_hash = $1", invalidCandidate.ContentHash[:],
+		"SELECT count(*) FROM nornrune.policy_versions WHERE content_hash = $1", invalidCandidate.ContentHash[:],
 	); got != 0 {
 		t.Fatalf("invalid graph durable version count = %d, want 0", got)
 	}
 	if got := queryCount(t, ctx, environment.runtime,
-		"SELECT count(*) FROM verifoxx.policy_nodes WHERE policy_version_id <> $1", version.ID,
+		"SELECT count(*) FROM nornrune.policy_nodes WHERE policy_version_id <> $1", version.ID,
 	); got != 0 {
 		t.Fatalf("invalid graph durable node count = %d, want 0", got)
 	}
@@ -315,7 +315,7 @@ func testPolicyGraphAcceptsRecompiledShape(
 	t.Helper()
 
 	nodeCountBefore := queryCount(t, ctx, environment.runtime,
-		"SELECT count(*) FROM verifoxx.policy_nodes WHERE policy_version_id = $1", wantVersion.ID,
+		"SELECT count(*) FROM nornrune.policy_nodes WHERE policy_version_id = $1", wantVersion.ID,
 	)
 	compiled, err := compileIntegrationPolicy(source)
 	if err != nil {
@@ -345,7 +345,7 @@ func testPolicyGraphAcceptsRecompiledShape(
 	}
 	assertPolicyVersionEqual(t, gotVersion, wantVersion)
 	if got := queryCount(t, ctx, environment.runtime,
-		"SELECT count(*) FROM verifoxx.policy_nodes WHERE policy_version_id = $1", wantVersion.ID,
+		"SELECT count(*) FROM nornrune.policy_nodes WHERE policy_version_id = $1", wantVersion.ID,
 	); got != nodeCountBefore {
 		t.Fatalf("node count after changed-shape republish = %d, want %d", got, nodeCountBefore)
 	}
@@ -384,7 +384,7 @@ func testPolicyGraphRejectsReasonAliasDivergence(
 		truth.ReasonInvalid,
 	} {
 		t.Run(fmt.Sprintf("reason_%d", reason), func(t *testing.T) {
-			source := verifoxxSourceVersion(t, fmt.Sprintf("3.0.%d", index))
+			source := nornruneSourceVersion(t, fmt.Sprintf("3.0.%d", index))
 			compiled, err := compileIntegrationPolicy(source)
 			if err != nil {
 				t.Fatalf("compile reason-alias fixture: %v", err)
@@ -405,7 +405,7 @@ func testPolicyGraphRejectsReasonAliasDivergence(
 				t.Fatalf("reason %d divergence error = %v, want %v", reason, err, persistence.ErrInvalidPolicyPersistence)
 			}
 			if got := queryCount(t, ctx, environment.runtime,
-				"SELECT count(*) FROM verifoxx.policy_versions WHERE content_hash = $1", candidate.ContentHash[:],
+				"SELECT count(*) FROM nornrune.policy_versions WHERE content_hash = $1", candidate.ContentHash[:],
 			); got != 0 {
 				t.Fatalf("reason %d divergence durable version count = %d, want 0", reason, got)
 			}
@@ -432,7 +432,7 @@ func testPolicyGraphRejectsPostPublicationInsert(
 	for _, connection := range connections {
 		t.Run(connection.name+"_claim", func(t *testing.T) {
 			assertPolicyGraphInsertRejected(t, ctx, connection.pool, `
-				INSERT INTO verifoxx.policy_nodes
+				INSERT INTO nornrune.policy_nodes
 				    (policy_version_id, node_kind, local_id, name, detail,
 				     source_start, source_end, content_hash,
 				     projected_node_count, projected_edge_count, projection_xid)
@@ -442,14 +442,14 @@ func testPolicyGraphRejectsPostPublicationInsert(
 		})
 		t.Run(connection.name+"_node", func(t *testing.T) {
 			assertPolicyGraphInsertRejected(t, ctx, connection.pool, `
-				INSERT INTO verifoxx.policy_nodes
+				INSERT INTO nornrune.policy_nodes
 				    (policy_version_id, node_kind, local_id, source_start, source_end)
 				VALUES ($1, 'requirement', 9223372036854775807, 0, 0)
 			`, version.ID)
 		})
 		t.Run(connection.name+"_edge", func(t *testing.T) {
 			assertPolicyGraphInsertRejected(t, ctx, connection.pool, `
-				INSERT INTO verifoxx.policy_edges
+				INSERT INTO nornrune.policy_edges
 				    (policy_version_id, edge_id, edge_kind, source_kind, source_id,
 				     target_kind, target_id, ordinal)
 				VALUES ($1, 9223372036854775807, 'CONTAINS', 'policy_version', 1,
@@ -498,7 +498,7 @@ func testPolicyGraphRejectsCorruptExistingClaim(
 		{name: "incomplete_projection"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			source := verifoxxSourceVersion(t, fmt.Sprintf("4.0.%d", index))
+			source := nornruneSourceVersion(t, fmt.Sprintf("4.0.%d", index))
 			compiled, err := compileIntegrationPolicy(source)
 			if err != nil {
 				t.Fatalf("compile corrupt-claim fixture: %v", err)
@@ -516,7 +516,7 @@ func testPolicyGraphRejectsCorruptExistingClaim(
 		})
 	}
 	if got := queryCount(t, ctx, environment.runtime,
-		"SELECT count(*) FROM verifoxx.policies WHERE active_version_id IS NOT NULL",
+		"SELECT count(*) FROM nornrune.policies WHERE active_version_id IS NOT NULL",
 	); got != 0 {
 		t.Fatalf("active policies after corrupt claims = %d, want 0", got)
 	}
@@ -556,7 +556,7 @@ func seedPolicyGraphClaim(
 		t.Fatalf("count corrupt-claim edges: %v", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO verifoxx.policy_nodes
+		INSERT INTO nornrune.policy_nodes
 		    (policy_version_id, node_kind, local_id, name, detail,
 		     source_start, source_end, content_hash,
 		     projected_node_count, projected_edge_count, projection_xid)
@@ -583,11 +583,11 @@ func testPolicyGraphMigrationDown(t *testing.T, ctx context.Context, environment
 	if changed, err := migrator.Down(ctx, 1); err != nil || changed != 1 {
 		t.Fatalf("migrate graph schema down = (%d, %v), want (1, nil)", changed, err)
 	}
-	assertRelationExists(t, ctx, environment.migrator, "verifoxx.policy_nodes", false)
-	assertRelationExists(t, ctx, environment.migrator, "verifoxx.policy_edges", false)
-	assertRelationExists(t, ctx, environment.migrator, "verifoxx.policy_versions", true)
+	assertRelationExists(t, ctx, environment.migrator, "nornrune.policy_nodes", false)
+	assertRelationExists(t, ctx, environment.migrator, "nornrune.policy_edges", false)
+	assertRelationExists(t, ctx, environment.migrator, "nornrune.policy_versions", true)
 	if got := queryCount(t, ctx, environment.migrator,
-		"SELECT count(*) FROM public.verifoxx_schema_migrations",
+		"SELECT count(*) FROM public.nornrune_schema_migrations",
 	); got != 1 {
 		t.Fatalf("migration rows after graph down = %d, want 1", got)
 	}
@@ -600,7 +600,7 @@ func testPolicyGraphMigrationDown(t *testing.T, ctx context.Context, environment
 var benchmarkGraphRows int64
 
 func BenchmarkPolicyGraphSources(b *testing.B) {
-	compiled, err := compileIntegrationPolicy([]byte(verifoxx.Source()))
+	compiled, err := compileIntegrationPolicy([]byte(nornrune.Source()))
 	if err != nil {
 		b.Fatalf("compile benchmark policy: %v", err)
 	}
@@ -690,7 +690,7 @@ func testPolicyGraphPGQ(t *testing.T, ctx context.Context, environment *postgres
 		t.Fatalf("construct policy store: %v", err)
 	}
 	versions := make([]persistence.PolicyVersion, 0, 2)
-	for _, source := range [][]byte{[]byte(verifoxx.Source()), verifoxxSourceVersion(t, "2.0.0")} {
+	for _, source := range [][]byte{[]byte(nornrune.Source()), nornruneSourceVersion(t, "2.0.0")} {
 		compiled, err := compileIntegrationPolicy(source)
 		if err != nil {
 			t.Fatalf("compile graph-query policy: %v", err)
@@ -705,7 +705,7 @@ func testPolicyGraphPGQ(t *testing.T, ctx context.Context, environment *postgres
 	rejectPaths := queryGraphPaths(t, ctx, environment, `
 		SELECT source_version, target_version, requirement_id, outcome_name, branch
 		FROM GRAPH_TABLE (
-			verifoxx.policy_graph
+			nornrune.policy_graph
 			MATCH
 				(requirement IS requirement)
 				-[IS "CONTAINS"]->(clause IS clause)
@@ -736,7 +736,7 @@ func testPolicyGraphPGQ(t *testing.T, ctx context.Context, environment *postgres
 	evidencePaths := queryGraphPaths(t, ctx, environment, `
 		SELECT source_version, target_version, requirement_id, evidence_kind, edge_kind
 		FROM GRAPH_TABLE (
-			verifoxx.policy_graph
+			nornrune.policy_graph
 			MATCH
 				(requirement IS requirement)
 				-[IS "CONTAINS"]->(clause IS clause)
@@ -767,7 +767,7 @@ func testPolicyGraphPGQ(t *testing.T, ctx context.Context, environment *postgres
 	rows, err := environment.runtime.Query(ctx, `
 		SELECT policy_version_id, evidence_id, count(*) AS dependency_count
 		FROM GRAPH_TABLE (
-			verifoxx.policy_graph
+			nornrune.policy_graph
 			MATCH
 				(IS clause)-[IS "REQUIRES"]->(
 					evidence IS evidence_requirement

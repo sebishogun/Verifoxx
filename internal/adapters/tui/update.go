@@ -11,7 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/sebishogun/verifoxx/internal/debug"
+	"github.com/sebishogun/nornrune/internal/debug"
 )
 
 const (

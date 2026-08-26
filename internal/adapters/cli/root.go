@@ -1,4 +1,4 @@
-// Package cli implements the scriptable Verifoxx command-line adapter.
+// Package cli implements the scriptable NornRune command-line adapter.
 package cli
 
 import (
@@ -10,11 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sebishogun/verifoxx/internal/buildinfo"
-	"github.com/sebishogun/verifoxx/internal/config"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	"github.com/sebishogun/verifoxx/internal/server"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/buildinfo"
+	"github.com/sebishogun/nornrune/internal/config"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/server"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 type dependencies struct {
@@ -72,7 +72,7 @@ func productionDependencies() dependencies {
 		databaseURL: func() config.SecretURL {
 			return config.SecretURL(os.Getenv(config.EnvDatabaseURL))
 		},
-		policy:   verifoxx.Source(),
+		policy:   nornrune.Source(),
 		requests: fixtures.RequestsJSON(),
 		evidence: fixtures.EvidenceJSON(),
 		version:  buildinfo.Version(),
@@ -232,7 +232,7 @@ func executeWithDependenciesContext(
 func newRoot(stdout, stderr io.Writer, deps dependencies) *cobra.Command {
 	var version bool
 	root := &cobra.Command{
-		Use:           "verifoxx",
+		Use:           "nornrune",
 		Short:         "Evidence-aware policy engine",
 		SilenceErrors: true,
 		SilenceUsage:  true,

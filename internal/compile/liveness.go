@@ -4,8 +4,8 @@ import (
 	"math"
 	"math/bits"
 
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 const knownRootFlags = program.RootApplicability | program.RootAssertion | program.RootEvidence

@@ -63,7 +63,7 @@ view.
 A new command supports:
 
 ```text
-verifoxx graph --view ast|program --format dot|svg|html --output PATH
+nornrune graph --view ast|program --format dot|svg|html --output PATH
 ```
 
 It accepts the existing policy/request/evidence source flags. DOT is suitable
@@ -73,7 +73,7 @@ source spans. Output is deterministic for identical inputs.
 
 ### Live browser
 
-`verifoxx tui --browser` starts an ephemeral IPv4-loopback HTTP server and opens
+`nornrune tui --browser` starts an ephemeral IPv4-loopback HTTP server and opens
 the interactive HTML viewer. The static graph payload is served once. A bounded
 state endpoint reports only graph mode, current node/instruction, selected row,
 truth state, and breakpoint/watch IDs. The page polls that endpoint and updates

@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/sebishogun/nornrune/internal/simdops"
 	"github.com/sebishogun/simd"
-	"github.com/sebishogun/verifoxx/internal/simdops"
 )
 
 type testID uint32

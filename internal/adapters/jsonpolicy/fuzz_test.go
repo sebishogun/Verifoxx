@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/compile"
+	"github.com/sebishogun/nornrune/internal/compile"
 )
 
 // FuzzDecode drives the package-level Decode entry point with bounded limits

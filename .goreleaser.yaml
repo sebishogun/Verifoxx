@@ -1,22 +1,22 @@
 version: 2
 
-project_name: verifoxx
+project_name: nornrune
 
 before:
   hooks:
     - go mod download
 
 builds:
-  - id: verifoxx
-    main: ./cmd/verifoxx
-    binary: verifoxx
+  - id: nornrune
+    main: ./cmd/nornrune
+    binary: nornrune
     env:
       - CGO_ENABLED=0
     flags:
       - -buildvcs=false
       - -trimpath
     ldflags:
-      - -s -w -X github.com/sebishogun/verifoxx/internal/buildinfo.version={{.Version}}
+      - -s -w -X github.com/sebishogun/nornrune/internal/buildinfo.version={{.Version}}
     goos:
       - linux
       - darwin
@@ -29,6 +29,11 @@ archives:
     formats:
       - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+      - SECURITY.md
 
 checksum:
   name_template: checksums.txt

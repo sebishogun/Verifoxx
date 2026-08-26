@@ -2,7 +2,7 @@ package graphview
 
 import "strings"
 
-const htmlPrefix = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Verifoxx semantic graph</title><style>
+const htmlPrefix = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NornRune semantic graph</title><style>
 :root{color-scheme:dark;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#020617;color:#e2e8f0}
 *{box-sizing:border-box}
 body{margin:0;display:grid;grid-template-rows:auto 1fr;height:100vh}

@@ -1,6 +1,6 @@
 package ast
 
-import "github.com/sebishogun/verifoxx/internal/schema"
+import "github.com/sebishogun/nornrune/internal/schema"
 
 // Document owns a policy AST as parallel typed columns. NodeID n indexes the
 // top-level columns at n-1. NodeRefs selects a row in the payload table named

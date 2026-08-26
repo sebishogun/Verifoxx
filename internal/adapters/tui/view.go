@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/sebishogun/verifoxx/internal/debug"
-	"github.com/sebishogun/verifoxx/internal/truth"
+	"github.com/sebishogun/nornrune/internal/debug"
+	"github.com/sebishogun/nornrune/internal/truth"
 )
 
 const (
@@ -104,7 +104,7 @@ func (model *Model) renderHeader(width int) string {
 		mode = "PROGRAM"
 	}
 	request := model.data.Requests[model.selectedRequest]
-	header := "VERIFOXX SEMANTIC DEBUGGER  |  " + mode + "  |  " + request.Name + " " + request.Decision +
+	header := "NORNRUNE SEMANTIC DEBUGGER  |  " + mode + "  |  " + request.Name + " " + request.Decision +
 		"  |  " + statusName(model.state.Status) + " / " + stopName(model.state.Stop)
 	return fitLine(header, width)
 }
@@ -518,7 +518,7 @@ func renderCompact(width, height int) string {
 		return ""
 	}
 	var output strings.Builder
-	output.WriteString(fitLine("VERIFOXX DEBUGGER", width))
+	output.WriteString(fitLine("NORNRUNE DEBUGGER", width))
 	for range height - 1 {
 		output.WriteByte('\n')
 		output.WriteString(strings.Repeat(" ", width))

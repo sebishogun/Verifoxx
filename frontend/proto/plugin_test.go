@@ -19,7 +19,7 @@ func TestGenerateEmitsDeterministicStaticBindings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first.File) != 1 || len(second.File) != 1 || first.File[0].GetName() != "policy_verifoxx.pb.go" {
+	if len(first.File) != 1 || len(second.File) != 1 || first.File[0].GetName() != "policy_nornrune.pb.go" {
 		t.Fatalf("generated files = %+v and %+v", first.File, second.File)
 	}
 	if first.File[0].GetContent() != second.File[0].GetContent() {
@@ -59,16 +59,16 @@ func TestGenerateIgnoresItsOptionSchemaGenerationTarget(t *testing.T) {
 	request.FileToGenerate = []string{"options.proto", "policy.proto"}
 	request.ProtoFile = append([]*descriptorpb.FileDescriptorProto{{
 		Name:    proto.String("options.proto"),
-		Package: proto.String("verifoxx.frontend"),
+		Package: proto.String("nornrune.frontend"),
 		Syntax:  proto.String("proto3"),
-		Options: &descriptorpb.FileOptions{GoPackage: proto.String("github.com/sebishogun/verifoxx/frontend/proto;frontproto")},
+		Options: &descriptorpb.FileOptions{GoPackage: proto.String("github.com/sebishogun/nornrune/frontend/proto;frontproto")},
 	}}, request.ProtoFile...)
 
 	response, err := Generate(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(response.File) != 1 || response.File[0].GetName() != "policy_verifoxx.pb.go" {
+	if len(response.File) != 1 || response.File[0].GetName() != "policy_nornrune.pb.go" {
 		t.Fatalf("generated files = %+v, want only policy binding", response.File)
 	}
 }
@@ -86,7 +86,7 @@ func TestGenerateAllowsProto2ImportDescriptors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(response.File) != 1 || response.File[0].GetName() != "policy_verifoxx.pb.go" {
+	if len(response.File) != 1 || response.File[0].GetName() != "policy_nornrune.pb.go" {
 		t.Fatalf("generated files = %+v, want policy binding", response.File)
 	}
 }

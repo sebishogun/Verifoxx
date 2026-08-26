@@ -9,7 +9,7 @@ import (
 	cedargo "github.com/cedar-policy/cedar-go"
 	cedarast "github.com/cedar-policy/cedar-go/x/exp/ast"
 
-	public "github.com/sebishogun/verifoxx/frontend"
+	public "github.com/sebishogun/nornrune/frontend"
 )
 
 // Parsed owns the official Cedar ASTs and source metadata needed for exact

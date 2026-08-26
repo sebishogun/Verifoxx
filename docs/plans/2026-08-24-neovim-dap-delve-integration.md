@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Make `Debug Verifoxx` automatically available in the installed Neovim/nvim-dap setup and align every repository developer workflow with Delve's DAP protocol.
+**Goal:** Make `Debug NornRune` automatically available in the installed Neovim/nvim-dap setup and align every repository developer workflow with Delve's DAP protocol.
 
 **Architecture:** Keep `.vscode/launch.json` as the shared target launch contract. Neovim owns an ephemeral loopback Delve process for normal use, while `devx debug` and `debug:dap` remain equivalent fixed-port alternatives. The semantic TUI stays on its independent owner-only Unix socket.
 
@@ -66,10 +66,10 @@ its existing dirty files other than `lua/plugins/dap.lua`, and do not update
 
 **Step 2: Establish the missing behavior**
 
-From the Verifoxx root, run headless Neovim without manually loading launch JSON
+From the NornRune root, run headless Neovim without manually loading launch JSON
 and inspect `dap.configurations.go`.
 
-Expected: generic Go configurations exist but `Debug Verifoxx` does not.
+Expected: generic Go configurations exist but `Debug NornRune` does not.
 
 **Step 3: Add bounded project launch discovery**
 
@@ -87,7 +87,7 @@ the existing Mason/system executable selection and all generic configurations.
 
 **Step 4: Verify headless discovery**
 
-Run Neovim from the repository root and require exactly one `Debug Verifoxx`
+Run Neovim from the repository root and require exactly one `Debug NornRune`
 configuration with the expected program, cwd, arguments, and build flags.
 
 Expected: PASS with six Go configurations total.
@@ -163,8 +163,8 @@ Expected: PASS.
 
 **Step 2: Launch through real nvim-dap**
 
-Use headless Neovim from the repository root, select `Debug Verifoxx`, and wait
-under a fixed timeout for `.verifoxx/debug.sock`. Confirm the DAP initialized and
+Use headless Neovim from the repository root, select `Debug NornRune`, and wait
+under a fixed timeout for `.nornrune/debug.sock`. Confirm the DAP initialized and
 the worker owns the socket.
 
 **Step 3: Attach the semantic TUI**

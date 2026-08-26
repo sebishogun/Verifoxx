@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	fixture "github.com/sebishogun/verifoxx/testdata/frontends/proto"
+	fixture "github.com/sebishogun/nornrune/testdata/frontends/proto"
 )
 
 func TestCheckedInFixtureMatchesGoldenBinding(t *testing.T) {

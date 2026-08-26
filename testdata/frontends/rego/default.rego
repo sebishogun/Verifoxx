@@ -1,4 +1,4 @@
-package verifoxx
+package nornrune
 
 default allow := false
 

@@ -4,11 +4,11 @@ import (
 	"errors"
 	"slices"
 
-	policyindex "github.com/sebishogun/verifoxx/internal/index"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/simdops"
-	"github.com/sebishogun/verifoxx/internal/truth"
+	policyindex "github.com/sebishogun/nornrune/internal/index"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/simdops"
+	"github.com/sebishogun/nornrune/internal/truth"
 )
 
 const factIndexMinRows uint32 = 64

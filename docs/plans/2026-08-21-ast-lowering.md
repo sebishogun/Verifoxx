@@ -643,7 +643,7 @@ go test -race -count=1 -timeout 120s ./internal/program ./internal/compile ./int
 GOARCH=386 go test -count=1 -timeout 60s ./internal/program ./internal/compile ./internal/result ./internal/truth
 go test -count=1 -timeout 60s ./...
 timeout 120s go vet ./...
-timeout 120s go build ./cmd/verifoxx
+timeout 120s go build ./cmd/nornrune
 timeout 180s go run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@v0.47.1-0.20260707181000-a299dadba899 -test=false ./internal/program ./internal/compile
 timeout 120s go build -gcflags=-m ./internal/program ./internal/compile
 timeout 30s gofmt -l .

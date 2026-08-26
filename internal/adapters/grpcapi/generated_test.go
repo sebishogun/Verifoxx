@@ -15,8 +15,8 @@ import (
 const bufImage = "bufbuild/buf:1.72.0@sha256:65bd496a89c762ad7151ca9e7d885a45dacb3671a8e8ec39738b9f844d3405ea"
 
 func TestGeneratedCodeIsCurrent(t *testing.T) {
-	if os.Getenv("VERIFOXX_CHECK_GENERATED") != "1" {
-		t.Skip("set VERIFOXX_CHECK_GENERATED=1 to run the containerized drift check")
+	if os.Getenv("NORNRUNE_CHECK_GENERATED") != "1" {
+		t.Skip("set NORNRUNE_CHECK_GENERATED=1 to run the containerized drift check")
 	}
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -28,7 +28,7 @@ func TestGeneratedCodeIsCurrent(t *testing.T) {
 		"buf.yaml",
 		"buf.gen.yaml",
 		"buf.frontend.gen.yaml",
-		"api/proto/verifoxx/v1/verifoxx.proto",
+		"api/proto/nornrune/v1/nornrune.proto",
 		"frontend/proto/options.proto",
 		"testdata/frontends/proto/policy.proto",
 	}
@@ -45,11 +45,11 @@ func TestGeneratedCodeIsCurrent(t *testing.T) {
 	runBufCheck(t, ctx, workspace, user, "generate", "--template", "buf.frontend.gen.yaml")
 
 	generated := []string{
-		"api/gen/verifoxx/v1/verifoxx.pb.go",
-		"api/gen/verifoxx/v1/verifoxx_grpc.pb.go",
+		"api/gen/nornrune/v1/nornrune.pb.go",
+		"api/gen/nornrune/v1/nornrune_grpc.pb.go",
 		"frontend/proto/options.pb.go",
 		"testdata/frontends/proto/policy.pb.go",
-		"testdata/frontends/proto/policy_verifoxx.pb.go",
+		"testdata/frontends/proto/policy_nornrune.pb.go",
 	}
 	for _, relative := range generated {
 		want, err := os.ReadFile(filepath.Join(repository, relative))
@@ -68,11 +68,11 @@ func TestGeneratedCodeIsCurrent(t *testing.T) {
 
 func buildFrontendPlugin(t *testing.T, ctx context.Context, repository, workspace string) {
 	t.Helper()
-	destination := filepath.Join(workspace, ".verifoxx/tools/protoc-gen-verifoxx")
+	destination := filepath.Join(workspace, ".nornrune/tools/protoc-gen-nornrune")
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		t.Fatalf("create frontend plugin directory: %v", err)
 	}
-	command := exec.CommandContext(ctx, "go", "build", "-trimpath", "-o", destination, "./cmd/protoc-gen-verifoxx")
+	command := exec.CommandContext(ctx, "go", "build", "-trimpath", "-o", destination, "./cmd/protoc-gen-nornrune")
 	command.Dir = repository
 	command.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if output, err := command.CombinedOutput(); err != nil {

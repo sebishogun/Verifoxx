@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/fixtures"
 )
 
 type policyDocument struct {
@@ -171,8 +171,8 @@ func TestPolicyFixtureExactSourceText(t *testing.T) {
 	var doc policyDocument
 	decodeStrict(t, fixtures.PolicyJSON(), &doc)
 
-	if doc.Pack != "verifoxx" {
-		t.Errorf("policy pack = %q, want %q", doc.Pack, "verifoxx")
+	if doc.Pack != "nornrune" {
+		t.Errorf("policy pack = %q, want %q", doc.Pack, "nornrune")
 	}
 	if got, want := len(doc.Requirements), 3; got != want {
 		t.Fatalf("policy has %d requirements, want %d", got, want)
@@ -202,8 +202,8 @@ func TestRequestsFixtureExactFields(t *testing.T) {
 	var doc requestsDocument
 	decodeStrict(t, fixtures.RequestsJSON(), &doc)
 
-	if doc.Pack != "verifoxx" {
-		t.Errorf("requests pack = %q, want %q", doc.Pack, "verifoxx")
+	if doc.Pack != "nornrune" {
+		t.Errorf("requests pack = %q, want %q", doc.Pack, "nornrune")
 	}
 	if got, want := len(doc.Requests), 5; got != want {
 		t.Fatalf("requests has %d records, want %d", got, want)
@@ -275,8 +275,8 @@ func TestEvidenceFixtureExactFields(t *testing.T) {
 	var doc evidenceDocument
 	decodeStrict(t, fixtures.EvidenceJSON(), &doc)
 
-	if doc.Pack != "verifoxx" {
-		t.Errorf("evidence pack = %q, want %q", doc.Pack, "verifoxx")
+	if doc.Pack != "nornrune" {
+		t.Errorf("evidence pack = %q, want %q", doc.Pack, "nornrune")
 	}
 	if got, want := len(doc.Evidence), 4; got != want {
 		t.Fatalf("evidence has %d records, want %d", got, want)

@@ -41,7 +41,7 @@ Walk tracked source/config/documentation roots without following symlinks. For
 text files, reject case-sensitive `Verifoxx`, `verifoxx`, and `VERIFOXX`.
 Allow only:
 
-- `Verifoxx_AI_Engineer_Assignment.pdf`, which is binary and never read;
+- `NornRune_AI_Engineer_Assignment.pdf`, whose binary contents are never read;
 - this implementation plan; and
 - `docs/plans/2026-08-27-nornrune-complete-rename-design.md`.
 
@@ -113,7 +113,7 @@ module github.com/sebishogun/nornrune
 Replace repository-owned import prefixes only:
 
 ```text
-github.com/sebishogun/verifoxx -> github.com/sebishogun/nornrune
+github.com/sebishogun/nornrune -> github.com/sebishogun/nornrune
 ```
 
 Run `gofmt` over every changed Go file. Do not edit `go.sum` manually.
@@ -474,7 +474,7 @@ timeout 30s git commit -m "docs: add NornRune OSS project files"
 
 **Files:**
 - Modify as required by failures only
-- Verify: all tracked files except the explicit rename-plan/PDF allowlist
+- Verify: all tracked files except the explicit rename-plan allowlist
 
 **Step 1: Run the forbidden-identity and focused generation gates**
 

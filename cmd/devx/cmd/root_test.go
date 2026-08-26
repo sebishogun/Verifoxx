@@ -86,7 +86,7 @@ func TestFindRepositoryRoot(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n\ngo 1.27.0\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/sebishogun/nornrune\n\ngo 1.27.0\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	nested := filepath.Join(root, "cmd", "devx", "cmd")
@@ -106,7 +106,7 @@ func TestFindRepositoryRootRejectsDifferentModule(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/not-verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/not-nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	if _, err := findRepositoryRoot(root, os.ReadFile); !errors.Is(err, ErrRepositoryRoot) {
@@ -118,9 +118,9 @@ func TestModuleDirectiveRequiresKeywordBoundary(t *testing.T) {
 	t.Parallel()
 
 	for _, module := range []string{
-		"modulegithub.com/sebishogun/verifoxx\n",
-		"module_name github.com/sebishogun/verifoxx\n",
-		"module github.com/sebishogun/verifoxx extra\n",
+		"modulegithub.com/sebishogun/nornrune\n",
+		"module_name github.com/sebishogun/nornrune\n",
+		"module github.com/sebishogun/nornrune extra\n",
 	} {
 		if validModuleDirective([]byte(module)) {
 			t.Errorf("validModuleDirective(%q) = true", module)
@@ -132,7 +132,7 @@ func TestBuildRunsExactBoundedCommandFromRepositoryRoot(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	nested := filepath.Join(repository, "cmd", "devx")
@@ -158,7 +158,7 @@ func TestBuildRunsExactBoundedCommandFromRepositoryRoot(t *testing.T) {
 	}
 	run := runner.runs[0]
 	if run.directory != repository || run.spec.executable != "go" ||
-		!slices.Equal(run.spec.arguments, []string{"build", "-trimpath", "-o", "bin/verifoxx", "./cmd/verifoxx"}) {
+		!slices.Equal(run.spec.arguments, []string{"build", "-trimpath", "-o", "bin/nornrune", "./cmd/nornrune"}) {
 		t.Fatalf("build run = directory:%q spec:%+v", run.directory, run.spec)
 	}
 	deadline, ok := run.ctx.Deadline()
@@ -174,7 +174,7 @@ func TestDatabaseResetRunsOrderedBoundedCommands(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	runner := &recordingRunner{}
@@ -206,7 +206,7 @@ func TestNoArgumentRootBuildsMenuAndRunsSelection(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	menu := &recordingMenu{selected: "build"}
@@ -237,7 +237,7 @@ func TestStatusReportsAndGatesMissingWorkflowPrerequisite(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	lookPath := func(name string) (string, error) {
@@ -278,7 +278,7 @@ func TestStatusReportsAndGatesMissingRepositoryAsset(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	var output bytes.Buffer
@@ -313,7 +313,7 @@ func TestKnownUnavailableWorkflowIsGatedBeforeExecution(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	runner := &recordingRunner{}
@@ -398,7 +398,7 @@ func TestStatusBlocksInstallWithoutSupportedPackageManager(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	var output bytes.Buffer
@@ -419,7 +419,7 @@ func TestDoctorRunsReadOnlyBoundedProbesAndReportsMissingTools(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	var lookedUp []string
@@ -510,7 +510,7 @@ func TestInstallConfirmationAndNonInteractiveExecution(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	lookPath := func(name string) (string, error) {
@@ -585,14 +585,14 @@ func TestRepresentativeWorkflowPlansUseExactArguments(t *testing.T) {
 		executable string
 		arguments  []string
 	}{
-		{name: "demo", executable: "go", arguments: []string{"run", "./cmd/verifoxx", "demo"}},
-		{name: "proto:gen", executable: "go", arguments: []string{"build", "-trimpath", "-o", ".verifoxx/tools/protoc-gen-verifoxx", "./cmd/protoc-gen-verifoxx"}},
+		{name: "demo", executable: "go", arguments: []string{"run", "./cmd/nornrune", "demo"}},
+		{name: "proto:gen", executable: "go", arguments: []string{"build", "-trimpath", "-o", ".nornrune/tools/protoc-gen-nornrune", "./cmd/protoc-gen-nornrune"}},
 		{name: "test", executable: "go", arguments: []string{"test", "-count=1", "-timeout", "60s", "./..."}},
 		{name: "bench", executable: "go", arguments: []string{"test", "-run", "^$", "-bench", "^BenchmarkEvaluate$", "-benchmem", "-benchtime", "200ms", "-count", "6", "-timeout", "120s", "./internal/eval"}},
 		{name: "load", executable: "go", arguments: []string{"run", "./cmd/loadgen", "-protocol", "http", "-target", "127.0.0.1:8080", "-requests", "1000", "-concurrency", "4", "-timeout", "30s"}},
 		{name: "debug", executable: "dlv", arguments: []string{"dap", "--listen", "127.0.0.1:38697", "--log"}},
 		{name: "debug:dap", executable: "dlv", arguments: []string{"dap", "--listen", "127.0.0.1:38697", "--log"}},
-		{name: "docker:build", executable: "docker", arguments: []string{"build", "-t", "verifoxx:dev", "."}},
+		{name: "docker:build", executable: "docker", arguments: []string{"build", "-t", "nornrune:dev", "."}},
 	}
 	for _, test := range tests {
 		plan, ok := namedCommandPlan(test.name)
@@ -618,7 +618,7 @@ func TestProtoGenerationBuildsPluginAndRunsBothPinnedTemplates(t *testing.T) {
 		executable string
 		arguments  []string
 	}{
-		{executable: "go", arguments: []string{"build", "-trimpath", "-o", ".verifoxx/tools/protoc-gen-verifoxx", "./cmd/protoc-gen-verifoxx"}},
+		{executable: "go", arguments: []string{"build", "-trimpath", "-o", ".nornrune/tools/protoc-gen-nornrune", "./cmd/protoc-gen-nornrune"}},
 		{executable: "buf", arguments: []string{"generate"}},
 		{executable: "buf", arguments: []string{"generate", "--template", "buf.frontend.gen.yaml"}},
 	}
@@ -716,7 +716,7 @@ func TestCleanRemovesOnlyRepositoryGeneratedPaths(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	var removed []string
@@ -730,7 +730,7 @@ func TestCleanRemovesOnlyRepositoryGeneratedPaths(t *testing.T) {
 	}
 	want := []string{
 		filepath.Join(repository, "bin"),
-		filepath.Join(repository, ".verifoxx"),
+		filepath.Join(repository, ".nornrune"),
 		filepath.Join(repository, "cpu.pprof"),
 	}
 	if !slices.Equal(removed, want) {
@@ -742,7 +742,7 @@ func TestMigrateCreateWritesNextPairedMigration(t *testing.T) {
 	t.Parallel()
 
 	repository := t.TempDir()
-	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/verifoxx\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repository, "go.mod"), []byte("module github.com/sebishogun/nornrune\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(go.mod) error = %v", err)
 	}
 	migrations := filepath.Join(repository, "migrations")

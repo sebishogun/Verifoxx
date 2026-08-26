@@ -5,11 +5,11 @@ package frontend
 import (
 	"errors"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/ast"
-	corecompile "github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/ast"
+	corecompile "github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 var ErrInvalidCompiler = errors.New("frontend compiler: invalid receiver or destination")

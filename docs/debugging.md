@@ -1,9 +1,9 @@
 # Debugging
 
-Verifoxx exposes two independent debugger planes:
+NornRune exposes two independent debugger planes:
 
 ```text
-Neovim nvim-dap -> DAP -> Delve -> Verifoxx debug process
+Neovim nvim-dap -> DAP -> Delve -> NornRune debug process
 Bubble Tea TUI  -> Unix socket -> retained semantic session
 ```
 
@@ -39,7 +39,7 @@ separate semantic-TUI client:
 `127.0.0.1:38697`, then wait for a DAP client to send the launch request. They do
 not start `debug-worker` before that request. Normal Neovim use does not need
 either command because nvim-dap starts an ephemeral Delve server itself.
-`debug:tui` connects to `.verifoxx/debug.sock` and therefore requires the
+`debug:tui` connects to `.nornrune/debug.sock` and therefore requires the
 launched `debug-worker` to be running.
 
 ## Debug Build
@@ -47,7 +47,7 @@ launched `debug-worker` to be running.
 Build with the `debug` tag and disable optimization and inlining:
 
 ```bash
-timeout 120s go build -gcflags=all='-N -l' -tags=debug ./cmd/verifoxx
+timeout 120s go build -gcflags=all='-N -l' -tags=debug ./cmd/nornrune
 ```
 
 The `debug` tag selects the non-inlined
@@ -63,9 +63,9 @@ benchmarks or performance claims.
 ## Neovim
 
 The repository's `.vscode/launch.json` is shared by VS Code and nvim-dap. It
-launches `verifoxx debug-worker` from the repository root with the required
+launches `nornrune debug-worker` from the repository root with the required
 build tag and compiler flags. The worker compiles the embedded policy and batch,
-then listens at `.verifoxx/debug.sock` for one semantic TUI client at a time.
+then listens at `.nornrune/debug.sock` for one semantic TUI client at a time.
 
 Register Delve in the Neovim setup:
 
@@ -87,10 +87,10 @@ dap.adapters.go = {
 Current nvim-dap automatically reads `.vscode/launch.json` through its built-in
 configuration provider when a session starts; do not call the deprecated
 `dap.ext.vscode.load_launchjs`. Open the repository, run `:DapContinue`, and
-select `Debug Verifoxx`; nvim-dap starts ephemeral Delve and the launch request
+select `Debug NornRune`; nvim-dap starts ephemeral Delve and the launch request
 starts `debug-worker`. Source breakpoints work in every debug launch.
 
-Once `.verifoxx/debug.sock` exists, run `./cli/devx debug:tui` in a terminal.
+Once `.nornrune/debug.sock` exists, run `./cli/devx debug:tui` in a terminal.
 The full-screen dashboard has AST/Program tabs, bounded Requests, Graph,
 Runtime, and Breakpoints/Watches panes, and Session/Persisted history. To stop at
 semantic instruction boundaries, set a breakpoint inside `debugtrap.Reached`
@@ -154,16 +154,16 @@ client may reconnect. Cancel the session host when the debug run is complete.
 Start both semantic-debug processes directly without the developer wrappers:
 
 ```bash
-mkdir -p .verifoxx && chmod 700 .verifoxx
-timeout 30m go run -tags=debug ./cmd/verifoxx debug-worker \
-  --socket "$PWD/.verifoxx/debug.sock"
+mkdir -p .nornrune && chmod 700 .nornrune
+timeout 30m go run -tags=debug ./cmd/nornrune debug-worker \
+  --socket "$PWD/.nornrune/debug.sock"
 ```
 
 In another terminal:
 
 ```bash
-timeout 30m go run -tags=debug ./cmd/verifoxx tui \
-  --socket "$PWD/.verifoxx/debug.sock"
+timeout 30m go run -tags=debug ./cmd/nornrune tui \
+  --socket "$PWD/.nornrune/debug.sock"
 ```
 
 If the client reports connection refused, confirm that both commands use the
@@ -176,8 +176,8 @@ semantic request as a transport failure.
 Start the synchronized browser graph from the TUI command:
 
 ```bash
-timeout 30m go run -tags=debug ./cmd/verifoxx tui \
-  --socket "$PWD/.verifoxx/debug.sock" --browser
+timeout 30m go run -tags=debug ./cmd/nornrune tui \
+  --socket "$PWD/.nornrune/debug.sock" --browser
 ```
 
 The command pre-renders the AST and Program graphs once, binds an ephemeral
@@ -204,10 +204,10 @@ Export the same bounded AST or compiled Program graph without starting a debug
 session:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx graph \
-  --view ast --format svg --output /tmp/verifoxx-ast.svg --force
-timeout 120s go run ./cmd/verifoxx graph \
-  --view program --format html --output /tmp/verifoxx-program.html --force
+timeout 120s go run ./cmd/nornrune graph \
+  --view ast --format svg --output /tmp/nornrune-ast.svg --force
+timeout 120s go run ./cmd/nornrune graph \
+  --view program --format html --output /tmp/nornrune-program.html --force
 ```
 
 The command accepts the same `--policy`, `--requests`, and `--evidence` sources

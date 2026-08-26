@@ -3,7 +3,7 @@ package index
 import (
 	"slices"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 // Query binds one immutable Policy so its static columns are validated once.

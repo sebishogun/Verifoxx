@@ -3,7 +3,7 @@ package result
 import (
 	"errors"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 // ErrBatchTooLarge reports a result shape that cannot be represented by the

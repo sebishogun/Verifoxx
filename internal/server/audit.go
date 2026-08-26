@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/security"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/security"
 )
 
 type auditInput struct {

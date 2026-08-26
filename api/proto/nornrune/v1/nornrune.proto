@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package verifoxx.v1;
+package nornrune.v1;
 
-option go_package = "github.com/sebishogun/verifoxx/api/gen/verifoxx/v1;verifoxxv1";
+option go_package = "github.com/sebishogun/nornrune/api/gen/nornrune/v1;nornrunev1";
 
 service PolicyService {
   rpc ValidatePolicy(ValidatePolicyRequest) returns (ValidatePolicyResponse);
@@ -36,7 +36,7 @@ message EvaluateBatchRequest {
 }
 
 message EvaluateBatchResponse {
-  // result_json is one complete canonical Verifoxx result document.
+  // result_json is one complete canonical NornRune result document.
   bytes result_json = 1;
 }
 
@@ -48,7 +48,7 @@ message EvaluateStreamRequest {
 }
 
 message EvaluateStreamResponse {
-  // result_json is one complete canonical Verifoxx result document.
+  // result_json is one complete canonical NornRune result document.
   bytes result_json = 1;
 }
 

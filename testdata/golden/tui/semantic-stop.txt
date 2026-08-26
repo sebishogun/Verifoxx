@@ -1,4 +1,4 @@
-VERIFOXX SEMANTIC DEBUGGER  |  AST  |  R1 Approve  |  Paused / Instruction
+NORNRUNE SEMANTIC DEBUGGER  |  AST  |  R1 Approve  |  Paused / Instruction
 ┌──────────────────┐ ┌────────────────────────────────────────────────────────────────┐ ┌──────────────────────────────┐
 │ REQUESTS         │ │ AST GRAPH  [AST]  PROGRAM                                      │ │ RUNTIME STATE                │
 │ > R1 Approve     │ │              ┌──────────────────┐                              │ │ Request: R1 (#1)             │

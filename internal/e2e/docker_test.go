@@ -16,7 +16,7 @@ import (
 
 func TestReleaseImageEvaluatesEmbeddedInputs(t *testing.T) {
 	repository := repositoryRoot(t)
-	image := fmt.Sprintf("verifoxx:e2e-%d", os.Getpid())
+	image := fmt.Sprintf("nornrune:e2e-%d", os.Getpid())
 	removeImageOnCleanup(t, image)
 
 	buildContext, cancelBuild := context.WithTimeout(context.Background(), 8*time.Minute)
@@ -49,7 +49,7 @@ func TestReleaseImageEvaluatesEmbeddedInputs(t *testing.T) {
 
 func TestDebugImageContainsDelveAndDebugSymbols(t *testing.T) {
 	repository := repositoryRoot(t)
-	image := fmt.Sprintf("verifoxx:debug-e2e-%d", os.Getpid())
+	image := fmt.Sprintf("nornrune:debug-e2e-%d", os.Getpid())
 	removeImageOnCleanup(t, image)
 
 	buildContext, cancelBuild := context.WithTimeout(context.Background(), 8*time.Minute)
@@ -73,7 +73,7 @@ func TestDebugImageContainsDelveAndDebugSymbols(t *testing.T) {
 	symbolContext, cancelSymbol := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelSymbol()
 	symbolOutput, err := exec.CommandContext(symbolContext, "docker", "run", "--rm", "--entrypoint", "/bin/sh", image,
-		"-c", "go tool nm /usr/local/bin/verifoxx | grep -q ' main.main$'").CombinedOutput()
+		"-c", "go tool nm /usr/local/bin/nornrune | grep -q ' main.main$'").CombinedOutput()
 	if err != nil {
 		t.Fatalf("inspect debug symbols error = %v\n%s", err, symbolOutput)
 	}

@@ -5,7 +5,7 @@
 Task 9 adds the engine-defined uncertainty reasons and policy-defined outcome,
 remediation, and resolution tables used by later compiler and evaluator tasks.
 The runtime stores numeric IDs and contiguous slices only. It does not embed
-the Verifoxx decision labels in engine control flow.
+the NornRune decision labels in engine control flow.
 
 Leaf evaluation, clause lowering, batch result storage, and explanation text
 remain later tasks.

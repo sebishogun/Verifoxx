@@ -9,8 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 type outboundRequest struct {

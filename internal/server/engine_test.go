@@ -10,15 +10,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/buildinfo"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	"github.com/sebishogun/verifoxx/internal/observability"
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/security"
-	"github.com/sebishogun/verifoxx/internal/service"
-	"github.com/sebishogun/verifoxx/internal/simdops"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/buildinfo"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/observability"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/security"
+	"github.com/sebishogun/nornrune/internal/service"
+	"github.com/sebishogun/nornrune/internal/simdops"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 func TestEngineEvaluatesGoldenAndSubmitsRequiredAudit(t *testing.T) {
@@ -50,11 +50,11 @@ func TestEngineEvaluatesGoldenAndSubmitsRequiredAudit(t *testing.T) {
 			t.Errorf("Engine.Close() error = %v", err)
 		}
 	})
-	metadata, err := engine.CompilePolicy(context.Background(), []byte(verifoxx.Source()))
+	metadata, err := engine.CompilePolicy(context.Background(), []byte(nornrune.Source()))
 	if err != nil {
 		t.Fatalf("CompilePolicy() error = %v", err)
 	}
-	if metadata.ContentHash == [sha256.Size]byte{} || string(metadata.Name) != "verifoxx" {
+	if metadata.ContentHash == [sha256.Size]byte{} || string(metadata.Name) != "nornrune" {
 		t.Fatalf("CompilePolicy() metadata = %+v", metadata)
 	}
 
@@ -121,7 +121,7 @@ func TestEngineUsesParallelSchedulerAndCloses(t *testing.T) {
 func schedulerTestRequests(rows int) []byte {
 	request := []byte(`{"requester":{"team":"external_partner","trust":"external"},"action":{"type":"aggregate_analysis","output":"aggregate_counts","dataset":"protected_dataset"},"environment":{"execution_env":"local_approved_env","usage":"standard"},"evidence_refs":["E1","E2"]}`)
 	dst := make([]byte, 0, rows*(len(request)+16))
-	dst = append(dst, `{"schema_version":1,"pack":"verifoxx","requests":[`...)
+	dst = append(dst, `{"schema_version":1,"pack":"nornrune","requests":[`...)
 	for row := 1; row <= rows; row++ {
 		if row != 1 {
 			dst = append(dst, ',')

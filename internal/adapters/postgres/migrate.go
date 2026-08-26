@@ -22,20 +22,20 @@ const (
 )
 
 const createMigrationLedgerSQL = `
-CREATE TABLE IF NOT EXISTS public.verifoxx_schema_migrations (
+CREATE TABLE IF NOT EXISTS public.nornrune_schema_migrations (
     version integer PRIMARY KEY CHECK (version > 0),
     name text NOT NULL CHECK (btrim(name) <> ''),
     checksum bytea NOT NULL CHECK (octet_length(checksum) = 32),
     applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
-REVOKE ALL ON TABLE public.verifoxx_schema_migrations FROM PUBLIC;
-DO $verifoxx$
+REVOKE ALL ON TABLE public.nornrune_schema_migrations FROM PUBLIC;
+DO $nornrune$
 BEGIN
-    IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'verifoxx_runtime') THEN
-        EXECUTE 'REVOKE ALL ON TABLE public.verifoxx_schema_migrations FROM verifoxx_runtime';
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'nornrune_runtime') THEN
+        EXECUTE 'REVOKE ALL ON TABLE public.nornrune_schema_migrations FROM nornrune_runtime';
     END IF;
 END;
-$verifoxx$;
+$nornrune$;
 `
 
 var (
@@ -99,7 +99,7 @@ func (m *Migrator) Up(ctx context.Context) (int, error) {
 			return 0, fmt.Errorf("postgres: apply migration %06d_%s: %w", item.version, item.name, err)
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO public.verifoxx_schema_migrations (version, name, checksum)
+			INSERT INTO public.nornrune_schema_migrations (version, name, checksum)
 			VALUES ($1, $2, $3)
 		`, item.version, item.name, item.checksum[:]); err != nil {
 			return 0, fmt.Errorf("postgres: record migration %06d_%s: %w", item.version, item.name, err)
@@ -141,7 +141,7 @@ func (m *Migrator) Down(ctx context.Context, steps uint32) (int, error) {
 			return 0, fmt.Errorf("postgres: revert migration %06d_%s: %w", item.version, item.name, err)
 		}
 		tag, err := tx.Exec(ctx,
-			"DELETE FROM public.verifoxx_schema_migrations WHERE version = $1",
+			"DELETE FROM public.nornrune_schema_migrations WHERE version = $1",
 			item.version,
 		)
 		if err != nil {
@@ -184,7 +184,7 @@ func (m *Migrator) begin(ctx context.Context) (pgx.Tx, error) {
 func (m *Migrator) reconcile(ctx context.Context, tx pgx.Tx) (int, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT version, name, checksum
-		FROM public.verifoxx_schema_migrations
+		FROM public.nornrune_schema_migrations
 		ORDER BY version
 	`)
 	if err != nil {

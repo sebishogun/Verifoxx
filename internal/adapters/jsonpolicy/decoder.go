@@ -1,4 +1,4 @@
-// Package jsonpolicy decodes Verifoxx policy documents directly into the
+// Package jsonpolicy decodes NornRune policy documents directly into the
 // pointerless AST. It uses a hand-written byte scanner: no encoding/json,
 // maps, reflection, or per-token strings. Nested relationships accumulate in
 // flat reusable scratch owned by the decoder.
@@ -8,8 +8,8 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 // Limits bounds one Decode call. A zero value disables every limit.

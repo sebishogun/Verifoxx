@@ -258,7 +258,7 @@ Run: `go test -count=1 -timeout 60s ./...`
 
 Run: `timeout 60s go vet ./...`
 
-Run: `timeout 60s go build ./cmd/verifoxx`
+Run: `timeout 60s go build ./cmd/nornrune`
 
 Run: `timeout 60s gofmt -l .`
 

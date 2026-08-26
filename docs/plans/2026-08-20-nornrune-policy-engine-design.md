@@ -1,4 +1,4 @@
-# Verifoxx Policy Engine Design
+# NornRune Policy Engine Design
 
 **Status:** Approved, with implementation planning pending
 
@@ -29,11 +29,11 @@ The working rules are:
 
 ## Abstract
 
-Verifoxx will be a general, evidence-aware policy compiler and decision engine written in Go 1.27. The three requirements and five requests in the candidate exercise will form its first policy pack and conformance data set. They will not be encoded as request-specific branches.
+NornRune will be a general, evidence-aware policy compiler and decision engine written in Go 1.27. The three requirements and five requests in the candidate exercise will form its first policy pack and conformance data set. They will not be encoded as request-specific branches.
 
 The system will translate a bounded policy document into a pointerless semantic abstract syntax tree, validate and normalize that tree, and compile it into an immutable struct-of-arrays execution program. Requests and evidence will be evaluated in batches. The hot path will use contiguous columns, bitmaps, indexes, and `github.com/sebishogun/simd` v1.21.0. Large batches will be divided among workers at existing bitset boundaries. Each worker will own its scratch memory and output range.
 
-The execution model will preserve four semantic states: true, false, unknown, and conflict. Outcome names will belong to a policy pack rather than the engine. The Verifoxx pack will define `Approve`, `Reject`, `Revise`, and `Escalate`.
+The execution model will preserve four semantic states: true, false, unknown, and conflict. Outcome names will belong to a policy pack rather than the engine. The NornRune pack will define `Approve`, `Reject`, `Revise`, and `Escalate`.
 
 PostgreSQL 19 will store canonical policy versions, evidence snapshots, and immutable decision records. Its SQL/PGQ support will expose a derived property-graph view of normalized policy nodes and edges. PostgreSQL will not participate in expression evaluation. The compiled program will remain in process memory.
 
@@ -249,9 +249,9 @@ type ResolutionTable struct {
 }
 ```
 
-The Verifoxx pack defines `Approve`, `Reject`, `Revise`, and `Escalate` exactly as required by the assignment.
+The NornRune pack defines `Approve`, `Reject`, `Revise`, and `Escalate` exactly as required by the assignment.
 
-## 7. Verifoxx Policy Pack
+## 7. NornRune Policy Pack
 
 The first policy pack models the supplied requirements without checking request IDs.
 
@@ -599,7 +599,7 @@ The project will verify:
 - Lengths around every vector and dispatch boundary
 
 The v1.21.0 experiment-gated vector-type API uses Go 1.26 `archsimd` names and
-does not compile with Go 1.27. Verifoxx does not use that API; add its build lane
+does not compile with Go 1.27. NornRune does not use that API; add its build lane
 only after the pinned dependency ships a compatible release.
 
 ## 15. Evaluation Algorithm
@@ -1050,18 +1050,18 @@ The source map correlates policy text, node ID, instruction ID, and Go debug loc
 The product binary supports:
 
 ```text
-verifoxx evaluate
-verifoxx validate
-verifoxx compile
-verifoxx explain <request-id>
-verifoxx simulate <request-id> --set field=value
-verifoxx tui
-verifoxx debug-worker
-verifoxx serve
-verifoxx bench
+nornrune evaluate
+nornrune validate
+nornrune compile
+nornrune explain <request-id>
+nornrune simulate <request-id> --set field=value
+nornrune tui
+nornrune debug-worker
+nornrune serve
+nornrune bench
 ```
 
-Default policy and candidate data are embedded so `verifoxx evaluate` requires no arguments.
+Default policy and candidate data are embedded so `nornrune evaluate` requires no arguments.
 
 ### 25.2 HTTP
 
@@ -1406,7 +1406,7 @@ Documentation claims about speed will cite committed benchmark output. PostgreSQ
 ## 33. Repository Layout
 
 ```text
-cmd/verifoxx/                  product binary
+cmd/nornrune/                  product binary
 cmd/devx/                      developer-experience CLI
 
 internal/schema/               fields, types, symbols
@@ -1430,7 +1430,7 @@ internal/adapters/postgres/
 internal/adapters/dap/
 
 api/proto/
-policies/verifoxx/
+policies/nornrune/
 migrations/
 testdata/
 results/
@@ -1443,7 +1443,7 @@ docs/
 
 1. Module, commands, and baseline documentation
 2. Schema, pointerless AST, and builder
-3. Verifoxx policy pack
+3. NornRune policy pack
 4. Validation, normalization, and compiler
 5. Scalar reference evaluator
 6. Generic outcomes and required R1-R5 output
@@ -1502,7 +1502,7 @@ The implementation is complete when all of the following statements are supporte
 | The complete system exceeds the original 4-5 hour scope | Preserve the required evaluator and output as an early complete release boundary. |
 | PostgreSQL 19 is still beta | Pin Beta 3 for development, test migrations, and move to the GA image when released. |
 | SIMD work may not pay at assignment scale | Let the library own thresholds and publish benchmark results for both small and large batches. |
-| Generic policy features can obscure the assignment | Keep the Verifoxx pack, expected results, and one-page design note prominent. |
+| Generic policy features can obscure the assignment | Keep the NornRune pack, expected results, and one-page design note prominent. |
 | Parallel overhead may exceed useful work | Select parallel execution only after benchmarked crossover points. |
 | A debugger can diverge from the fast engine | Execute the same compiled program and require differential equivalence. |
 | Persistent full traces can grow rapidly | Store driving findings by default and apply retention to opt-in traces. |

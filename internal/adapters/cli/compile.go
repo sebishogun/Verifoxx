@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/program"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/program"
 )
 
 var errInvalidCompiledMetadata = errors.New("compiled policy has invalid metadata")

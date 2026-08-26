@@ -7,7 +7,7 @@ import (
 	cedartypes "github.com/cedar-policy/cedar-go/types"
 	cedarast "github.com/cedar-policy/cedar-go/x/exp/ast"
 
-	public "github.com/sebishogun/verifoxx/frontend"
+	public "github.com/sebishogun/nornrune/frontend"
 )
 
 type lowerResult struct {

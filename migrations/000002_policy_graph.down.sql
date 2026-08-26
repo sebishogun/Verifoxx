@@ -1,4 +1,4 @@
-SET LOCAL search_path = verifoxx, pg_catalog;
+SET LOCAL search_path = nornrune, pg_catalog;
 
 DROP PROPERTY GRAPH policy_graph;
 

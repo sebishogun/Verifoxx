@@ -4,7 +4,7 @@ import (
 	"math"
 	"slices"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 // Constraints is a borrowed SoA/CSR view of positive symbolic applicability

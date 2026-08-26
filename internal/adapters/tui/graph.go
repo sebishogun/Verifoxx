@@ -6,8 +6,8 @@ import (
 
 	"github.com/mattn/go-runewidth"
 
-	"github.com/sebishogun/verifoxx/internal/debug"
-	"github.com/sebishogun/verifoxx/internal/graphview"
+	"github.com/sebishogun/nornrune/internal/debug"
+	"github.com/sebishogun/nornrune/internal/graphview"
 )
 
 const (

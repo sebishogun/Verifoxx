@@ -5,9 +5,9 @@ import (
 	"math"
 	"slices"
 
-	policyindex "github.com/sebishogun/verifoxx/internal/index"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	policyindex "github.com/sebishogun/nornrune/internal/index"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 const (

@@ -13,13 +13,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/wire"
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/program"
+	"github.com/sebishogun/nornrune/internal/adapters/wire"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/program"
 )
 
 const (
-	policyNotificationChannelPrefix = "verifoxx_policy_"
+	policyNotificationChannelPrefix = "nornrune_policy_"
 	policyListenerCloseTimeout      = time.Second
 )
 

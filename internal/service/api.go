@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/sebishogun/verifoxx/internal/compile"
+	"github.com/sebishogun/nornrune/internal/compile"
 )
 
 var (

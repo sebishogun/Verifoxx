@@ -1,6 +1,6 @@
 # Concurrency
 
-Verifoxx uses fixed ownership budgets and immutable policy snapshots. Channels
+NornRune uses fixed ownership budgets and immutable policy snapshots. Channels
 transfer exclusive mutable state; locks protect cold metadata and lifecycle
 state. No mutex is acquired by an `eval.Executor` instruction kernel.
 

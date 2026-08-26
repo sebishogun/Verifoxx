@@ -1,4 +1,4 @@
-SET LOCAL search_path = verifoxx, pg_catalog;
+SET LOCAL search_path = nornrune, pg_catalog;
 
 CREATE TABLE policy_nodes (
     policy_version_id bigint NOT NULL,
@@ -144,7 +144,7 @@ BEGIN
 
     SELECT projection_xid
     INTO claim_xid
-    FROM verifoxx.policy_nodes
+    FROM nornrune.policy_nodes
     WHERE policy_version_id = NEW.policy_version_id
       AND node_kind = 'policy_version'
       AND local_id = 1;
@@ -314,7 +314,7 @@ REVOKE ALL ON
 FROM PUBLIC;
 REVOKE ALL ON PROPERTY GRAPH policy_graph FROM PUBLIC;
 
-GRANT SELECT, INSERT ON policy_nodes, policy_edges TO verifoxx_runtime;
+GRANT SELECT, INSERT ON policy_nodes, policy_edges TO nornrune_runtime;
 GRANT SELECT ON
     policy_version_vertices,
     requirement_vertices,
@@ -331,5 +331,5 @@ GRANT SELECT ON
     clause_requires_evidence_edges,
     clause_resolves_to_edges,
     clause_remediates_with_edges
-TO verifoxx_runtime;
-GRANT SELECT ON PROPERTY GRAPH policy_graph TO verifoxx_runtime;
+TO nornrune_runtime;
+GRANT SELECT ON PROPERTY GRAPH policy_graph TO nornrune_runtime;

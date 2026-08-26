@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.12
 // 	protoc        (unknown)
-// source: verifoxx/v1/verifoxx.proto
+// source: nornrune/v1/nornrune.proto
 
-package verifoxxv1
+package nornrunev1
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -30,7 +30,7 @@ type ValidatePolicyRequest struct {
 
 func (x *ValidatePolicyRequest) Reset() {
 	*x = ValidatePolicyRequest{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[0]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +42,7 @@ func (x *ValidatePolicyRequest) String() string {
 func (*ValidatePolicyRequest) ProtoMessage() {}
 
 func (x *ValidatePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[0]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +55,7 @@ func (x *ValidatePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatePolicyRequest.ProtoReflect.Descriptor instead.
 func (*ValidatePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{0}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *ValidatePolicyRequest) GetSourceJson() []byte {
@@ -75,7 +75,7 @@ type ValidatePolicyResponse struct {
 
 func (x *ValidatePolicyResponse) Reset() {
 	*x = ValidatePolicyResponse{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[1]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87,7 +87,7 @@ func (x *ValidatePolicyResponse) String() string {
 func (*ValidatePolicyResponse) ProtoMessage() {}
 
 func (x *ValidatePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[1]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -100,7 +100,7 @@ func (x *ValidatePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatePolicyResponse.ProtoReflect.Descriptor instead.
 func (*ValidatePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{1}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ValidatePolicyResponse) GetValid() bool {
@@ -126,7 +126,7 @@ type CompilePolicyRequest struct {
 
 func (x *CompilePolicyRequest) Reset() {
 	*x = CompilePolicyRequest{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[2]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -138,7 +138,7 @@ func (x *CompilePolicyRequest) String() string {
 func (*CompilePolicyRequest) ProtoMessage() {}
 
 func (x *CompilePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[2]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -151,7 +151,7 @@ func (x *CompilePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompilePolicyRequest.ProtoReflect.Descriptor instead.
 func (*CompilePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{2}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CompilePolicyRequest) GetSourceJson() []byte {
@@ -170,7 +170,7 @@ type CompilePolicyResponse struct {
 
 func (x *CompilePolicyResponse) Reset() {
 	*x = CompilePolicyResponse{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[3]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -182,7 +182,7 @@ func (x *CompilePolicyResponse) String() string {
 func (*CompilePolicyResponse) ProtoMessage() {}
 
 func (x *CompilePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[3]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -195,7 +195,7 @@ func (x *CompilePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompilePolicyResponse.ProtoReflect.Descriptor instead.
 func (*CompilePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{3}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CompilePolicyResponse) GetPolicy() *PolicyMetadata {
@@ -217,7 +217,7 @@ type EvaluateBatchRequest struct {
 
 func (x *EvaluateBatchRequest) Reset() {
 	*x = EvaluateBatchRequest{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[4]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -229,7 +229,7 @@ func (x *EvaluateBatchRequest) String() string {
 func (*EvaluateBatchRequest) ProtoMessage() {}
 
 func (x *EvaluateBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[4]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -242,7 +242,7 @@ func (x *EvaluateBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateBatchRequest.ProtoReflect.Descriptor instead.
 func (*EvaluateBatchRequest) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{4}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *EvaluateBatchRequest) GetRequestsJson() []byte {
@@ -268,7 +268,7 @@ func (x *EvaluateBatchRequest) GetPolicySha256() []byte {
 
 type EvaluateBatchResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// result_json is one complete canonical Verifoxx result document.
+	// result_json is one complete canonical NornRune result document.
 	ResultJson    []byte `protobuf:"bytes,1,opt,name=result_json,json=resultJson,proto3" json:"result_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -276,7 +276,7 @@ type EvaluateBatchResponse struct {
 
 func (x *EvaluateBatchResponse) Reset() {
 	*x = EvaluateBatchResponse{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[5]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -288,7 +288,7 @@ func (x *EvaluateBatchResponse) String() string {
 func (*EvaluateBatchResponse) ProtoMessage() {}
 
 func (x *EvaluateBatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[5]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -301,7 +301,7 @@ func (x *EvaluateBatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateBatchResponse.ProtoReflect.Descriptor instead.
 func (*EvaluateBatchResponse) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{5}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *EvaluateBatchResponse) GetResultJson() []byte {
@@ -323,7 +323,7 @@ type EvaluateStreamRequest struct {
 
 func (x *EvaluateStreamRequest) Reset() {
 	*x = EvaluateStreamRequest{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[6]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -335,7 +335,7 @@ func (x *EvaluateStreamRequest) String() string {
 func (*EvaluateStreamRequest) ProtoMessage() {}
 
 func (x *EvaluateStreamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[6]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -348,7 +348,7 @@ func (x *EvaluateStreamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateStreamRequest.ProtoReflect.Descriptor instead.
 func (*EvaluateStreamRequest) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{6}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *EvaluateStreamRequest) GetRequestsJson() []byte {
@@ -374,7 +374,7 @@ func (x *EvaluateStreamRequest) GetPolicySha256() []byte {
 
 type EvaluateStreamResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// result_json is one complete canonical Verifoxx result document.
+	// result_json is one complete canonical NornRune result document.
 	ResultJson    []byte `protobuf:"bytes,1,opt,name=result_json,json=resultJson,proto3" json:"result_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -382,7 +382,7 @@ type EvaluateStreamResponse struct {
 
 func (x *EvaluateStreamResponse) Reset() {
 	*x = EvaluateStreamResponse{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[7]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -394,7 +394,7 @@ func (x *EvaluateStreamResponse) String() string {
 func (*EvaluateStreamResponse) ProtoMessage() {}
 
 func (x *EvaluateStreamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[7]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -407,7 +407,7 @@ func (x *EvaluateStreamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateStreamResponse.ProtoReflect.Descriptor instead.
 func (*EvaluateStreamResponse) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{7}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *EvaluateStreamResponse) GetResultJson() []byte {
@@ -431,7 +431,7 @@ type PolicyMetadata struct {
 
 func (x *PolicyMetadata) Reset() {
 	*x = PolicyMetadata{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[8]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -443,7 +443,7 @@ func (x *PolicyMetadata) String() string {
 func (*PolicyMetadata) ProtoMessage() {}
 
 func (x *PolicyMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[8]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -456,7 +456,7 @@ func (x *PolicyMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyMetadata.ProtoReflect.Descriptor instead.
 func (*PolicyMetadata) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{8}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PolicyMetadata) GetName() string {
@@ -515,7 +515,7 @@ type Diagnostic struct {
 
 func (x *Diagnostic) Reset() {
 	*x = Diagnostic{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[9]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -527,7 +527,7 @@ func (x *Diagnostic) String() string {
 func (*Diagnostic) ProtoMessage() {}
 
 func (x *Diagnostic) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[9]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -540,7 +540,7 @@ func (x *Diagnostic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Diagnostic.ProtoReflect.Descriptor instead.
 func (*Diagnostic) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{9}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Diagnostic) GetCode() string {
@@ -596,7 +596,7 @@ type DiagnosticSpan struct {
 
 func (x *DiagnosticSpan) Reset() {
 	*x = DiagnosticSpan{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[10]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -608,7 +608,7 @@ func (x *DiagnosticSpan) String() string {
 func (*DiagnosticSpan) ProtoMessage() {}
 
 func (x *DiagnosticSpan) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[10]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -621,7 +621,7 @@ func (x *DiagnosticSpan) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiagnosticSpan.ProtoReflect.Descriptor instead.
 func (*DiagnosticSpan) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{10}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DiagnosticSpan) GetStart() uint32 {
@@ -656,7 +656,7 @@ type DiagnosticIDs struct {
 
 func (x *DiagnosticIDs) Reset() {
 	*x = DiagnosticIDs{}
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[11]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -668,7 +668,7 @@ func (x *DiagnosticIDs) String() string {
 func (*DiagnosticIDs) ProtoMessage() {}
 
 func (x *DiagnosticIDs) ProtoReflect() protoreflect.Message {
-	mi := &file_verifoxx_v1_verifoxx_proto_msgTypes[11]
+	mi := &file_nornrune_v1_nornrune_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -681,7 +681,7 @@ func (x *DiagnosticIDs) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiagnosticIDs.ProtoReflect.Descriptor instead.
 func (*DiagnosticIDs) Descriptor() ([]byte, []int) {
-	return file_verifoxx_v1_verifoxx_proto_rawDescGZIP(), []int{11}
+	return file_nornrune_v1_nornrune_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DiagnosticIDs) GetNode() uint32 {
@@ -747,22 +747,22 @@ func (x *DiagnosticIDs) GetEvidenceState() uint32 {
 	return 0
 }
 
-var File_verifoxx_v1_verifoxx_proto protoreflect.FileDescriptor
+var File_nornrune_v1_nornrune_proto protoreflect.FileDescriptor
 
-const file_verifoxx_v1_verifoxx_proto_rawDesc = "" +
+const file_nornrune_v1_nornrune_proto_rawDesc = "" +
 	"\n" +
-	"\x1averifoxx/v1/verifoxx.proto\x12\vverifoxx.v1\"8\n" +
+	"\x1anornrune/v1/nornrune.proto\x12\vnornrune.v1\"8\n" +
 	"\x15ValidatePolicyRequest\x12\x1f\n" +
 	"\vsource_json\x18\x01 \x01(\fR\n" +
 	"sourceJson\"i\n" +
 	"\x16ValidatePolicyResponse\x12\x14\n" +
 	"\x05valid\x18\x01 \x01(\bR\x05valid\x129\n" +
-	"\vdiagnostics\x18\x02 \x03(\v2\x17.verifoxx.v1.DiagnosticR\vdiagnostics\"7\n" +
+	"\vdiagnostics\x18\x02 \x03(\v2\x17.nornrune.v1.DiagnosticR\vdiagnostics\"7\n" +
 	"\x14CompilePolicyRequest\x12\x1f\n" +
 	"\vsource_json\x18\x01 \x01(\fR\n" +
 	"sourceJson\"L\n" +
 	"\x15CompilePolicyResponse\x123\n" +
-	"\x06policy\x18\x01 \x01(\v2\x1b.verifoxx.v1.PolicyMetadataR\x06policy\"\x85\x01\n" +
+	"\x06policy\x18\x01 \x01(\v2\x1b.nornrune.v1.PolicyMetadataR\x06policy\"\x85\x01\n" +
 	"\x14EvaluateBatchRequest\x12#\n" +
 	"\rrequests_json\x18\x01 \x01(\fR\frequestsJson\x12#\n" +
 	"\revidence_json\x18\x02 \x01(\fR\fevidenceJson\x12#\n" +
@@ -790,8 +790,8 @@ const file_verifoxx_v1_verifoxx_proto_rawDesc = "" +
 	"\x05table\x18\x02 \x01(\tR\x05table\x12\x16\n" +
 	"\x06member\x18\x03 \x01(\tR\x06member\x12\x10\n" +
 	"\x03row\x18\x04 \x01(\rR\x03row\x12/\n" +
-	"\x04span\x18\x05 \x01(\v2\x1b.verifoxx.v1.DiagnosticSpanR\x04span\x12,\n" +
-	"\x03ids\x18\x06 \x01(\v2\x1a.verifoxx.v1.DiagnosticIDsR\x03ids\"8\n" +
+	"\x04span\x18\x05 \x01(\v2\x1b.nornrune.v1.DiagnosticSpanR\x04span\x12,\n" +
+	"\x03ids\x18\x06 \x01(\v2\x1a.nornrune.v1.DiagnosticIDsR\x03ids\"8\n" +
 	"\x0eDiagnosticSpan\x12\x14\n" +
 	"\x05start\x18\x01 \x01(\rR\x05start\x12\x10\n" +
 	"\x03end\x18\x02 \x01(\rR\x03end\"\x91\x02\n" +
@@ -806,51 +806,51 @@ const file_verifoxx_v1_verifoxx_proto_rawDesc = "" +
 	"\revidence_kind\x18\b \x01(\rR\fevidenceKind\x12%\n" +
 	"\x0eevidence_state\x18\t \x01(\rR\revidenceState2\xf9\x02\n" +
 	"\rPolicyService\x12Y\n" +
-	"\x0eValidatePolicy\x12\".verifoxx.v1.ValidatePolicyRequest\x1a#.verifoxx.v1.ValidatePolicyResponse\x12V\n" +
-	"\rCompilePolicy\x12!.verifoxx.v1.CompilePolicyRequest\x1a\".verifoxx.v1.CompilePolicyResponse\x12V\n" +
-	"\rEvaluateBatch\x12!.verifoxx.v1.EvaluateBatchRequest\x1a\".verifoxx.v1.EvaluateBatchResponse\x12]\n" +
-	"\x0eEvaluateStream\x12\".verifoxx.v1.EvaluateStreamRequest\x1a#.verifoxx.v1.EvaluateStreamResponse(\x010\x01B?Z=github.com/sebishogun/verifoxx/api/gen/verifoxx/v1;verifoxxv1b\x06proto3"
+	"\x0eValidatePolicy\x12\".nornrune.v1.ValidatePolicyRequest\x1a#.nornrune.v1.ValidatePolicyResponse\x12V\n" +
+	"\rCompilePolicy\x12!.nornrune.v1.CompilePolicyRequest\x1a\".nornrune.v1.CompilePolicyResponse\x12V\n" +
+	"\rEvaluateBatch\x12!.nornrune.v1.EvaluateBatchRequest\x1a\".nornrune.v1.EvaluateBatchResponse\x12]\n" +
+	"\x0eEvaluateStream\x12\".nornrune.v1.EvaluateStreamRequest\x1a#.nornrune.v1.EvaluateStreamResponse(\x010\x01B?Z=github.com/sebishogun/nornrune/api/gen/nornrune/v1;nornrunev1b\x06proto3"
 
 var (
-	file_verifoxx_v1_verifoxx_proto_rawDescOnce sync.Once
-	file_verifoxx_v1_verifoxx_proto_rawDescData []byte
+	file_nornrune_v1_nornrune_proto_rawDescOnce sync.Once
+	file_nornrune_v1_nornrune_proto_rawDescData []byte
 )
 
-func file_verifoxx_v1_verifoxx_proto_rawDescGZIP() []byte {
-	file_verifoxx_v1_verifoxx_proto_rawDescOnce.Do(func() {
-		file_verifoxx_v1_verifoxx_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_verifoxx_v1_verifoxx_proto_rawDesc), len(file_verifoxx_v1_verifoxx_proto_rawDesc)))
+func file_nornrune_v1_nornrune_proto_rawDescGZIP() []byte {
+	file_nornrune_v1_nornrune_proto_rawDescOnce.Do(func() {
+		file_nornrune_v1_nornrune_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_nornrune_v1_nornrune_proto_rawDesc), len(file_nornrune_v1_nornrune_proto_rawDesc)))
 	})
-	return file_verifoxx_v1_verifoxx_proto_rawDescData
+	return file_nornrune_v1_nornrune_proto_rawDescData
 }
 
-var file_verifoxx_v1_verifoxx_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
-var file_verifoxx_v1_verifoxx_proto_goTypes = []any{
-	(*ValidatePolicyRequest)(nil),  // 0: verifoxx.v1.ValidatePolicyRequest
-	(*ValidatePolicyResponse)(nil), // 1: verifoxx.v1.ValidatePolicyResponse
-	(*CompilePolicyRequest)(nil),   // 2: verifoxx.v1.CompilePolicyRequest
-	(*CompilePolicyResponse)(nil),  // 3: verifoxx.v1.CompilePolicyResponse
-	(*EvaluateBatchRequest)(nil),   // 4: verifoxx.v1.EvaluateBatchRequest
-	(*EvaluateBatchResponse)(nil),  // 5: verifoxx.v1.EvaluateBatchResponse
-	(*EvaluateStreamRequest)(nil),  // 6: verifoxx.v1.EvaluateStreamRequest
-	(*EvaluateStreamResponse)(nil), // 7: verifoxx.v1.EvaluateStreamResponse
-	(*PolicyMetadata)(nil),         // 8: verifoxx.v1.PolicyMetadata
-	(*Diagnostic)(nil),             // 9: verifoxx.v1.Diagnostic
-	(*DiagnosticSpan)(nil),         // 10: verifoxx.v1.DiagnosticSpan
-	(*DiagnosticIDs)(nil),          // 11: verifoxx.v1.DiagnosticIDs
+var file_nornrune_v1_nornrune_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_nornrune_v1_nornrune_proto_goTypes = []any{
+	(*ValidatePolicyRequest)(nil),  // 0: nornrune.v1.ValidatePolicyRequest
+	(*ValidatePolicyResponse)(nil), // 1: nornrune.v1.ValidatePolicyResponse
+	(*CompilePolicyRequest)(nil),   // 2: nornrune.v1.CompilePolicyRequest
+	(*CompilePolicyResponse)(nil),  // 3: nornrune.v1.CompilePolicyResponse
+	(*EvaluateBatchRequest)(nil),   // 4: nornrune.v1.EvaluateBatchRequest
+	(*EvaluateBatchResponse)(nil),  // 5: nornrune.v1.EvaluateBatchResponse
+	(*EvaluateStreamRequest)(nil),  // 6: nornrune.v1.EvaluateStreamRequest
+	(*EvaluateStreamResponse)(nil), // 7: nornrune.v1.EvaluateStreamResponse
+	(*PolicyMetadata)(nil),         // 8: nornrune.v1.PolicyMetadata
+	(*Diagnostic)(nil),             // 9: nornrune.v1.Diagnostic
+	(*DiagnosticSpan)(nil),         // 10: nornrune.v1.DiagnosticSpan
+	(*DiagnosticIDs)(nil),          // 11: nornrune.v1.DiagnosticIDs
 }
-var file_verifoxx_v1_verifoxx_proto_depIdxs = []int32{
-	9,  // 0: verifoxx.v1.ValidatePolicyResponse.diagnostics:type_name -> verifoxx.v1.Diagnostic
-	8,  // 1: verifoxx.v1.CompilePolicyResponse.policy:type_name -> verifoxx.v1.PolicyMetadata
-	10, // 2: verifoxx.v1.Diagnostic.span:type_name -> verifoxx.v1.DiagnosticSpan
-	11, // 3: verifoxx.v1.Diagnostic.ids:type_name -> verifoxx.v1.DiagnosticIDs
-	0,  // 4: verifoxx.v1.PolicyService.ValidatePolicy:input_type -> verifoxx.v1.ValidatePolicyRequest
-	2,  // 5: verifoxx.v1.PolicyService.CompilePolicy:input_type -> verifoxx.v1.CompilePolicyRequest
-	4,  // 6: verifoxx.v1.PolicyService.EvaluateBatch:input_type -> verifoxx.v1.EvaluateBatchRequest
-	6,  // 7: verifoxx.v1.PolicyService.EvaluateStream:input_type -> verifoxx.v1.EvaluateStreamRequest
-	1,  // 8: verifoxx.v1.PolicyService.ValidatePolicy:output_type -> verifoxx.v1.ValidatePolicyResponse
-	3,  // 9: verifoxx.v1.PolicyService.CompilePolicy:output_type -> verifoxx.v1.CompilePolicyResponse
-	5,  // 10: verifoxx.v1.PolicyService.EvaluateBatch:output_type -> verifoxx.v1.EvaluateBatchResponse
-	7,  // 11: verifoxx.v1.PolicyService.EvaluateStream:output_type -> verifoxx.v1.EvaluateStreamResponse
+var file_nornrune_v1_nornrune_proto_depIdxs = []int32{
+	9,  // 0: nornrune.v1.ValidatePolicyResponse.diagnostics:type_name -> nornrune.v1.Diagnostic
+	8,  // 1: nornrune.v1.CompilePolicyResponse.policy:type_name -> nornrune.v1.PolicyMetadata
+	10, // 2: nornrune.v1.Diagnostic.span:type_name -> nornrune.v1.DiagnosticSpan
+	11, // 3: nornrune.v1.Diagnostic.ids:type_name -> nornrune.v1.DiagnosticIDs
+	0,  // 4: nornrune.v1.PolicyService.ValidatePolicy:input_type -> nornrune.v1.ValidatePolicyRequest
+	2,  // 5: nornrune.v1.PolicyService.CompilePolicy:input_type -> nornrune.v1.CompilePolicyRequest
+	4,  // 6: nornrune.v1.PolicyService.EvaluateBatch:input_type -> nornrune.v1.EvaluateBatchRequest
+	6,  // 7: nornrune.v1.PolicyService.EvaluateStream:input_type -> nornrune.v1.EvaluateStreamRequest
+	1,  // 8: nornrune.v1.PolicyService.ValidatePolicy:output_type -> nornrune.v1.ValidatePolicyResponse
+	3,  // 9: nornrune.v1.PolicyService.CompilePolicy:output_type -> nornrune.v1.CompilePolicyResponse
+	5,  // 10: nornrune.v1.PolicyService.EvaluateBatch:output_type -> nornrune.v1.EvaluateBatchResponse
+	7,  // 11: nornrune.v1.PolicyService.EvaluateStream:output_type -> nornrune.v1.EvaluateStreamResponse
 	8,  // [8:12] is the sub-list for method output_type
 	4,  // [4:8] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
@@ -858,26 +858,26 @@ var file_verifoxx_v1_verifoxx_proto_depIdxs = []int32{
 	0,  // [0:4] is the sub-list for field type_name
 }
 
-func init() { file_verifoxx_v1_verifoxx_proto_init() }
-func file_verifoxx_v1_verifoxx_proto_init() {
-	if File_verifoxx_v1_verifoxx_proto != nil {
+func init() { file_nornrune_v1_nornrune_proto_init() }
+func file_nornrune_v1_nornrune_proto_init() {
+	if File_nornrune_v1_nornrune_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_verifoxx_v1_verifoxx_proto_rawDesc), len(file_verifoxx_v1_verifoxx_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nornrune_v1_nornrune_proto_rawDesc), len(file_nornrune_v1_nornrune_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_verifoxx_v1_verifoxx_proto_goTypes,
-		DependencyIndexes: file_verifoxx_v1_verifoxx_proto_depIdxs,
-		MessageInfos:      file_verifoxx_v1_verifoxx_proto_msgTypes,
+		GoTypes:           file_nornrune_v1_nornrune_proto_goTypes,
+		DependencyIndexes: file_nornrune_v1_nornrune_proto_depIdxs,
+		MessageInfos:      file_nornrune_v1_nornrune_proto_msgTypes,
 	}.Build()
-	File_verifoxx_v1_verifoxx_proto = out.File
-	file_verifoxx_v1_verifoxx_proto_goTypes = nil
-	file_verifoxx_v1_verifoxx_proto_depIdxs = nil
+	File_nornrune_v1_nornrune_proto = out.File
+	file_nornrune_v1_nornrune_proto_goTypes = nil
+	file_nornrune_v1_nornrune_proto_depIdxs = nil
 }

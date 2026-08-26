@@ -6,28 +6,28 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 const (
 	celPolicy  = `team == "external_partner"`
-	regoPolicy = `package verifoxx
+	regoPolicy = `package nornrune
 
 allow if { input.team == "external_partner" }`
 	cedarPolicy = `permit(principal, action, resource) when { context.team == "external_partner" };`
 
-	celBindings      = `{"name":"verifoxx","version":"v1","fields":[{"source":"team","target":"requester.team","kind":"string","group":"subject"}]}`
-	regoBindings     = `{"name":"verifoxx","version":"v1","decision":"allow","fields":[{"source":"input.team","target":"requester.team","kind":"string","group":"subject"}]}`
-	cedarBindings    = `{"name":"verifoxx","version":"v1","fields":[{"source":"context.team","target":"requester.team","kind":"string","group":"subject"}]}`
-	frontendRequests = `{"schema_version":1,"pack":"verifoxx","requests":[{"id":"R1","requester":{"team":"external_partner"}},{"id":"R2","requester":{"team":"internal_team"}}]}`
-	frontendEvidence = `{"schema_version":1,"pack":"verifoxx","evidence":[]}`
+	celBindings      = `{"name":"nornrune","version":"v1","fields":[{"source":"team","target":"requester.team","kind":"string","group":"subject"}]}`
+	regoBindings     = `{"name":"nornrune","version":"v1","decision":"allow","fields":[{"source":"input.team","target":"requester.team","kind":"string","group":"subject"}]}`
+	cedarBindings    = `{"name":"nornrune","version":"v1","fields":[{"source":"context.team","target":"requester.team","kind":"string","group":"subject"}]}`
+	frontendRequests = `{"schema_version":1,"pack":"nornrune","requests":[{"id":"R1","requester":{"team":"external_partner"}},{"id":"R2","requester":{"team":"internal_team"}}]}`
+	frontendEvidence = `{"schema_version":1,"pack":"nornrune","evidence":[]}`
 )
 
 func frontendTestDependencies() dependencies {
 	files := map[string]string{
-		"native.policy": verifoxx.Source(),
+		"native.policy": nornrune.Source(),
 		"cel.policy":    celPolicy, "cel.bindings": celBindings,
 		"rego.policy": regoPolicy, "rego.bindings": regoBindings,
 		"cedar.policy": cedarPolicy, "cedar.bindings": cedarBindings,
@@ -53,7 +53,7 @@ func frontendTestDependencies() dependencies {
 			}
 			return []byte(value), nil
 		},
-		policy: verifoxx.Source(), requests: fixtures.RequestsJSON(), evidence: fixtures.EvidenceJSON(), version: "test-engine",
+		policy: nornrune.Source(), requests: fixtures.RequestsJSON(), evidence: fixtures.EvidenceJSON(), version: "test-engine",
 	}
 }
 
@@ -170,7 +170,7 @@ func TestExplicitFrontendsCompileValidateAndEvaluate(t *testing.T) {
 				if code != 0 || stderr != "" {
 					t.Fatalf("Execute(%q) = (%d,%q,%q), want success", args, code, stdout, stderr)
 				}
-				if command == "compile" && !strings.Contains(stdout, `"name":"verifoxx"`) {
+				if command == "compile" && !strings.Contains(stdout, `"name":"nornrune"`) {
 					t.Fatalf("compile output = %q", stdout)
 				}
 				if command == "validate" && stdout != "{\"valid\":true,\"diagnostics\":[]}\n" {

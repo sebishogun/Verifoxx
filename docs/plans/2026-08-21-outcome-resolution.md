@@ -64,7 +64,7 @@ Create `internal/truth/reason.go`:
 ```go
 package truth
 
-import "github.com/sebishogun/verifoxx/internal/schema"
+import "github.com/sebishogun/nornrune/internal/schema"
 
 const ReasonCount = 9
 
@@ -132,7 +132,7 @@ git commit -m "feat: add uncertainty reason masks"
 
 **Step 1: Write failing lookup and precedence tests**
 
-Use a table with four arbitrary symbol IDs and the Verifoxx fixture ordering:
+Use a table with four arbitrary symbol IDs and the NornRune fixture ordering:
 
 ```text
 OutcomeID 1: precedence 1, terminal true
@@ -500,7 +500,7 @@ go test -count=1 -timeout 60s ./internal/truth ./internal/result
 go test -race -count=1 -timeout 120s ./internal/truth ./internal/result
 go test -count=1 -timeout 60s ./...
 timeout 120s go vet ./...
-timeout 120s go build ./cmd/verifoxx
+timeout 120s go build ./cmd/nornrune
 timeout 180s go run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@v0.47.1-0.20260707181000-a299dadba899 -test=false ./internal/truth ./internal/result
 timeout 30s gofmt -l .
 timeout 60s go mod tidy -diff
@@ -514,7 +514,7 @@ Expected: all commands exit zero; listing/diff commands print nothing.
 Invoke `@superpowers:requesting-code-review`. Review specifically for reason-bit
 collisions, reversed precedence, unstable ties, terminal short-circuiting,
 malformed CSR overflow, invalid remediation payloads, borrowed-slice lifetime,
-hidden allocations, and engine branches on Verifoxx labels. Fix confirmed
+hidden allocations, and engine branches on NornRune labels. Fix confirmed
 findings with a new RED/GREEN cycle and rerun Step 4.
 
 **Step 6: Commit only when requested**

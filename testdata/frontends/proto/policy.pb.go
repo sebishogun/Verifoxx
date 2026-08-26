@@ -7,7 +7,7 @@
 package policy
 
 import (
-	_ "github.com/sebishogun/verifoxx/frontend/proto"
+	_ "github.com/sebishogun/nornrune/frontend/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -86,11 +86,11 @@ var File_policy_proto protoreflect.FileDescriptor
 
 const file_policy_proto_rawDesc = "" +
 	"\n" +
-	"\fpolicy.proto\x12\x19verifoxx.frontend.fixture\x1a\roptions.proto\"\xde\x01\n" +
+	"\fpolicy.proto\x12\x19nornrune.frontend.fixture\x1a\roptions.proto\"\xde\x01\n" +
 	"\rPolicyRequest\x12-\n" +
 	"\tteam_name\x18\x01 \x01(\tB\x10\xe2\xf3\x18\fsubject.teamR\bteamName\x12'\n" +
 	"\x05count\x18\x02 \x01(\x12B\x11\xe2\xf3\x18\rcontext.countR\x05count\x12-\n" +
-	"\aenabled\x18\x03 \x01(\bB\x13\xe2\xf3\x18\x0fcontext.enabledR\aenabled:F\xca\xf3\x18\raccess-policy\xd2\xf3\x18\x02v1\xda\xf3\x18+teamName == \"blue\" && count >= 2 && enabledB@Z>github.com/sebishogun/verifoxx/testdata/frontends/proto;policyb\x06proto3"
+	"\aenabled\x18\x03 \x01(\bB\x13\xe2\xf3\x18\x0fcontext.enabledR\aenabled:F\xca\xf3\x18\raccess-policy\xd2\xf3\x18\x02v1\xda\xf3\x18+teamName == \"blue\" && count >= 2 && enabledB@Z>github.com/sebishogun/nornrune/testdata/frontends/proto;policyb\x06proto3"
 
 var (
 	file_policy_proto_rawDescOnce sync.Once
@@ -106,7 +106,7 @@ func file_policy_proto_rawDescGZIP() []byte {
 
 var file_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_policy_proto_goTypes = []any{
-	(*PolicyRequest)(nil), // 0: verifoxx.frontend.fixture.PolicyRequest
+	(*PolicyRequest)(nil), // 0: nornrune.frontend.fixture.PolicyRequest
 }
 var file_policy_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type

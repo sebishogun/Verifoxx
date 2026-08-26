@@ -4,7 +4,7 @@ import (
 	"errors"
 	"math"
 
-	"github.com/sebishogun/verifoxx/internal/result"
+	"github.com/sebishogun/nornrune/internal/result"
 )
 
 var errInvalidShardResult = errors.New("scheduler: invalid shard result")

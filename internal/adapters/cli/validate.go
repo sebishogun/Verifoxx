@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/compile"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/compile"
 )
 
 func newValidateCommand(deps dependencies) *cobra.Command {

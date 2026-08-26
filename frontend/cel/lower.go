@@ -9,7 +9,7 @@ import (
 	"cel.dev/cel-go/common/operators"
 	celtypes "cel.dev/cel-go/common/types"
 
-	public "github.com/sebishogun/verifoxx/frontend"
+	public "github.com/sebishogun/nornrune/frontend"
 )
 
 type lowerFrame struct {

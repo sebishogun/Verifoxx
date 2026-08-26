@@ -105,7 +105,7 @@ func workflowRepositoryAssets(name string) []string {
 	case "proto:gen", "proto:check":
 		return []string{
 			"buf.yaml", "buf.gen.yaml", "buf.frontend.gen.yaml",
-			"api/proto/verifoxx/v1/verifoxx.proto", "frontend/proto/options.proto",
+			"api/proto/nornrune/v1/nornrune.proto", "frontend/proto/options.proto",
 			"testdata/frontends/proto/policy.proto",
 		}
 	case "bench:compare":

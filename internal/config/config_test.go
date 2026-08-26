@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/persistence"
 )
 
 func TestDefaultIsValid(t *testing.T) {
@@ -40,7 +40,7 @@ func TestLoadPrecedence(t *testing.T) {
 		EnvWorkers:           "4",
 		EnvQueueDepth:        "4",
 		EnvMaxBatchRows:      "400",
-		EnvDatabaseURL:       "postgres://runtime:secret@database/verifoxx",
+		EnvDatabaseURL:       "postgres://runtime:secret@database/nornrune",
 		EnvShutdownTimeout:   "4s",
 		EnvAuditWriteTimeout: "1s",
 	}
@@ -76,12 +76,12 @@ func TestLoadPrecedence(t *testing.T) {
 func TestLoadAllSources(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "verifoxx.json")
+	path := filepath.Join(t.TempDir(), "nornrune.json")
 	writeConfigFile(t, path, `{
 		"http_address":"127.0.0.1:18080",
 		"grpc_address":"127.0.0.1:19090",
 		"policy_name":"policy-a",
-		"database_url":"postgres://runtime:secret@database/verifoxx",
+		"database_url":"postgres://runtime:secret@database/nornrune",
 		"workers":2,
 		"queue_depth":8,
 		"max_batch_rows":1024,
@@ -110,7 +110,7 @@ func TestLoadAllSources(t *testing.T) {
 		got.DatabaseMaxConnections != 8 || got.DatabaseConnectTimeout != 14*time.Second {
 		t.Fatalf("Load() = %+v", got)
 	}
-	if got.DatabaseURL.Reveal() != "postgres://runtime:secret@database/verifoxx" {
+	if got.DatabaseURL.Reveal() != "postgres://runtime:secret@database/nornrune" {
 		t.Fatal("Load() did not preserve the database URL for runtime use")
 	}
 }
@@ -119,7 +119,7 @@ func TestConfigRedactsDatabaseURL(t *testing.T) {
 	t.Parallel()
 
 	value, err := Load(nil, mapLookup(map[string]string{
-		EnvDatabaseURL: "postgres://runtime:super-secret@database/verifoxx",
+		EnvDatabaseURL: "postgres://runtime:super-secret@database/nornrune",
 	}))
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -189,13 +189,13 @@ func TestConfigValidation(t *testing.T) {
 		{name: "shutdown timeout", mutate: func(value *Config) { value.ShutdownTimeout = -time.Second }},
 		{name: "flush budget", mutate: func(value *Config) {
 			value.AuditMode = persistence.AuditRequired
-			value.DatabaseURL = SecretURL("postgres://runtime:secret@database/verifoxx")
+			value.DatabaseURL = SecretURL("postgres://runtime:secret@database/nornrune")
 			value.ShutdownTimeout = value.AuditWriteTimeout
 		}},
 		{name: "audit mode", mutate: func(value *Config) { value.AuditMode = persistence.AuditMode(255) }},
 		{name: "audit database", mutate: func(value *Config) { value.AuditMode = persistence.AuditRequired }},
 		{name: "audit writers", mutate: func(value *Config) { value.AuditWriters = value.AuditQueueDepth + 1 }},
-		{name: "database url", mutate: func(value *Config) { value.DatabaseURL = SecretURL("https://database/verifoxx") }},
+		{name: "database url", mutate: func(value *Config) { value.DatabaseURL = SecretURL("https://database/nornrune") }},
 		{name: "database connections", mutate: func(value *Config) {
 			value.DatabaseMinConnections = value.DatabaseMaxConnections + 1
 		}},

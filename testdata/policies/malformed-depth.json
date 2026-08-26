@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "name": "verifoxx",
+  "name": "nornrune",
   "version": "1.0.0",
   "evidence_kinds": [
     {"name": "approval_record"},

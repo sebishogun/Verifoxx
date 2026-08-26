@@ -1,6 +1,6 @@
 # Architecture
 
-Verifoxx is a deterministic, evidence-aware policy compiler and evaluator. The
+NornRune is a deterministic, evidence-aware policy compiler and evaluator. The
 JSON, CLI, TUI, HTTP, gRPC, and PostgreSQL packages are adapters around a typed
 core. The core does not branch on the five supplied request IDs and does not
 query PostgreSQL while evaluating a policy.
@@ -35,7 +35,7 @@ transport objects do not enter evaluator kernels.
 
 CEL, Rego, and Cedar use pinned official parsers on the CLI cold path, then
 translate only their documented subsets into the shared semantic tables.
-Protobuf descriptors run through `protoc-gen-verifoxx` at generation time and
+Protobuf descriptors run through `protoc-gen-nornrune` at generation time and
 produce static bindings; runtime descriptor reflection is not supported.
 Persisted service registry sources remain canonical native JSON. See the
 [compatibility frontend guide](frontends.md) for the exact boundary.

@@ -4,8 +4,8 @@ import (
 	"math"
 	"math/bits"
 
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 const scheduleOpcodeCount = int(program.OpcodeDefined) + 1

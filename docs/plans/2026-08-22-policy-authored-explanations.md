@@ -545,11 +545,11 @@ not commit.
 ### Task 10: Migrate Policies, Fixtures, And Conformance Projection
 
 **Files:**
-- Modify: `policies/verifoxx/policy.json`
+- Modify: `policies/nornrune/policy.json`
 - Modify: `testdata/policies/*.json`
 - Modify: policy source helpers under `internal/fixtures`
 - Modify: JSON policy fixtures embedded in package tests
-- Modify: `internal/conformance/verifoxx_test.go`
+- Modify: `internal/conformance/nornrune_test.go`
 - Modify: `testdata/golden/requests.json`
 - Modify: `results/requests.json`
 
@@ -558,7 +558,7 @@ not commit.
 Keep schema version 1. Add required assumptions, evidence issue fallback and
 overrides, and seven resolution objects per clause. Use concise reusable test
 text in generic fixtures and the current authored rationale/uncertainty text in
-the Verifoxx policy.
+the NornRune policy.
 
 Do not invent an EvidenceID for Missing. Update those two golden evidence issue
 lines to name the required evidence kind. Retain E4 for the actual conflicting

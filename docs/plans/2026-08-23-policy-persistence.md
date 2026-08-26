@@ -322,18 +322,18 @@ func (store *PolicyStore) LoadByHash(ctx context.Context, hash [sha256.Size]byte
 Use one transaction for PublishActive:
 
 ```sql
-INSERT INTO verifoxx.policies (name)
+INSERT INTO nornrune.policies (name)
 VALUES ($1)
 ON CONFLICT (name) DO NOTHING
 RETURNING id;
 
-INSERT INTO verifoxx.policy_versions
+INSERT INTO nornrune.policy_versions
     (policy_id, semantic_version, source, content_hash, compiler_version)
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (content_hash) DO NOTHING
 RETURNING id, published_at;
 
-UPDATE verifoxx.policies
+UPDATE nornrune.policies
 SET active_version_id = $1
 WHERE id = $2;
 ```
@@ -366,7 +366,7 @@ Expected: PASS.
 
 **Step 1: Write failing end-to-end publication tests**
 
-Add a test-only real compiler using `verifoxx.NewSchema`, `jsonpolicy.Decoder`,
+Add a test-only real compiler using `nornrune.NewSchema`, `jsonpolicy.Decoder`,
 `ast.Builder`, and `compile.Lowerer`. Do not import unexported CLI engine code.
 
 Add parent subtests before `standalone_migrator`:
@@ -476,8 +476,8 @@ applying analyzer fixes blindly.
 **Step 5: Recheck build and immutable CLI output**
 
 ```bash
-timeout 120s go build -trimpath -o /tmp/opencode/verifoxx-task28 ./cmd/verifoxx
-timeout 120s go run ./cmd/verifoxx evaluate > /tmp/opencode/task28-results.json
+timeout 120s go build -trimpath -o /tmp/opencode/nornrune-task28 ./cmd/nornrune
+timeout 120s go run ./cmd/nornrune evaluate > /tmp/opencode/task28-results.json
 cmp /tmp/opencode/task28-results.json results/requests.json
 ```
 

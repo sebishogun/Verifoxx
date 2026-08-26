@@ -7,7 +7,7 @@
 ## Goal
 
 Add bounded CEL, Rego, Cedar, and Protobuf compilation frontends without adding
-another evaluator. Each accepted source program becomes the same Verifoxx AST
+another evaluator. Each accepted source program becomes the same NornRune AST
 and immutable Program used by native policy JSON. Compatibility claims apply
 only to the documented subset and its differential corpus.
 
@@ -59,7 +59,7 @@ reaches its rejecting clause while absent input remains unresolved.
 | `==`, `!=`, `<`, `<=`, `>`, `>=` | Supported for matching scalar types |
 | `&&`, `||`, `!` | Supported |
 | `in` with a constant homogeneous list | Supported |
-| Missing declared activation value | Lowered to Verifoxx unknown |
+| Missing declared activation value | Lowered to NornRune unknown |
 | Object selection with an explicit field binding | Lowered with restrictions |
 | Macros, dynamic dispatch, calls, maps, messages, comprehensions | Rejected |
 | `double`, `uint`, bytes, duration, timestamp, null | Rejected initially |
@@ -117,7 +117,7 @@ matching forbid wins independently of source order. Missing context escalates.
 
 `frontend/proto/options.proto` defines message options for policy name,
 version, and CEL expression plus field options for canonical field names.
-`protoc-gen-verifoxx` validates scalar field types and emits a static
+`protoc-gen-nornrune` validates scalar field types and emits a static
 `frontend.BindingSet`. Generated code contains no descriptor walk or runtime
 reflection. Repeated, map, oneof, message, enum, floating-point, unsigned, and
 bytes fields are rejected until their semantics receive an explicit capability
@@ -162,7 +162,7 @@ caller-owned presentation data and are not retained in errors.
 - Each language has positive and negative corpus cases plus malformed, Unicode,
   depth, size, duplicate, and unsupported tests.
 - Supported CEL, Rego, and Cedar cases are evaluated by both the official
-  engine and the Verifoxx Program over the same typed rows.
+  engine and the NornRune Program over the same typed rows.
 - Cross-frontend conformance proves equivalent supported expressions compile to
   equivalent decisions for true, false, and missing inputs.
 - Protobuf tests construct a code-generator request, inspect deterministic
@@ -171,7 +171,7 @@ caller-owned presentation data and are not retained in errors.
 
 ## Performance
 
-Benchmarks separate official parse/check, semantic translation, Verifoxx
+Benchmarks separate official parse/check, semantic translation, NornRune
 lowering, and warm evaluation. Parser allocations are reported but are outside
 the evaluator contract. Warm scalar, SIMD, indexed, and parallel evaluation
 must retain their existing zero-allocation behavior and linked-binary parity;

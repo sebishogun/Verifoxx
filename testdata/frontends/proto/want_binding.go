@@ -1,6 +1,6 @@
 package policy
 
-import "github.com/sebishogun/verifoxx/frontend"
+import "github.com/sebishogun/nornrune/frontend"
 
 const WantPolicyRequestCEL = `teamName == "blue" && count >= 2 && enabled`
 

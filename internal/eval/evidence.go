@@ -1,6 +1,6 @@
 package eval
 
-import "github.com/sebishogun/verifoxx/internal/schema"
+import "github.com/sebishogun/nornrune/internal/schema"
 
 // EvidenceBatch stores one evidence record per row in parallel typed columns.
 type EvidenceBatch struct {

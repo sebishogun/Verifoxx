@@ -1,6 +1,6 @@
 # Compatibility Frontends
 
-Verifoxx accepts its complete native semantic JSON policy and four bounded
+NornRune accepts its complete native semantic JSON policy and four bounded
 compatibility frontends: CEL, Rego, Cedar, and generated Protobuf bindings.
 These adapters are not drop-in replacements for the complete upstream
 languages. They reject syntax outside the matrices below rather than silently
@@ -20,11 +20,11 @@ format requires explicit policy and binding files; formats are never inferred
 from file names or source text.
 
 ```bash
-timeout 120s go run ./cmd/verifoxx compile \
+timeout 120s go run ./cmd/nornrune compile \
   --format cel --policy policy.cel --bindings bindings.json
-timeout 120s go run ./cmd/verifoxx validate \
+timeout 120s go run ./cmd/nornrune validate \
   --format rego --policy policy.rego --bindings bindings.json
-timeout 120s go run ./cmd/verifoxx evaluate \
+timeout 120s go run ./cmd/nornrune evaluate \
   --format cedar --policy policy.cedar --bindings bindings.json \
   --requests requests.json --evidence evidence.json
 ```
@@ -74,7 +74,7 @@ name its complete Boolean rule; CEL and Cedar ignore it.
 
 ## Decision Mapping
 
-| Semantic result | Verifoxx decision |
+| Semantic result | NornRune decision |
 |---|---|
 | True | `Approve` |
 | False | `Reject` |
@@ -124,7 +124,7 @@ Pinned parser: `github.com/cedar-policy/cedar-go v1.8.0`.
 ## Protobuf Matrix
 
 Pinned runtime/generator API: `google.golang.org/protobuf v1.36.12`. The
-`protoc-gen-verifoxx` plugin reads proto3 descriptors and emits a static Go
+`protoc-gen-nornrune` plugin reads proto3 descriptors and emits a static Go
 `frontend.BindingSet`; generated request messages are not decoded by evaluator
 kernels.
 
@@ -138,9 +138,9 @@ Install or build the local plugin and regenerate deterministically through the
 repository workflow:
 
 ```bash
-timeout 180s go build -o .verifoxx/tools/protoc-gen-verifoxx ./cmd/protoc-gen-verifoxx
-timeout 300s env PATH="$PWD/.verifoxx/tools:$PATH" go run ./cmd/devx proto:gen
-timeout 300s env PATH="$PWD/.verifoxx/tools:$PATH" go run ./cmd/devx proto:check
+timeout 180s go build -o .nornrune/tools/protoc-gen-nornrune ./cmd/protoc-gen-nornrune
+timeout 300s env PATH="$PWD/.nornrune/tools:$PATH" go run ./cmd/devx proto:gen
+timeout 300s env PATH="$PWD/.nornrune/tools:$PATH" go run ./cmd/devx proto:check
 ```
 
 The custom options are declared in `frontend/proto/options.proto`; the pinned

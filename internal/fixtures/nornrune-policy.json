@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "pack": "verifoxx",
+  "pack": "nornrune",
   "document": "requirements-source-text",
   "requirements": [
     {

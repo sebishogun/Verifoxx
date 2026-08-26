@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	coreservice "github.com/sebishogun/verifoxx/internal/service"
+	coreservice "github.com/sebishogun/nornrune/internal/service"
 )
 
 func TestHealthSeparatesLivenessAndReadiness(t *testing.T) {

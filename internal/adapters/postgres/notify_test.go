@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/program"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/program"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 func testPolicyNotifications(t *testing.T, ctx context.Context, environment *postgresTestEnvironment) {
@@ -42,7 +42,7 @@ func testPolicyNotifications(t *testing.T, ctx context.Context, environment *pos
 	if err != nil {
 		t.Fatalf("construct notification reloader: %v", err)
 	}
-	listener, err := NewPolicyListener(environment.runtime, reloader, "verifoxx", 10*time.Millisecond)
+	listener, err := NewPolicyListener(environment.runtime, reloader, "nornrune", 10*time.Millisecond)
 	if err != nil {
 		t.Fatalf("construct policy listener: %v", err)
 	}
@@ -73,7 +73,7 @@ func testPolicyNotifications(t *testing.T, ctx context.Context, environment *pos
 		t.Fatalf("wait for policy listener readiness: %v", opCtx.Err())
 	}
 
-	compiledV1, versionV1, err := publisher.Publish(opCtx, []byte(verifoxx.Source()))
+	compiledV1, versionV1, err := publisher.Publish(opCtx, []byte(nornrune.Source()))
 	if err != nil {
 		t.Fatalf("publish notification policy v1: %v", err)
 	}
@@ -92,12 +92,12 @@ func testPolicyNotifications(t *testing.T, ctx context.Context, environment *pos
 
 	activeV1 := reloadingRegistry.Active()
 	otherSource := bytes.Replace(
-		[]byte(verifoxx.Source()),
-		[]byte(`"name": "verifoxx"`),
+		[]byte(nornrune.Source()),
+		[]byte(`"name": "nornrune"`),
 		[]byte(`"name": "other-policy"`),
 		1,
 	)
-	if bytes.Equal(otherSource, []byte(verifoxx.Source())) {
+	if bytes.Equal(otherSource, []byte(nornrune.Source())) {
 		t.Fatal("other-policy fixture did not replace the policy name")
 	}
 	otherProgram, err := compileIntegrationPolicy(otherSource)
@@ -189,7 +189,7 @@ func testPolicyNotifications(t *testing.T, ctx context.Context, environment *pos
 	if !terminated {
 		t.Fatalf("notification backend %d was not terminated", oldPID)
 	}
-	compiledV2, versionV2, err := publisher.Publish(opCtx, verifoxxSourceVersion(t, "2.0.0"))
+	compiledV2, versionV2, err := publisher.Publish(opCtx, nornruneSourceVersion(t, "2.0.0"))
 	if err != nil {
 		t.Fatalf("publish notification policy v2 during reconnect: %v", err)
 	}
@@ -271,7 +271,7 @@ func testPolicyNotificationStartupCatchup(
 	if err != nil {
 		t.Fatalf("construct startup notification publisher: %v", err)
 	}
-	_, version, err := publisher.Publish(ctx, []byte(verifoxx.Source()))
+	_, version, err := publisher.Publish(ctx, []byte(nornrune.Source()))
 	if err != nil {
 		t.Fatalf("publish policy before listener startup: %v", err)
 	}

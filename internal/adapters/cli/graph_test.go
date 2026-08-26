@@ -37,7 +37,7 @@ func TestGraphCommandWritesAllDeterministicFormats(t *testing.T) {
 	formats := []struct {
 		name string
 		want string
-	}{{"dot", "digraph verifoxx"}, {"svg", `<svg xmlns="http://www.w3.org/2000/svg"`}, {"html", "<!doctype html>"}}
+	}{{"dot", "digraph nornrune"}, {"svg", `<svg xmlns="http://www.w3.org/2000/svg"`}, {"html", "<!doctype html>"}}
 	for _, format := range formats {
 		for _, view := range []string{"ast", "program"} {
 			t.Run(format.name+"/"+view, func(t *testing.T) {

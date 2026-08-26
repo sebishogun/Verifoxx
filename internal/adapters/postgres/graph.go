@@ -8,11 +8,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/truth"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/truth"
 )
 
 const (
@@ -33,8 +33,8 @@ const (
 )
 
 var (
-	policyNodeTable   = pgx.Identifier{"verifoxx", "policy_nodes"}
-	policyEdgeTable   = pgx.Identifier{"verifoxx", "policy_edges"}
+	policyNodeTable   = pgx.Identifier{"nornrune", "policy_nodes"}
+	policyEdgeTable   = pgx.Identifier{"nornrune", "policy_edges"}
 	policyNodeColumns = []string{
 		"policy_version_id", "node_kind", "local_id", "name", "detail",
 		"source_start", "source_end", "precedence", "terminal", "content_hash",
@@ -85,7 +85,7 @@ func writePolicyGraph(
 
 	var claimed int64
 	err = tx.QueryRow(ctx, `
-		INSERT INTO verifoxx.policy_nodes
+		INSERT INTO nornrune.policy_nodes
 		    (policy_version_id, node_kind, local_id, name, detail,
 		     source_start, source_end, content_hash,
 		     projected_node_count, projected_edge_count, projection_xid)
@@ -142,9 +142,9 @@ func validateExistingPolicyGraph(
 	err := tx.QueryRow(ctx, `
 		SELECT claim.name, claim.detail, claim.source_start, claim.source_end, claim.content_hash,
 		       claim.projected_node_count, claim.projected_edge_count,
-		       (SELECT count(*) FROM verifoxx.policy_nodes WHERE policy_version_id = $1),
-		       (SELECT count(*) FROM verifoxx.policy_edges WHERE policy_version_id = $1)
-		FROM verifoxx.policy_nodes AS claim
+		       (SELECT count(*) FROM nornrune.policy_nodes WHERE policy_version_id = $1),
+		       (SELECT count(*) FROM nornrune.policy_edges WHERE policy_version_id = $1)
+		FROM nornrune.policy_nodes AS claim
 		WHERE claim.policy_version_id = $1
 		  AND claim.node_kind = 'policy_version'
 		  AND claim.local_id = 1

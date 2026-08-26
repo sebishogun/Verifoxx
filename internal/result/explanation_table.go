@@ -3,8 +3,8 @@ package result
 import (
 	"errors"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/truth"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/truth"
 )
 
 const (

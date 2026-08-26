@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	policyindex "github.com/sebishogun/verifoxx/internal/index"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	policyindex "github.com/sebishogun/nornrune/internal/index"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func decoderTestProgram(t testing.TB) *program.Program {
@@ -72,7 +72,7 @@ func fixtureDecoderProgram(t testing.TB) *program.Program {
 	kindNames := []string{"approval_record", "execution_environment_attestation", "usage_limit_adjustment"}
 	stateNames := []string{"valid", "verified", "approved", "conflicting", "stale", "unclear", "unverifiable", "invalid"}
 	values := make([]string, 0, 1+len(fieldNames)+len(kindNames)+len(stateNames))
-	values = append(values, "verifoxx")
+	values = append(values, "nornrune")
 	values = append(values, fieldNames...)
 	values = append(values, kindNames...)
 	values = append(values, stateNames...)
@@ -400,7 +400,7 @@ func TestDecodeEvidenceQualifierPrecedenceIsOrderIndependent(t *testing.T) {
 	if err := b.Begin(p, 0, 2, 0); err != nil {
 		t.Fatalf("Begin: %v", err)
 	}
-	source := []byte(`{"schema_version":1,"pack":"verifoxx","evidence":[` +
+	source := []byte(`{"schema_version":1,"pack":"nornrune","evidence":[` +
 		`{"id":"E1","type":"approval_record","attributes":{"status":"valid","timestamp_state":"stale","attestation_state":"invalid"}},` +
 		`{"id":"E2","type":"approval_record","attributes":{"status":"valid","attestation_state":"invalid","timestamp_state":"stale"}}]}`)
 	if err := d.decodeEvidence(&b, source, Limits{}, 2); err != nil {
@@ -559,7 +559,7 @@ func TestDecodeRequestsRejectsInvalidRows(t *testing.T) {
 	}
 }
 
-func TestDecodeSuppliedVerifoxxPacks(t *testing.T) {
+func TestDecodeSuppliedNornRunePacks(t *testing.T) {
 	p := fixtureDecoderProgram(t)
 	requests := []byte(fixtures.RequestsJSON())
 	evidence := []byte(fixtures.EvidenceJSON())
@@ -612,7 +612,7 @@ func TestDecodeFailureAbortsAndRecovers(t *testing.T) {
 		t.Fatalf("first Decode: %v", err)
 	}
 	wantCap := cap(first.RequestIDs)
-	bad := []byte(`{"schema_version":1,"pack":"verifoxx","requests":[{"id":"R1","unknown":"x"}]}`)
+	bad := []byte(`{"schema_version":1,"pack":"nornrune","requests":[{"id":"R1","unknown":"x"}]}`)
 	if _, err := d.Decode(&b, p, bad, evidence, Limits{}); err == nil {
 		t.Fatal("malformed Decode succeeded")
 	}

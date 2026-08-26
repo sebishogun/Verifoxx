@@ -1,6 +1,6 @@
 # API
 
-Verifoxx exposes the same transport-independent policy service through strict
+NornRune exposes the same transport-independent policy service through strict
 JSON HTTP and protobuf gRPC adapters. Both apply request deadlines, bounded
 admission, body/message limits, and the same immutable policy selection.
 
@@ -16,8 +16,8 @@ For a database that is already migrated, set a runtime-role URL and run the
 source service directly:
 
 ```bash
-export VERIFOXX_DATABASE_URL='postgresql://verifoxx_runtime:verifoxx-runtime-local@127.0.0.1:5432/verifoxx?sslmode=disable'
-export VERIFOXX_AUDIT_MODE=required
+export NORNRUNE_DATABASE_URL='postgresql://nornrune_runtime:nornrune-runtime-local@127.0.0.1:5432/nornrune?sslmode=disable'
+export NORNRUNE_AUDIT_MODE=required
 ./cli/devx serve
 ```
 
@@ -50,7 +50,7 @@ request/evidence documents are rejected.
 ```bash
 curl -fsS \
   -H 'Content-Type: application/json' \
-  --data-binary @policies/verifoxx/policy.json \
+  --data-binary @policies/nornrune/policy.json \
   http://127.0.0.1:8080/v1/policies/validate
 ```
 
@@ -68,7 +68,7 @@ Diagnostics contain `code`, `table`, `member`, `row`, a half-open source
 ```bash
 curl -fsS \
   -H 'Content-Type: application/json' \
-  --data-binary @policies/verifoxx/policy.json \
+  --data-binary @policies/nornrune/policy.json \
   http://127.0.0.1:8080/v1/policies/compile
 ```
 
@@ -76,7 +76,7 @@ The response identifies the immutable compiled shape:
 
 ```json
 {
-  "name":"verifoxx",
+  "name":"nornrune",
   "version":"1.0.0",
   "sha256":"<64 lowercase hexadecimal characters>",
   "instructions":14,
@@ -103,7 +103,7 @@ curl -fsS \
 {
   "requests": {
     "schema_version": 1,
-    "pack": "verifoxx",
+    "pack": "nornrune",
     "requests": [{
       "id": "R1",
       "requester": {"team":"external_partner","trust":"external"},
@@ -114,7 +114,7 @@ curl -fsS \
   },
   "evidence": {
     "schema_version": 1,
-    "pack": "verifoxx",
+    "pack": "nornrune",
     "evidence": [
       {"id":"E1","type":"approval_record","attributes":{"status":"valid","timing":"before_execution","reviewer":"designated_reviewer","timestamp_state":"current"}},
       {"id":"E2","type":"execution_environment_attestation","attributes":{"subject":"local_approved_env","status":"verified","attestation_state":"valid"}}
@@ -169,7 +169,7 @@ credentials are not returned.
 ## gRPC
 
 The protobuf contract is
-[`api/proto/verifoxx/v1/verifoxx.proto`](../api/proto/verifoxx/v1/verifoxx.proto):
+[`api/proto/nornrune/v1/nornrune.proto`](../api/proto/nornrune/v1/nornrune.proto):
 
 | RPC | Shape |
 |---|---|
@@ -196,7 +196,7 @@ codes, and admission, dependency, or audit failures to `Unavailable`.
 
 ## Limits And Security
 
-HTTP body and gRPC message limits share `VERIFOXX_MAX_BODY_BYTES`; the default
+HTTP body and gRPC message limits share `NORNRUNE_MAX_BODY_BYTES`; the default
 is 8 MiB and the hard ceiling is 64 MiB. Policy source has a separate 4 MiB hard
 ceiling. The default request deadline is 30 seconds and the default batch row
 limit is 65,536.

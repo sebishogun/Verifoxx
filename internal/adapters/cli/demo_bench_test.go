@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	"github.com/sebishogun/verifoxx/internal/simdops"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/simdops"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 var (
@@ -18,7 +18,7 @@ var (
 
 func BenchmarkDemoPipeline(b *testing.B) {
 	inputs := sources{
-		policy:   []byte(verifoxx.Source()),
+		policy:   []byte(nornrune.Source()),
 		requests: []byte(fixtures.RequestsJSON()),
 		evidence: []byte(fixtures.EvidenceJSON()),
 	}

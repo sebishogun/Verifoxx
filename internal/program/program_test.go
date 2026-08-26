@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func TestOpcodeInvalidZeroAndAppendOnlyValues(t *testing.T) {

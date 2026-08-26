@@ -11,15 +11,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonpolicy"
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/truth"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonpolicy"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/truth"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 const integrationCompilerVersion = "integration-compiler"
@@ -31,9 +31,9 @@ type policyPublishResult struct {
 }
 
 func compileIntegrationPolicy(source []byte) (*program.Program, error) {
-	fields, symbols, err := verifoxx.NewSchema()
+	fields, symbols, err := nornrune.NewSchema()
 	if err != nil {
-		return nil, fmt.Errorf("construct Verifoxx schema: %w", err)
+		return nil, fmt.Errorf("construct NornRune schema: %w", err)
 	}
 	builder := ast.NewBuilder(ast.Hints{SourceBytes: len(source)})
 	var decoder jsonpolicy.Decoder
@@ -64,9 +64,9 @@ func policyCandidateFromProgram(t *testing.T, compiled *program.Program) persist
 	}
 }
 
-func verifoxxSourceVersion(t *testing.T, version string) []byte {
+func nornruneSourceVersion(t *testing.T, version string) []byte {
 	t.Helper()
-	source := []byte(verifoxx.Source())
+	source := []byte(nornrune.Source())
 	updated := bytes.Replace(source, []byte(`"version": "1.0.0"`), []byte(`"version": "`+version+`"`), 1)
 	if bytes.Equal(updated, source) {
 		t.Fatalf("embedded policy version marker was not replaced with %q", version)
@@ -196,7 +196,7 @@ func testPolicyStorePublish(t *testing.T, ctx context.Context, environment *post
 	if _, err := store.PublishActive(ctx, persistence.Candidate{}); !errors.Is(err, persistence.ErrInvalidPolicyPersistence) {
 		t.Fatalf("publish invalid Candidate error = %v, want %v", err, persistence.ErrInvalidPolicyPersistence)
 	}
-	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM verifoxx.policies"); got != 0 {
+	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM nornrune.policies"); got != 0 {
 		t.Fatalf("policy count after invalid Candidate = %d, want 0", got)
 	}
 
@@ -236,8 +236,8 @@ func testPolicyStorePublish(t *testing.T, ctx context.Context, environment *post
 	if err := environment.runtime.QueryRow(ctx, `
 		SELECT p.id, p.name, p.active_version_id,
 		       v.id, v.semantic_version, v.source, v.content_hash, v.compiler_version
-		FROM verifoxx.policies AS p
-		JOIN verifoxx.policy_versions AS v ON v.id = p.active_version_id
+		FROM nornrune.policies AS p
+		JOIN nornrune.policy_versions AS v ON v.id = p.active_version_id
 		WHERE p.name = $1
 	`, candidate.Name).Scan(
 		&databasePolicyID,
@@ -268,7 +268,7 @@ func testPolicyStorePublish(t *testing.T, ctx context.Context, environment *post
 		t.Fatalf("republish identical source: %v", err)
 	}
 	assertPolicyVersionEqual(t, storedAgain, stored)
-	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM verifoxx.policy_versions"); got != 1 {
+	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM nornrune.policy_versions"); got != 1 {
 		t.Fatalf("version count after duplicate = %d, want 1", got)
 	}
 
@@ -276,15 +276,15 @@ func testPolicyStorePublish(t *testing.T, ctx context.Context, environment *post
 	if _, err := store.PublishActive(ctx, conflict); !errors.Is(err, persistence.ErrPolicyVersionConflict) {
 		t.Fatalf("conflicting semantic version error = %v, want %v", err, persistence.ErrPolicyVersionConflict)
 	}
-	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM verifoxx.policies"); got != 1 {
+	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM nornrune.policies"); got != 1 {
 		t.Fatalf("policy count after conflict = %d, want 1", got)
 	}
-	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM verifoxx.policy_versions"); got != 1 {
+	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM nornrune.policy_versions"); got != 1 {
 		t.Fatalf("version count after conflict = %d, want 1", got)
 	}
 	var activeID int64
 	if err := environment.runtime.QueryRow(ctx,
-		"SELECT active_version_id FROM verifoxx.policies WHERE id = $1",
+		"SELECT active_version_id FROM nornrune.policies WHERE id = $1",
 		stored.PolicyID,
 	).Scan(&activeID); err != nil {
 		t.Fatalf("query active version after conflict: %v", err)
@@ -294,10 +294,10 @@ func testPolicyStorePublish(t *testing.T, ctx context.Context, environment *post
 	}
 
 	assertSQLState(t, execError(ctx, environment.runtime,
-		"UPDATE verifoxx.policy_versions SET compiler_version = compiler_version WHERE id = $1", stored.ID,
+		"UPDATE nornrune.policy_versions SET compiler_version = compiler_version WHERE id = $1", stored.ID,
 	), "42501")
 	assertSQLState(t, execError(ctx, environment.runtime,
-		"DELETE FROM verifoxx.policy_versions WHERE id = $1", stored.ID,
+		"DELETE FROM nornrune.policy_versions WHERE id = $1", stored.ID,
 	), "42501")
 }
 
@@ -368,13 +368,13 @@ func testPolicyPublishReload(t *testing.T, ctx context.Context, environment *pos
 	if err != nil {
 		t.Fatalf("construct Publisher: %v", err)
 	}
-	source := []byte(verifoxx.Source())
+	source := []byte(nornrune.Source())
 
 	firstProgram, firstVersion, err := publisher.Publish(ctx, source)
 	if err != nil {
 		t.Fatalf("publish embedded policy: %v", err)
 	}
-	if registry.Active() != firstProgram || firstVersion.Name != "verifoxx" ||
+	if registry.Active() != firstProgram || firstVersion.Name != "nornrune" ||
 		firstVersion.SemanticVersion != "1.0.0" || !bytes.Equal(firstProgram.InputBytes, source) ||
 		firstProgram.ContentHash != firstVersion.ContentHash {
 		t.Fatalf("first publication = Program:%p Version:%+v Active:%p", firstProgram, firstVersion, registry.Active())
@@ -418,7 +418,7 @@ func testPolicyPublishReload(t *testing.T, ctx context.Context, environment *pos
 	if reloadedRegistry.Active() != reloadedActive {
 		t.Fatalf("active Program changed after conflict: got %p want %p", reloadedRegistry.Active(), reloadedActive)
 	}
-	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM verifoxx.policy_versions"); got != 1 {
+	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM nornrune.policy_versions"); got != 1 {
 		t.Fatalf("version count after conflict = %d, want 1", got)
 	}
 	databaseActive, err := store.LoadActive(ctx, firstVersion.Name)
@@ -441,7 +441,7 @@ func testPolicyConcurrentPublish(t *testing.T, ctx context.Context, environment 
 	if err != nil {
 		t.Fatalf("construct second policy store: %v", err)
 	}
-	sourceV1 := []byte(verifoxx.Source())
+	sourceV1 := []byte(nornrune.Source())
 	compiledV1, err := compileIntegrationPolicy(sourceV1)
 	if err != nil {
 		t.Fatalf("compile v1 policy: %v", err)
@@ -463,13 +463,13 @@ func testPolicyConcurrentPublish(t *testing.T, ctx context.Context, environment 
 		t.Fatalf("concurrent identical store errors = (%v, %v)", firstResult.err, secondResult.err)
 	}
 	assertPolicyVersionEqual(t, firstResult.version, secondResult.version)
-	if got := queryCount(t, opCtx, environment.runtime, "SELECT count(*) FROM verifoxx.policy_versions"); got != 1 {
+	if got := queryCount(t, opCtx, environment.runtime, "SELECT count(*) FROM nornrune.policy_versions"); got != 1 {
 		t.Fatalf("version count after identical race = %d, want 1", got)
 	}
 	wantNodes := 1 + len(compiledV1.RequirementIDs) + len(compiledV1.ClauseAssertionRoots) +
 		len(compiledV1.Opcodes) + len(compiledV1.Outcomes.Names) + len(compiledV1.Remediations.Kinds)
 	if got := queryCount(t, opCtx, environment.runtime,
-		"SELECT count(*) FROM verifoxx.policy_nodes WHERE policy_version_id = $1", firstResult.version.ID,
+		"SELECT count(*) FROM nornrune.policy_nodes WHERE policy_version_id = $1", firstResult.version.ID,
 	); got != wantNodes {
 		t.Fatalf("node count after identical race = %d, want %d", got, wantNodes)
 	}
@@ -477,12 +477,12 @@ func testPolicyConcurrentPublish(t *testing.T, ctx context.Context, environment 
 		len(compiledV1.ClauseAssertionRoots) + len(compiledV1.ClauseEvidenceIDs) + len(compiledV1.Operands) +
 		7*len(compiledV1.ClauseAssertionRoots) + len(compiledV1.ClauseRemediationIDs)
 	if got := queryCount(t, opCtx, environment.runtime,
-		"SELECT count(*) FROM verifoxx.policy_edges WHERE policy_version_id = $1", firstResult.version.ID,
+		"SELECT count(*) FROM nornrune.policy_edges WHERE policy_version_id = $1", firstResult.version.ID,
 	); got != wantEdges {
 		t.Fatalf("edge count after identical race = %d, want %d", got, wantEdges)
 	}
 
-	sourceV2 := verifoxxSourceVersion(t, "2.0.0")
+	sourceV2 := nornruneSourceVersion(t, "2.0.0")
 	registry := &program.Registry{}
 	compileReady := make(chan struct{}, 2)
 	releaseCompile := make(chan struct{})
@@ -533,14 +533,14 @@ func testPolicyConcurrentPublish(t *testing.T, ctx context.Context, environment 
 	if publishedV1.version.ID == publishedV2.version.ID || publishedV1.compiled == nil || publishedV2.compiled == nil {
 		t.Fatalf("concurrent versions = (%+v, %+v)", publishedV1.version, publishedV2.version)
 	}
-	if got := queryCount(t, opCtx, environment.runtime, "SELECT count(*) FROM verifoxx.policy_versions"); got != 2 {
+	if got := queryCount(t, opCtx, environment.runtime, "SELECT count(*) FROM nornrune.policy_versions"); got != 2 {
 		t.Fatalf("version count after distinct publication = %d, want 2", got)
 	}
 	active := registry.Active()
 	if active == nil {
 		t.Fatal("registry has no active Program after concurrent publication")
 	}
-	databaseActive, err := firstStore.LoadActive(opCtx, "verifoxx")
+	databaseActive, err := firstStore.LoadActive(opCtx, "nornrune")
 	if err != nil {
 		t.Fatalf("load database active after concurrency: %v", err)
 	}

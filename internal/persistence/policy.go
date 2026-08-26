@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/program"
+	"github.com/sebishogun/nornrune/internal/program"
 )
 
 var (

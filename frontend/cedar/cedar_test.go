@@ -9,12 +9,12 @@ import (
 	cedargo "github.com/cedar-policy/cedar-go"
 	cedartypes "github.com/cedar-policy/cedar-go/types"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	internalfrontend "github.com/sebishogun/verifoxx/internal/frontend"
-	coreprogram "github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/eval"
+	internalfrontend "github.com/sebishogun/nornrune/internal/frontend"
+	coreprogram "github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func cedarBindings() public.BindingSet {
@@ -495,7 +495,7 @@ forbid(principal, action, resource) when { context.team == "blocked" };`)
 				fields[4] = test.team
 			}
 			if got := evaluateCedarPolicy(t, compiled, fields); got != test.want {
-				t.Fatalf("Verifoxx outcome = %d, want %d", got, test.want)
+				t.Fatalf("NornRune outcome = %d, want %d", got, test.want)
 			}
 		})
 	}

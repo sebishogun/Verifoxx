@@ -5,10 +5,10 @@ import (
 	"slices"
 	"testing"
 
-	policyindex "github.com/sebishogun/verifoxx/internal/index"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	policyindex "github.com/sebishogun/nornrune/internal/index"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func indexedExecutionProgram(t testing.TB) *program.Program {

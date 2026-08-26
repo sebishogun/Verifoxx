@@ -1,4 +1,4 @@
-# Verifoxx Product CLI Design
+# NornRune Product CLI Design
 
 **Status:** Approved
 
@@ -16,11 +16,11 @@ golden output without requiring PostgreSQL or network services.
 Task 26 adds these commands:
 
 ```text
-verifoxx evaluate
-verifoxx validate
-verifoxx compile
-verifoxx explain <request-id>
-verifoxx simulate <request-id> --set field=value
+nornrune evaluate
+nornrune validate
+nornrune compile
+nornrune explain <request-id>
+nornrune simulate <request-id> --set field=value
 ```
 
 The root command without arguments continues to display help. Service,
@@ -44,7 +44,7 @@ Two alternatives were rejected:
 
 Pin `github.com/spf13/cobra` at `v1.10.2`.
 
-Add a reusable Go package beside `policies/verifoxx/policy.json`. The package
+Add a reusable Go package beside `policies/nornrune/policy.json`. The package
 embeds that semantic policy and constructs its typed field schema:
 
 ```text
@@ -57,8 +57,8 @@ environment.execution_env
 environment.usage
 ```
 
-This package is the Verifoxx policy pack. It prevents the CLI from embedding
-`internal/fixtures/verifoxx-policy.json`, which is the original natural-language
+This package is the NornRune policy pack. It prevents the CLI from embedding
+`internal/fixtures/nornrune-policy.json`, which is the original natural-language
 assignment source rather than compiler input. It also removes the production
 schema from conformance-test-only code and gives later adapters one source of
 truth.
@@ -67,7 +67,7 @@ truth.
 pipeline state, row selection, overrides, deterministic metadata output, and
 exit-code mapping. `internal/app` becomes a thin process adapter. The existing
 `app.Run(args, stdout, stderr)` entry point remains available, while an
-stdin-aware entry point is used by `cmd/verifoxx`.
+stdin-aware entry point is used by `cmd/nornrune`.
 
 ## Input Contract
 
@@ -83,7 +83,7 @@ An omitted path selects embedded data. A path of `-` reads stdin. At most one
 input may use stdin in one invocation. File reads and stdin reads are adapter
 operations and occur before decoding.
 
-External policies use the Verifoxx policy-pack schema. A future schema-bearing
+External policies use the NornRune policy-pack schema. A future schema-bearing
 pack format is outside Task 26.
 
 ## Command Contract
@@ -200,4 +200,4 @@ memory. They cover:
 
 Completion requires focused tests followed by native, purego, 386,
 race/checkptr, vet, formatting, whitespace, and full-suite gates. Running
-`go run ./cmd/verifoxx evaluate` must reproduce `results/requests.json` exactly.
+`go run ./cmd/nornrune evaluate` must reproduce `results/requests.json` exactly.

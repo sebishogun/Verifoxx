@@ -4,16 +4,16 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/fixtures"
 )
 
 func FuzzDecodeBatch(f *testing.F) {
 	canonicalRequests := []byte(fixtures.RequestsJSON())
 	canonicalEvidence := []byte(fixtures.EvidenceJSON())
 	f.Add(canonicalRequests, canonicalEvidence)
-	f.Add([]byte(`{"schema_version":1,"pack":"verifoxx","requests":[]}`), []byte(`{"schema_version":1,"pack":"verifoxx","evidence":[]}`))
-	f.Add([]byte(`{"schema_version":1,"pack":"verifoxx","requests":[`), []byte(`null`))
+	f.Add([]byte(`{"schema_version":1,"pack":"nornrune","requests":[]}`), []byte(`{"schema_version":1,"pack":"nornrune","evidence":[]}`))
+	f.Add([]byte(`{"schema_version":1,"pack":"nornrune","requests":[`), []byte(`null`))
 	p := fixtureDecoderProgram(f)
 	limits := Limits{
 		MaxRequestBytes:       4096,

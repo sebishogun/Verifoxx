@@ -5,7 +5,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	public "github.com/sebishogun/verifoxx/frontend"
+	public "github.com/sebishogun/nornrune/frontend"
 )
 
 type token struct {

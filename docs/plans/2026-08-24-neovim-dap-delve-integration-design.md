@@ -15,8 +15,8 @@ use the current Delve release supported by Go 1.27.
 
 Neovim owns the normal Delve process. Its existing Go adapter launches an
 ephemeral loopback `dlv dap` server and imports the repository's
-`.vscode/launch.json`. The `Debug Verifoxx` launch builds with the `debug` tag
-and `-N -l`, starts `debug-worker`, and exposes `.verifoxx/debug.sock`. The
+`.vscode/launch.json`. The `Debug NornRune` launch builds with the `debug` tag
+and `-N -l`, starts `debug-worker`, and exposes `.nornrune/debug.sock`. The
 Bubble Tea TUI connects only to that Unix socket and never consumes the Delve
 DAP connection.
 
@@ -46,7 +46,7 @@ once Neovim continues the process.
 ## Verification
 
 Tests cover exact Delve DAP argv and the shared launch JSON. Headless Neovim must
-load `Debug Verifoxx` in addition to generic Go sessions. A real nvim-dap launch
+load `Debug NornRune` in addition to generic Go sessions. A real nvim-dap launch
 must create the semantic socket, accept the TUI client, support a semantic step,
 and terminate without leaving the debug process or alternate screen active.
 Unrelated existing Neovim configuration and lockfile changes remain untouched.

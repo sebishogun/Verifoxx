@@ -293,7 +293,7 @@ Expected: PASS and warm merge allocations equal zero. Do not commit.
 
 **Step 1: Add the failing scheduler acceptance test**
 
-Add `TestScheduler` using the compiled embedded Verifoxx fixture and a helper
+Add `TestScheduler` using the compiled embedded NornRune fixture and a helper
 that repeats its valid five-row batch to `63, 64, 65, 127, 128, 129`, and a
 larger benchmark-like shape. Cover:
 

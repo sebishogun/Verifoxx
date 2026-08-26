@@ -1,11 +1,11 @@
-// Package verifoxx provides the embedded semantic policy and typed field
-// schema for the Verifoxx assignment policy pack.
-package verifoxx
+// Package nornrune provides the embedded semantic policy and typed field
+// schema for the NornRune assignment policy pack.
+package nornrune
 
 import (
 	_ "embed"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 //go:embed policy.json

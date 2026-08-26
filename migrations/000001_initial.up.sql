@@ -1,6 +1,6 @@
-CREATE SCHEMA verifoxx AUTHORIZATION verifoxx_migrator;
-REVOKE ALL ON SCHEMA verifoxx FROM PUBLIC;
-SET LOCAL search_path = verifoxx, pg_catalog;
+CREATE SCHEMA nornrune AUTHORIZATION nornrune_migrator;
+REVOKE ALL ON SCHEMA nornrune FROM PUBLIC;
+SET LOCAL search_path = nornrune, pg_catalog;
 
 CREATE TABLE policies (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -236,20 +236,20 @@ CREATE TRIGGER evaluation_evidence_immutable
     BEFORE UPDATE OR DELETE ON evaluation_evidence
     FOR EACH STATEMENT EXECUTE FUNCTION reject_immutable_change();
 
-REVOKE ALL ON ALL TABLES IN SCHEMA verifoxx FROM PUBLIC;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA verifoxx FROM PUBLIC;
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA verifoxx FROM PUBLIC;
+REVOKE ALL ON ALL TABLES IN SCHEMA nornrune FROM PUBLIC;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA nornrune FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA nornrune FROM PUBLIC;
 
-GRANT USAGE ON SCHEMA verifoxx TO verifoxx_runtime;
-GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA verifoxx TO verifoxx_runtime;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA verifoxx TO verifoxx_runtime;
+GRANT USAGE ON SCHEMA nornrune TO nornrune_runtime;
+GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA nornrune TO nornrune_runtime;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA nornrune TO nornrune_runtime;
 REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-    ON ALL TABLES IN SCHEMA verifoxx FROM verifoxx_runtime;
-GRANT UPDATE (active_version_id) ON policies TO verifoxx_runtime;
+    ON ALL TABLES IN SCHEMA nornrune FROM nornrune_runtime;
+GRANT UPDATE (active_version_id) ON policies TO nornrune_runtime;
 
-ALTER DEFAULT PRIVILEGES FOR ROLE verifoxx_migrator IN SCHEMA verifoxx
+ALTER DEFAULT PRIVILEGES FOR ROLE nornrune_migrator IN SCHEMA nornrune
     REVOKE ALL ON TABLES FROM PUBLIC;
-ALTER DEFAULT PRIVILEGES FOR ROLE verifoxx_migrator IN SCHEMA verifoxx
+ALTER DEFAULT PRIVILEGES FOR ROLE nornrune_migrator IN SCHEMA nornrune
     REVOKE ALL ON SEQUENCES FROM PUBLIC;
-ALTER DEFAULT PRIVILEGES FOR ROLE verifoxx_migrator IN SCHEMA verifoxx
+ALTER DEFAULT PRIVILEGES FOR ROLE nornrune_migrator IN SCHEMA nornrune
     REVOKE ALL ON FUNCTIONS FROM PUBLIC;

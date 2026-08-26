@@ -14,10 +14,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/sebishogun/verifoxx/internal/debug"
-	"github.com/sebishogun/verifoxx/internal/graphview"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/truth"
+	"github.com/sebishogun/nornrune/internal/debug"
+	"github.com/sebishogun/nornrune/internal/graphview"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/truth"
 )
 
 func TestModelAcceptsEdgeAwareSemanticGraphs(t *testing.T) {
@@ -423,7 +423,7 @@ func TestModelRendersFullScreenDAPDashboardAndGraphTabs(t *testing.T) {
 		t.Fatalf("dashboard = %dx%d, want 140x42:\n%s", width, height, view)
 	}
 	if !containsAll(view,
-		"VERIFOXX SEMANTIC DEBUGGER", "REQUESTS", "AST GRAPH", "[AST]", "PROGRAM",
+		"NORNRUNE SEMANTIC DEBUGGER", "REQUESTS", "AST GRAPH", "[AST]", "PROGRAM",
 		"RUNTIME STATE", "BREAKPOINTS / WATCHES", "Paused / Instruction",
 	) {
 		t.Fatalf("dashboard lacks DAP panes or active AST tab:\n%s", view)

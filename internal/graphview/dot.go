@@ -20,7 +20,7 @@ func (renderer *Renderer) AppendDOT(dst []byte, graph *Graph) ([]byte, error) {
 	if err := renderer.validator.Validate(graph, DefaultLimits()); err != nil {
 		return dst, err
 	}
-	dst = append(dst, "digraph verifoxx {\n"...)
+	dst = append(dst, "digraph nornrune {\n"...)
 	dst = append(dst, "  graph [rankdir=TB, bgcolor=\"transparent\"];\n"...)
 	dst = append(dst, "  node [shape=box, style=\"rounded,filled\", fontname=\"monospace\"];\n"...)
 	for row, kind := range graph.Kinds {
