@@ -91,13 +91,13 @@ func Lower(source []byte, parsed *Parsed, bindings public.BindingSet, limits pub
 	}
 
 	rootSpan := public.Span{End: uint32(len(source))}
-	permitRoot, code := combineAny(builder, permits, rootSpan, false)
+	permitRoot, code := combineAny(builder, permits, rootSpan)
 	if code.Valid() {
 		return nil, []public.Diagnostic{newDiagnostic(code, rootSpan, 0, 0)}
 	}
 	root := permitRoot
 	if len(forbids) != 0 {
-		forbidRoot, code := combineAny(builder, forbids, rootSpan, false)
+		forbidRoot, code := combineAny(builder, forbids, rootSpan)
 		if code.Valid() {
 			return nil, []public.Diagnostic{newDiagnostic(code, rootSpan, 0, 0)}
 		}
@@ -304,10 +304,10 @@ func combineAll(builder *public.Builder, nodes []public.NodeID, span public.Span
 	}
 }
 
-func combineAny(builder *public.Builder, nodes []public.NodeID, span public.Span, empty bool) (public.NodeID, public.DiagnosticCode) {
+func combineAny(builder *public.Builder, nodes []public.NodeID, span public.Span) (public.NodeID, public.DiagnosticCode) {
 	switch len(nodes) {
 	case 0:
-		node, err := builder.AddBoolean(empty, span)
+		node, err := builder.AddBoolean(false, span)
 		return node, builderErrorCode(err)
 	case 1:
 		return nodes[0], public.CodeInvalid

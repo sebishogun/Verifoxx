@@ -29,9 +29,9 @@ func Parse(source []byte, bindings public.BindingSet, limits public.Limits) (*Pa
 		return nil, diagnostics
 	}
 	ownedSource := bytes.Clone(source)
-	tokens, ok := lex(ownedSource, limits.MaxDepth)
-	if !ok {
-		return nil, []public.Diagnostic{newDiagnostic(public.CodeSyntax, public.Span{End: uint32(min(len(source), 1))}, 0, 0)}
+	tokens, failure := lex(ownedSource, limits.MaxDepth)
+	if failure.Code.Valid() {
+		return nil, []public.Diagnostic{newDiagnostic(failure.Code, failure.Span, 0, 0)}
 	}
 	policies, err := cedargo.NewPolicyListFromBytes("policy.cedar", ownedSource)
 	if err != nil {
@@ -69,9 +69,11 @@ func Parse(source []byte, bindings public.BindingSet, limits public.Limits) (*Pa
 			diagnostics = appendBounded(diagnostics, newDiagnostic(public.CodeInvalidPolicy, syntax[row].span, uint32(row+1), 0), limits)
 			continue
 		}
+		policyNodes := uint64(scopeNodeCount(ast))
+		policyLimited := false
 		for conditionRow, condition := range ast.Conditions {
 			nodes, depth, supported := inspectExpression(condition.Body)
-			totalNodes += uint64(nodes)
+			policyNodes += uint64(nodes)
 			conditionSpan := syntax[row].conditions[conditionRow].span
 			if !supported {
 				diagnostics = appendBounded(diagnostics, newDiagnostic(public.CodeUnsupported, conditionSpan, uint32(row+1), 0), limits)
@@ -79,13 +81,15 @@ func Parse(source []byte, bindings public.BindingSet, limits public.Limits) (*Pa
 			}
 			if uint64(depth) > uint64(limits.MaxDepth) {
 				diagnostics = appendBounded(diagnostics, newDiagnostic(public.CodeLimit, conditionSpan, uint32(row+1), 0), limits)
+				policyLimited = true
 				continue
 			}
 			if _, ok := parseExpression(tokens, syntax[row].conditions[conditionRow].tokenStart, syntax[row].conditions[conditionRow].tokenEnd); !ok {
 				diagnostics = appendBounded(diagnostics, newDiagnostic(public.CodeInvalidPolicy, conditionSpan, uint32(row+1), 0), limits)
 			}
 		}
-		if totalNodes+uint64(scopeNodeCount(ast)) > uint64(limits.MaxNodes) {
+		totalNodes += policyNodes
+		if totalNodes > uint64(limits.MaxNodes) && !policyLimited {
 			diagnostics = appendBounded(diagnostics, newDiagnostic(public.CodeLimit, syntax[row].span, uint32(row+1), 0), limits)
 		}
 	}
@@ -173,7 +177,7 @@ func inspectBinary(node cedarast.BinaryNode) (nodes, depth uint32, supported boo
 }
 
 func scopeNodeCount(policy *cedarast.Policy) uint32 {
-	count := uint32(1)
+	count := uint32(0)
 	for _, scope := range []cedarast.IsScopeNode{policy.Principal, policy.Action, policy.Resource} {
 		if _, ok := scope.(cedarast.ScopeTypeEq); ok {
 			count++
