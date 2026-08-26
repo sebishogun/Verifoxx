@@ -9,10 +9,10 @@ import (
 	"io"
 	"time"
 
-	verifoxxv1 "github.com/sebishogun/verifoxx/api/gen/verifoxx/v1"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/security"
-	coreservice "github.com/sebishogun/verifoxx/internal/service"
+	nornrunev1 "github.com/sebishogun/nornrune/api/gen/nornrune/v1"
+	"github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/security"
+	coreservice "github.com/sebishogun/nornrune/internal/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -44,7 +44,7 @@ func (config Config) valid() bool {
 }
 
 type policyServer struct {
-	verifoxxv1.UnimplementedPolicyServiceServer
+	nornrunev1.UnimplementedPolicyServiceServer
 	api       coreservice.PolicyAPI
 	admission *coreservice.Service
 	config    Config
@@ -59,7 +59,7 @@ func New(api coreservice.PolicyAPI, admission *coreservice.Service, config Confi
 		grpc.MaxRecvMsgSize(config.MaxMessageBytes),
 		grpc.MaxSendMsgSize(config.MaxMessageBytes),
 	)
-	verifoxxv1.RegisterPolicyServiceServer(server, &policyServer{
+	nornrunev1.RegisterPolicyServiceServer(server, &policyServer{
 		api: api, admission: admission, config: config,
 	})
 	return server, nil
@@ -67,8 +67,8 @@ func New(api coreservice.PolicyAPI, admission *coreservice.Service, config Confi
 
 func (server *policyServer) ValidatePolicy(
 	ctx context.Context,
-	request *verifoxxv1.ValidatePolicyRequest,
-) (*verifoxxv1.ValidatePolicyResponse, error) {
+	request *nornrunev1.ValidatePolicyRequest,
+) (*nornrunev1.ValidatePolicyResponse, error) {
 	if request == nil || len(request.GetSourceJson()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "policy source is required")
 	}
@@ -84,19 +84,19 @@ func (server *policyServer) ValidatePolicy(
 	if err != nil {
 		return nil, serviceStatus(err)
 	}
-	diagnostics := make([]*verifoxxv1.Diagnostic, len(validation.Diagnostics))
+	diagnostics := make([]*nornrunev1.Diagnostic, len(validation.Diagnostics))
 	for index := range validation.Diagnostics {
 		diagnostics[index] = encodeDiagnostic(&validation.Diagnostics[index])
 	}
-	return &verifoxxv1.ValidatePolicyResponse{
+	return &nornrunev1.ValidatePolicyResponse{
 		Valid: len(diagnostics) == 0, Diagnostics: diagnostics,
 	}, nil
 }
 
 func (server *policyServer) CompilePolicy(
 	ctx context.Context,
-	request *verifoxxv1.CompilePolicyRequest,
-) (*verifoxxv1.CompilePolicyResponse, error) {
+	request *nornrunev1.CompilePolicyRequest,
+) (*nornrunev1.CompilePolicyResponse, error) {
 	if request == nil || len(request.GetSourceJson()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "policy source is required")
 	}
@@ -116,13 +116,13 @@ func (server *policyServer) CompilePolicy(
 	if !ok {
 		return nil, status.Error(codes.Internal, "compiled policy metadata is invalid")
 	}
-	return &verifoxxv1.CompilePolicyResponse{Policy: encoded}, nil
+	return &nornrunev1.CompilePolicyResponse{Policy: encoded}, nil
 }
 
 func (server *policyServer) EvaluateBatch(
 	ctx context.Context,
-	request *verifoxxv1.EvaluateBatchRequest,
-) (*verifoxxv1.EvaluateBatchResponse, error) {
+	request *nornrunev1.EvaluateBatchRequest,
+) (*nornrunev1.EvaluateBatchResponse, error) {
 	if request == nil {
 		return nil, status.Error(codes.InvalidArgument, "evaluation request is required")
 	}
@@ -132,11 +132,11 @@ func (server *policyServer) EvaluateBatch(
 	if err != nil {
 		return nil, err
 	}
-	return &verifoxxv1.EvaluateBatchResponse{ResultJson: encoded}, nil
+	return &nornrunev1.EvaluateBatchResponse{ResultJson: encoded}, nil
 }
 
 func (server *policyServer) EvaluateStream(
-	stream grpc.BidiStreamingServer[verifoxxv1.EvaluateStreamRequest, verifoxxv1.EvaluateStreamResponse],
+	stream grpc.BidiStreamingServer[nornrunev1.EvaluateStreamRequest, nornrunev1.EvaluateStreamResponse],
 ) error {
 	for {
 		request, err := stream.Recv()
@@ -152,7 +152,7 @@ func (server *policyServer) EvaluateStream(
 		if err != nil {
 			return err
 		}
-		if err := stream.Send(&verifoxxv1.EvaluateStreamResponse{ResultJson: encoded}); err != nil {
+		if err := stream.Send(&nornrunev1.EvaluateStreamResponse{ResultJson: encoded}); err != nil {
 			return serviceStatus(err)
 		}
 	}
@@ -225,14 +225,14 @@ func (config Config) maxPolicyBytes() int {
 	return min(config.MaxMessageBytes, security.MaximumPolicyBytes)
 }
 
-func encodeDiagnostic(diagnostic *compile.Diagnostic) *verifoxxv1.Diagnostic {
-	return &verifoxxv1.Diagnostic{
+func encodeDiagnostic(diagnostic *compile.Diagnostic) *nornrunev1.Diagnostic {
+	return &nornrunev1.Diagnostic{
 		Code:   diagnostic.Code.String(),
 		Table:  diagnostic.Table.String(),
 		Member: diagnostic.Member.String(),
 		Row:    diagnostic.Row,
-		Span:   &verifoxxv1.DiagnosticSpan{Start: diagnostic.Span.Start, End: diagnostic.Span.End},
-		Ids: &verifoxxv1.DiagnosticIDs{
+		Span:   &nornrunev1.DiagnosticSpan{Start: diagnostic.Span.Start, End: diagnostic.Span.End},
+		Ids: &nornrunev1.DiagnosticIDs{
 			Node: uint32(diagnostic.Node), Clause: uint32(diagnostic.Clause),
 			Requirement: uint32(diagnostic.Requirement), Field: uint32(diagnostic.Field),
 			Value: uint32(diagnostic.Value), Outcome: uint32(diagnostic.Outcome),
@@ -242,11 +242,11 @@ func encodeDiagnostic(diagnostic *compile.Diagnostic) *verifoxxv1.Diagnostic {
 	}
 }
 
-func encodePolicyMetadata(metadata coreservice.PolicyMetadata) (*verifoxxv1.PolicyMetadata, bool) {
+func encodePolicyMetadata(metadata coreservice.PolicyMetadata) (*nornrunev1.PolicyMetadata, bool) {
 	if len(metadata.Name) == 0 || len(metadata.Version) == 0 || metadata.ContentHash == [32]byte{} {
 		return nil, false
 	}
-	return &verifoxxv1.PolicyMetadata{
+	return &nornrunev1.PolicyMetadata{
 		Name: string(metadata.Name), Version: string(metadata.Version),
 		Sha256: append([]byte(nil), metadata.ContentHash[:]...), Instructions: metadata.Instructions,
 		Requirements: metadata.Requirements, Clauses: metadata.Clauses,

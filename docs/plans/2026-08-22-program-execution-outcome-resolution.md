@@ -478,7 +478,7 @@ go test -count=1 -timeout 60s ./...
 go test -count=1 -timeout 60s -race ./internal/eval ./internal/index ./internal/result
 GOARCH=386 go test -count=1 -timeout 60s ./internal/eval ./internal/index ./internal/result
 timeout 60s go vet ./...
-timeout 120s go build -o /dev/null ./cmd/verifoxx
+timeout 120s go build -o /dev/null ./cmd/nornrune
 timeout 120s go build -gcflags=-m ./internal/eval
 timeout 60s go run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@v0.47.1-0.20260707181000-a299dadba899 -test=false ./internal/eval ./internal/index ./internal/result
 timeout 30s gofmt -l .

@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/security"
+	"github.com/sebishogun/nornrune/internal/security"
 )
 
 var (

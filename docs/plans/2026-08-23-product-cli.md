@@ -1,10 +1,10 @@
-# Verifoxx Product CLI Implementation Plan
+# NornRune Product CLI Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add a scriptable Cobra CLI that validates, compiles, evaluates, explains, and simulates the Verifoxx policy pack from embedded or caller-provided inputs.
+**Goal:** Add a scriptable Cobra CLI that validates, compiles, evaluates, explains, and simulates the NornRune policy pack from embedded or caller-provided inputs.
 
-**Architecture:** Thin Cobra commands call one in-memory policy pipeline built from the existing decoders, compiler, evaluator, and result encoder. A reusable Verifoxx policy-pack package owns the embedded semantic policy and field schema; explain and simulate compact one selected request into a fresh one-row SoA batch before evaluation.
+**Architecture:** Thin Cobra commands call one in-memory policy pipeline built from the existing decoders, compiler, evaluator, and result encoder. A reusable NornRune policy-pack package owns the embedded semantic policy and field schema; explain and simulate compact one selected request into a fresh one-row SoA batch before evaluation.
 
 **Tech Stack:** Go 1.27, Cobra v1.10.2, embedded files, pointerless AST, immutable compiled Program, SoA request batches, SIMD-capable evaluator, append-based JSON output.
 
@@ -12,19 +12,19 @@
 
 ---
 
-### Task 1: Create The Reusable Verifoxx Policy Pack
+### Task 1: Create The Reusable NornRune Policy Pack
 
 **Files:**
-- Create: `policies/verifoxx/pack.go`
-- Create: `policies/verifoxx/pack_test.go`
-- Modify: `internal/conformance/verifoxx_test.go:22-112`
+- Create: `policies/nornrune/pack.go`
+- Create: `policies/nornrune/pack_test.go`
+- Modify: `internal/conformance/nornrune_test.go:22-112`
 
 **Step 1: Write the failing policy-pack tests**
 
-Add tests in package `verifoxx_test` that assert:
+Add tests in package `nornrune_test` that assert:
 
-- `verifoxx.Source()` is non-empty and contains the semantic policy.
-- `verifoxx.NewSchema()` returns seven fields in the approved order.
+- `nornrune.Source()` is non-empty and contains the semantic policy.
+- `nornrune.NewSchema()` returns seven fields in the approved order.
 - Every field is `schema.ValueKindSymbol` and has the expected group.
 - Each field name resolves through the returned interner.
 - The embedded source decodes and lowers with the returned schema and interner.
@@ -52,7 +52,7 @@ var wantFields = []struct {
 Run:
 
 ```bash
-timeout 120s go test -count=1 -timeout 60s ./policies/verifoxx
+timeout 120s go test -count=1 -timeout 60s ./policies/nornrune
 ```
 
 Expected: FAIL because the directory has no Go package and `Source` and
@@ -63,12 +63,12 @@ Expected: FAIL because the directory has no Go package and `Source` and
 In `pack.go`:
 
 ```go
-package verifoxx
+package nornrune
 
 import (
     _ "embed"
 
-    "github.com/sebishogun/verifoxx/internal/schema"
+    "github.com/sebishogun/nornrune/internal/schema"
 )
 
 //go:embed policy.json
@@ -92,15 +92,15 @@ or return embedded `[]byte` storage.
 Run:
 
 ```bash
-timeout 120s go test -count=1 -timeout 60s ./policies/verifoxx
+timeout 120s go test -count=1 -timeout 60s ./policies/nornrune
 ```
 
 Expected: PASS.
 
 **Step 5: Replace the conformance-only schema and filesystem read**
 
-Update `internal/conformance/verifoxx_test.go` to call
-`verifoxx.NewSchema()` and use `[]byte(verifoxx.Source())`. Delete
+Update `internal/conformance/nornrune_test.go` to call
+`nornrune.NewSchema()` and use `[]byte(nornrune.Source())`. Delete
 `conformanceSchema` and remove its `os.ReadFile` use. Keep filesystem reads for
 the two golden output files.
 
@@ -109,7 +109,7 @@ the two golden output files.
 Run:
 
 ```bash
-timeout 120s go test -count=1 -timeout 60s ./policies/verifoxx ./internal/conformance
+timeout 120s go test -count=1 -timeout 60s ./policies/nornrune ./internal/conformance
 ```
 
 Expected: PASS and unchanged conformance output.
@@ -119,8 +119,8 @@ Expected: PASS and unchanged conformance output.
 If the user requests a commit:
 
 ```bash
-git add policies/verifoxx/pack.go policies/verifoxx/pack_test.go internal/conformance/verifoxx_test.go
-git commit -m "feat: add reusable verifoxx policy pack"
+git add policies/nornrune/pack.go policies/nornrune/pack_test.go internal/conformance/nornrune_test.go
+git commit -m "feat: add reusable nornrune policy pack"
 ```
 
 ### Task 2: Add Cobra Root And Preserve Process Contracts
@@ -132,7 +132,7 @@ git commit -m "feat: add reusable verifoxx policy pack"
 - Create: `internal/adapters/cli/cli_test.go`
 - Modify: `internal/app/app.go`
 - Modify: `internal/app/app_test.go`
-- Modify: `cmd/verifoxx/main.go`
+- Modify: `cmd/nornrune/main.go`
 
 **Step 1: Write failing root command tests**
 
@@ -199,7 +199,7 @@ type dependencies struct {
 ```
 
 Order pointer-bearing fields first and run `fieldalignment` later. Production
-dependencies use `os.ReadFile`, `verifoxx.Source()`, fixture request/evidence
+dependencies use `os.ReadFile`, `nornrune.Source()`, fixture request/evidence
 strings, and `buildinfo.Version()`.
 
 Configure Cobra with `SilenceErrors: true` and `SilenceUsage: true`. Implement
@@ -217,7 +217,7 @@ so trailing arguments still fail argument validation.
 6. Render argument errors plus usage on stderr and return 2.
 7. Return 1 if writing the error or usage fails.
 
-Do not call `os.Exit` below `cmd/verifoxx`.
+Do not call `os.Exit` below `cmd/nornrune`.
 
 **Step 5: Implement app delegation without breaking callers**
 
@@ -241,7 +241,7 @@ func RunWithInput(args []string, stdin io.Reader, stdout, stderr io.Writer) int
 Run:
 
 ```bash
-timeout 120s go test -count=1 -timeout 60s ./internal/adapters/cli ./internal/app ./cmd/verifoxx
+timeout 120s go test -count=1 -timeout 60s ./internal/adapters/cli ./internal/app ./cmd/nornrune
 ```
 
 Expected: PASS.
@@ -251,7 +251,7 @@ Expected: PASS.
 If requested:
 
 ```bash
-git add go.mod go.sum internal/adapters/cli/root.go internal/adapters/cli/cli_test.go internal/app/app.go internal/app/app_test.go cmd/verifoxx/main.go
+git add go.mod go.sum internal/adapters/cli/root.go internal/adapters/cli/cli_test.go internal/app/app.go internal/app/app_test.go cmd/nornrune/main.go
 git commit -m "feat: add cobra command root"
 ```
 
@@ -343,7 +343,7 @@ suggestion would separate frequently used state.
 
 Implement helpers that:
 
-1. Build the Verifoxx field schema and symbol interner.
+1. Build the NornRune field schema and symbol interner.
 2. Create `ast.NewBuilder` with source-byte capacity and conservative hints.
 3. Decode through a reusable `jsonpolicy.Decoder`.
 4. Validate into caller-owned diagnostic storage.
@@ -552,7 +552,7 @@ Expected: PASS and byte-identical outputs.
 Run:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx evaluate > /tmp/opencode/verifoxx-task26-results.json
+timeout 120s go run ./cmd/nornrune evaluate > /tmp/opencode/nornrune-task26-results.json
 ```
 
 Expected: both commands exit 0 and `cmp` prints nothing.
@@ -816,7 +816,7 @@ git commit -m "feat: simulate typed request changes"
 Run:
 
 ```bash
-timeout 30s gofmt -w policies/verifoxx/*.go internal/adapters/cli/*.go internal/app/*.go internal/conformance/verifoxx_test.go cmd/verifoxx/main.go
+timeout 30s gofmt -w policies/nornrune/*.go internal/adapters/cli/*.go internal/app/*.go internal/conformance/nornrune_test.go cmd/nornrune/main.go
 ```
 
 Expected: exit 0.
@@ -837,7 +837,7 @@ remain.
 Run:
 
 ```bash
-timeout 120s go test -count=1 -timeout 60s ./policies/verifoxx ./internal/adapters/cli ./internal/app ./internal/conformance
+timeout 120s go test -count=1 -timeout 60s ./policies/nornrune ./internal/adapters/cli ./internal/app ./internal/conformance
 ```
 
 Expected: PASS.
@@ -847,7 +847,7 @@ Expected: PASS.
 Run:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx evaluate > /tmp/opencode/verifoxx-task26-results.json
+timeout 120s go run ./cmd/nornrune evaluate > /tmp/opencode/nornrune-task26-results.json
 ```
 
 Expected: both exit 0 and `cmp` prints nothing.
@@ -898,5 +898,5 @@ present. Do not revert unrelated dirty files.
 Only if explicitly requested:
 
 ```bash
-git add go.mod go.sum cmd/verifoxx internal/app internal/adapters/cli internal/conformance policies/verifoxx docs/plans/2026-08-23-product-cli-design.md docs/plans/2026-08-23-product-cli.md
+git add go.mod go.sum cmd/nornrune internal/app internal/adapters/cli internal/conformance policies/nornrune docs/plans/2026-08-23-product-cli-design.md docs/plans/2026-08-23-product-cli.md
 ```

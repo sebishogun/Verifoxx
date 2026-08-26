@@ -4,14 +4,14 @@ import (
 	"reflect"
 	"testing"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/frontend/cedar"
-	"github.com/sebishogun/verifoxx/frontend/cel"
-	"github.com/sebishogun/verifoxx/frontend/rego"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/frontend/cedar"
+	"github.com/sebishogun/nornrune/frontend/cel"
+	"github.com/sebishogun/nornrune/frontend/rego"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 type conformanceInput struct {
@@ -51,7 +51,7 @@ func TestCompatibilityFrontendsProduceEquivalentDecisions(t *testing.T) {
 		}},
 		{name: "disjunction", sources: conformanceSources{
 			cel:   `team == "blue" || count >= 2`,
-			rego:  "package verifoxx\nallow if { input.team == \"blue\" }\nallow if { input.count >= 2 }",
+			rego:  "package nornrune\nallow if { input.team == \"blue\" }\nallow if { input.count >= 2 }",
 			cedar: `permit(principal, action, resource) when { context.team == "blue" || context.count >= 2 };`,
 		}, inputs: []conformanceInput{
 			{team: "blue", teamPresent: true, count: 1, countPresent: true, want: 1},
@@ -92,7 +92,7 @@ func TestCompatibilityFrontendDiagnosticsAreStable(t *testing.T) {
 		sources  conformanceSources
 	}{
 		{language: public.LanguageCEL, sources: conformanceSources{cel: `request.unknown == "x"`}},
-		{language: public.LanguageRego, sources: conformanceSources{rego: "package verifoxx\nallow if { input.unknown }"}},
+		{language: public.LanguageRego, sources: conformanceSources{rego: "package nornrune\nallow if { input.unknown }"}},
 		{language: public.LanguageCedar, sources: conformanceSources{cedar: "permit(principal, action, resource) when { context.unknown };"}},
 	}
 	for _, test := range tests {
@@ -112,7 +112,7 @@ func TestCompatibilityFrontendDiagnosticsAreStable(t *testing.T) {
 func expressions(celExpression, regoExpression, cedarExpression string) conformanceSources {
 	return conformanceSources{
 		cel:   celExpression,
-		rego:  "package verifoxx\nallow if { " + regoExpression + " }",
+		rego:  "package nornrune\nallow if { " + regoExpression + " }",
 		cedar: "permit(principal, action, resource) when { " + cedarExpression + " };",
 	}
 }

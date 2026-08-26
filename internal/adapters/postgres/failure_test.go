@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/persistence"
 )
 
 func TestJournalRequiredFailureStormReturnsEverySlot(t *testing.T) {

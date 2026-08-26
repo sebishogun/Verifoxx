@@ -1,8 +1,8 @@
 package eval
 
 import (
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/truth"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/truth"
 )
 
 // ReasonPlanes is a non-owning reason-major view for one evaluator scratch

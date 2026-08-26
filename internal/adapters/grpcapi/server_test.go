@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	verifoxxv1 "github.com/sebishogun/verifoxx/api/gen/verifoxx/v1"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	coreservice "github.com/sebishogun/verifoxx/internal/service"
+	nornrunev1 "github.com/sebishogun/nornrune/api/gen/nornrune/v1"
+	"github.com/sebishogun/nornrune/internal/compile"
+	coreservice "github.com/sebishogun/nornrune/internal/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -53,7 +53,7 @@ func TestUnaryPolicyRPCs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	validated, err := harness.client.ValidatePolicy(ctx, &verifoxxv1.ValidatePolicyRequest{SourceJson: policySource})
+	validated, err := harness.client.ValidatePolicy(ctx, &nornrunev1.ValidatePolicyRequest{SourceJson: policySource})
 	if err != nil {
 		t.Fatalf("ValidatePolicy() error = %v", err)
 	}
@@ -63,7 +63,7 @@ func TestUnaryPolicyRPCs(t *testing.T) {
 		t.Fatalf("ValidatePolicy() = %+v", validated)
 	}
 
-	compiled, err := harness.client.CompilePolicy(ctx, &verifoxxv1.CompilePolicyRequest{SourceJson: policySource})
+	compiled, err := harness.client.CompilePolicy(ctx, &nornrunev1.CompilePolicyRequest{SourceJson: policySource})
 	if err != nil {
 		t.Fatalf("CompilePolicy() error = %v", err)
 	}
@@ -72,7 +72,7 @@ func TestUnaryPolicyRPCs(t *testing.T) {
 		t.Fatalf("CompilePolicy() = %+v", compiled)
 	}
 
-	evaluated, err := harness.client.EvaluateBatch(ctx, &verifoxxv1.EvaluateBatchRequest{
+	evaluated, err := harness.client.EvaluateBatch(ctx, &nornrunev1.EvaluateBatchRequest{
 		RequestsJson: requests,
 		EvidenceJson: evidence,
 		PolicySha256: hash[:],
@@ -103,7 +103,7 @@ func TestEvaluateStreamPreservesOrder(t *testing.T) {
 
 	requests := [][]byte{[]byte(`{"sequence":1}`), []byte(`{"sequence":2}`), []byte(`{"sequence":3}`)}
 	for _, request := range requests {
-		if err := stream.Send(&verifoxxv1.EvaluateStreamRequest{RequestsJson: request, EvidenceJson: []byte(`{}`)}); err != nil {
+		if err := stream.Send(&nornrunev1.EvaluateStreamRequest{RequestsJson: request, EvidenceJson: []byte(`{}`)}); err != nil {
 			t.Fatalf("EvaluateStream.Send() error = %v", err)
 		}
 	}
@@ -131,7 +131,7 @@ func TestGRPCLimitsDeadlinesCancellationAndStatusMapping(t *testing.T) {
 		harness := newGRPCTestHarness(t, &fakePolicyAPI{}, nil, Config{MaxMessageBytes: 128, RequestTimeout: time.Second})
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		_, err := harness.client.ValidatePolicy(ctx, &verifoxxv1.ValidatePolicyRequest{SourceJson: make([]byte, 256)})
+		_, err := harness.client.ValidatePolicy(ctx, &nornrunev1.ValidatePolicyRequest{SourceJson: make([]byte, 256)})
 		assertGRPCCode(t, err, codes.ResourceExhausted)
 	})
 
@@ -139,7 +139,7 @@ func TestGRPCLimitsDeadlinesCancellationAndStatusMapping(t *testing.T) {
 		harness := newGRPCTestHarness(t, &fakePolicyAPI{}, nil, Config{MaxMessageBytes: 1 << 20, RequestTimeout: time.Second})
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		_, err := harness.client.EvaluateBatch(ctx, &verifoxxv1.EvaluateBatchRequest{
+		_, err := harness.client.EvaluateBatch(ctx, &nornrunev1.EvaluateBatchRequest{
 			RequestsJson: []byte(`{}`), EvidenceJson: []byte(`{}`), PolicySha256: []byte{1},
 		})
 		assertGRPCCode(t, err, codes.InvalidArgument)
@@ -223,7 +223,7 @@ func TestGRPCLimitsDeadlinesCancellationAndStatusMapping(t *testing.T) {
 		}
 		for _, test := range tests {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			_, err := harness.client.EvaluateBatch(ctx, &verifoxxv1.EvaluateBatchRequest{
+			_, err := harness.client.EvaluateBatch(ctx, &nornrunev1.EvaluateBatchRequest{
 				RequestsJson: test.requests, EvidenceJson: []byte(`{}`),
 			})
 			cancel()
@@ -296,7 +296,7 @@ func TestGRPCAdmissionPrecedesEvaluationJSONScan(t *testing.T) {
 		MaxMessageBytes: 1 << 20, RequestTimeout: time.Second,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	_, err = harness.client.EvaluateBatch(ctx, &verifoxxv1.EvaluateBatchRequest{
+	_, err = harness.client.EvaluateBatch(ctx, &nornrunev1.EvaluateBatchRequest{
 		RequestsJson: []byte(`{"truncated":`), EvidenceJson: []byte(`{}`),
 	})
 	cancel()
@@ -355,7 +355,7 @@ func (api *fakePolicyAPI) Health(ctx context.Context) error {
 }
 
 type grpcTestHarness struct {
-	client     verifoxxv1.PolicyServiceClient
+	client     nornrunev1.PolicyServiceClient
 	connection *grpc.ClientConn
 	server     *grpc.Server
 	listener   *bufconn.Listener
@@ -391,7 +391,7 @@ func newGRPCTestHarness(t *testing.T, api coreservice.PolicyAPI, admission *core
 		t.Fatalf("grpc.NewClient() error = %v", err)
 	}
 	harness := &grpcTestHarness{
-		client: verifoxxv1.NewPolicyServiceClient(connection), connection: connection,
+		client: nornrunev1.NewPolicyServiceClient(connection), connection: connection,
 		server: server, listener: listener, done: done,
 	}
 	t.Cleanup(func() {
@@ -410,8 +410,8 @@ func newGRPCTestHarness(t *testing.T, api coreservice.PolicyAPI, admission *core
 	return harness
 }
 
-func validEvaluationRequest() *verifoxxv1.EvaluateBatchRequest {
-	return &verifoxxv1.EvaluateBatchRequest{RequestsJson: []byte(`{}`), EvidenceJson: []byte(`{}`)}
+func validEvaluationRequest() *nornrunev1.EvaluateBatchRequest {
+	return &nornrunev1.EvaluateBatchRequest{RequestsJson: []byte(`{}`), EvidenceJson: []byte(`{}`)}
 }
 
 func testPolicyMetadata() coreservice.PolicyMetadata {

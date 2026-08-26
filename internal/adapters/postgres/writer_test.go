@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/persistence"
 )
 
 func benchmarkWriterBatch(rows int) persistence.AuditBatch {

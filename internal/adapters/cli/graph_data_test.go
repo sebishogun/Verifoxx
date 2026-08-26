@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/graphview"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/graphview"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func TestBuildASTGraphIncludesCompleteSemanticTopology(t *testing.T) {
@@ -175,7 +175,7 @@ func graphTestPolicy(t *testing.T) (decodedPolicy, *program.Program) {
 
 func assertCompleteSemanticGraph(t *testing.T, graph graphview.Graph, structuralLabel string, structuralKind graphview.EdgeKind) {
 	t.Helper()
-	policy := graphNode(t, graph, graphview.NodePolicy, "policy verifoxx@1.0.0")
+	policy := graphNode(t, graph, graphview.NodePolicy, "policy nornrune@1.0.0")
 	requirement := graphNode(t, graph, graphview.NodeRequirement, "requirement R1")
 	clause := graphNode(t, graph, graphview.NodeClause, "clause 1")
 	approve := graphNode(t, graph, graphview.NodeOutcome, "outcome Approve")

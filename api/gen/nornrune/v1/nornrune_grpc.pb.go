@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             (unknown)
-// source: verifoxx/v1/verifoxx.proto
+// source: nornrune/v1/nornrune.proto
 
-package verifoxxv1
+package nornrunev1
 
 import (
 	context "context"
@@ -19,10 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PolicyService_ValidatePolicy_FullMethodName = "/verifoxx.v1.PolicyService/ValidatePolicy"
-	PolicyService_CompilePolicy_FullMethodName  = "/verifoxx.v1.PolicyService/CompilePolicy"
-	PolicyService_EvaluateBatch_FullMethodName  = "/verifoxx.v1.PolicyService/EvaluateBatch"
-	PolicyService_EvaluateStream_FullMethodName = "/verifoxx.v1.PolicyService/EvaluateStream"
+	PolicyService_ValidatePolicy_FullMethodName = "/nornrune.v1.PolicyService/ValidatePolicy"
+	PolicyService_CompilePolicy_FullMethodName  = "/nornrune.v1.PolicyService/CompilePolicy"
+	PolicyService_EvaluateBatch_FullMethodName  = "/nornrune.v1.PolicyService/EvaluateBatch"
+	PolicyService_EvaluateStream_FullMethodName = "/nornrune.v1.PolicyService/EvaluateStream"
 )
 
 // PolicyServiceClient is the client API for PolicyService service.
@@ -202,7 +202,7 @@ type PolicyService_EvaluateStreamServer = grpc.BidiStreamingServer[EvaluateStrea
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var PolicyService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "verifoxx.v1.PolicyService",
+	ServiceName: "nornrune.v1.PolicyService",
 	HandlerType: (*PolicyServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -226,5 +226,5 @@ var PolicyService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "verifoxx/v1/verifoxx.proto",
+	Metadata: "nornrune/v1/nornrune.proto",
 }

@@ -1,6 +1,6 @@
 package cel
 
-import public "github.com/sebishogun/verifoxx/frontend"
+import public "github.com/sebishogun/nornrune/frontend"
 
 var capabilities = [...]public.Capability{
 	{Name: "boolean_literals", Support: public.SupportSupported},

@@ -4,13 +4,13 @@ plugins:
     revision: 1
     out: .
     opt:
-      - module=github.com/sebishogun/verifoxx
-  - local: .verifoxx/tools/protoc-gen-verifoxx
+      - module=github.com/sebishogun/nornrune
+  - local: .nornrune/tools/protoc-gen-nornrune
     out: .
     opt:
-      - module=github.com/sebishogun/verifoxx
+      - module=github.com/sebishogun/nornrune
     types:
-      - verifoxx.frontend.fixture.PolicyRequest
+      - nornrune.frontend.fixture.PolicyRequest
 inputs:
   - directory: .
     paths:

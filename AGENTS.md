@@ -2,12 +2,12 @@
 
 ## Sources Of Truth
 
-- `Verifoxx_AI_Engineer_Assignment.pdf` is the original assignment; `Requirements.md` is its text transcription. Resolve any discrepancy in favor of the PDF.
-- `docs/plans/2026-08-20-verifoxx-policy-engine-design.md` is the approved architecture; `docs/plans/2026-08-20-verifoxx-policy-engine.md` is the ordered implementation plan.
+- `NornRune_AI_Engineer_Assignment.pdf` is the original assignment; `Requirements.md` is its text transcription. Resolve any discrepancy in favor of the PDF.
+- `docs/plans/2026-08-20-nornrune-policy-engine-design.md` is the approved architecture; `docs/plans/2026-08-20-nornrune-policy-engine.md` is the ordered implementation plan.
 
 ## Development
 
-- The module is `github.com/sebishogun/verifoxx`, targets Go 1.27, and enters through `cmd/verifoxx`.
+- The module is `github.com/sebishogun/nornrune`, targets Go 1.27, and enters through `cmd/nornrune`.
 - Run all tests with `go test -timeout 60s ./...`; use `-count=1` when fresh evidence matters.
 - Bound every test, benchmark, build, vet, and fuzz command with an explicit timeout. Never use watch or repeat loops.
 - Keep per-node, per-row, and per-request paths allocation-free through capacity hints, reusable typed slabs, SoA columns, and CSR edges. Verify with `-benchmem` and `-gcflags=-m`.

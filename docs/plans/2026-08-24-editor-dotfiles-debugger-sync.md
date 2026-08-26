@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Align the maintained cross-editor and standalone LazyVim repositories with the shared Verifoxx DAP launch contract.
+**Goal:** Align the maintained cross-editor and standalone LazyVim repositories with the shared NornRune DAP launch contract.
 
 **Architecture:** `Zed-Config` remains the live cross-editor source of truth, while `LazyVim-Config` receives the same explicit Delve adapter argument. Project launch behavior remains in `.vscode/launch.json`, which modern nvim-dap and Zed both discover without duplicated global profiles.
 
@@ -80,7 +80,7 @@ Expected: PASS in `Zed-Config`.
 **Files:**
 - Verify only: `/home/sebishogun/zed-config/nvim/lua/plugins/dap.lua`
 - Verify only: `/home/sebishogun/neovim-configs/LazyvimCustomConfig/lua/plugins/dap.lua`
-- Verify only: `/home/sebishogun/Learning/Go/Verifoxx/.worktrees/main/.vscode/launch.json`
+- Verify only: `/home/sebishogun/Learning/Go/NornRune/.worktrees/main/.vscode/launch.json`
 
 **Step 1: Confirm the maintained DAP files remain identical**
 
@@ -128,15 +128,15 @@ Expected: every pre-existing adapter family remains available.
 
 **Step 5: Verify nvim-dap project discovery**
 
-From the Verifoxx worktree, query `dap.providers.configs["dap.launch.json"]`
-under headless Neovim and assert exactly one `Debug Verifoxx` entry.
+From the NornRune worktree, query `dap.providers.configs["dap.launch.json"]`
+under headless Neovim and assert exactly one `Debug NornRune` entry.
 
 Expected: PASS without a deprecated `load_launchjs` warning.
 
 **Step 6: Rerun the real DAP/TUI integration harness**
 
 ```bash
-timeout 130s /tmp/opencode/verifoxx-nvim-dap-e2e.sh
+timeout 130s /tmp/opencode/nornrune-nvim-dap-e2e.sh
 ```
 
 Expected: DAP initialization, semantic TUI navigation and step, alternate-screen

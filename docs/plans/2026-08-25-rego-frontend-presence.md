@@ -203,7 +203,7 @@ defaults, and undeclared input paths.
 
 For `allow if { not input.enabled }`, require:
 
-| Input | OPA | Verifoxx |
+| Input | OPA | NornRune |
 |---|---|---|
 | `{"enabled": true}` | undefined | Reject |
 | `{"enabled": false}` | true | Approve |

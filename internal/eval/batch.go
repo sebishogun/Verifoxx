@@ -2,7 +2,7 @@
 // column-major storage and executes compiled policy programs over them.
 package eval
 
-import "github.com/sebishogun/verifoxx/internal/schema"
+import "github.com/sebishogun/nornrune/internal/schema"
 
 // Batch stores request facts and evidence in evaluator-ready struct-of-arrays
 // form. A Batch returned by Builder.Finish is valid until that builder's next

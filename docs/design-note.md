@@ -2,7 +2,7 @@
 
 ## Semantic Representation
 
-Verifoxx represents policy meaning rather than copying phrases into flat
+NornRune represents policy meaning rather than copying phrases into flat
 fields. The versioned policy document defines requirement applicability,
 Boolean assertions, evidence obligations, outcome precedence, uncertainty
 resolutions, explanation templates, and bounded remediations. Every requirement

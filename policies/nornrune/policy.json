@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "name": "verifoxx",
+  "name": "nornrune",
   "version": "1.0.0",
   "assumptions": [
     "The supplied structured fields faithfully represent the underlying request and evidence records."

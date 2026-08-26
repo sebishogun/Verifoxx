@@ -1,6 +1,6 @@
-# Verifoxx
+# NornRune
 
-Verifoxx is a deterministic evidence-aware policy engine for the Verifoxx AI
+NornRune is a deterministic evidence-aware policy engine for the NornRune AI
 Engineer semantic decision representation exercise. It compiles the three
 natural-language requirements into a reusable semantic policy, evaluates the
 five supplied requests, and returns exactly one of `Approve`, `Reject`,
@@ -8,6 +8,13 @@ five supplied requests, and returns exactly one of `Approve`, `Reject`,
 
 The default command embeds the policy, requests, and evidence, so the required
 submission runs without a database or network service.
+
+## Why NornRune
+
+In Norse tradition, the Norns shape fate across past, present, and future. A
+rune is a written symbol and a piece of encoded knowledge. NornRune compiles
+written rules and evidence into deterministic, auditable decisions whose
+meaning can depend on time, history, and uncertainty.
 
 ## Dependencies
 
@@ -24,20 +31,20 @@ submission runs without a database or network service.
 Run the complete demonstration from the repository root:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx demo
+timeout 120s go run ./cmd/nornrune demo
 ```
 
 Produce only the machine-readable R1-R5 results:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx evaluate
+timeout 120s go run ./cmd/nornrune evaluate
 ```
 
 The checked-in result is [`results/requests.json`](results/requests.json). To
 verify it against a fresh embedded evaluation:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx evaluate | cmp - results/requests.json
+timeout 120s go run ./cmd/nornrune evaluate | cmp - results/requests.json
 ```
 
 Useful commands are:
@@ -59,7 +66,7 @@ Measure warmed scheduler execution with a deterministic typed batch generated
 from the embedded fixtures:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx bench --rows 4096 --iterations 100 --workers 4
+timeout 120s go run ./cmd/nornrune bench --rows 4096 --iterations 100 --workers 4
 ```
 
 `bench` accepts no policy, request, evidence, stdin, or network payload. Bounds
@@ -74,8 +81,8 @@ runs to warm every fixed context and admission state occur before measurement.
 Export a deterministic standalone SVG:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx graph \
-  --view ast --format svg --output /tmp/verifoxx-ast.svg --force
+timeout 120s go run ./cmd/nornrune graph \
+  --view ast --format svg --output /tmp/nornrune-ast.svg --force
 ```
 
 `--view` accepts `ast` or `program`; `--format` accepts `dot`, `svg`, or `html`.
@@ -87,8 +94,8 @@ with mode `0600`; an existing destination is rejected unless `--force` is set.
 
 The TUI is a client for a retained semantic debug session. With the installed
 Neovim configuration, open the repository, run `:DapContinue`, and select
-`Debug Verifoxx`. Neovim imports `.vscode/launch.json`, starts an ephemeral
-Delve DAP server, and launches `debug-worker`. Once `.verifoxx/debug.sock`
+`Debug NornRune`. Neovim imports `.vscode/launch.json`, starts an ephemeral
+Delve DAP server, and launches `debug-worker`. Once `.nornrune/debug.sock`
 exists, connect from a terminal:
 
 ```bash
@@ -103,14 +110,14 @@ itself.
 Without an editor, start the worker directly in one terminal:
 
 ```bash
-mkdir -p .verifoxx && chmod 700 .verifoxx
-timeout 30m go run ./cmd/verifoxx debug-worker --socket "$PWD/.verifoxx/debug.sock"
+mkdir -p .nornrune && chmod 700 .nornrune
+timeout 30m go run ./cmd/nornrune debug-worker --socket "$PWD/.nornrune/debug.sock"
 ```
 
 Connect from a second terminal:
 
 ```bash
-timeout 30m go run ./cmd/verifoxx tui --socket "$PWD/.verifoxx/debug.sock"
+timeout 30m go run ./cmd/nornrune tui --socket "$PWD/.nornrune/debug.sock"
 ```
 
 Add `--browser` to start a synchronized viewer on an ephemeral
@@ -135,7 +142,7 @@ Use `s`, `n`, and `o` to step; `c` to continue; and `a` and `p` to switch the
 visible `[AST]` and `[PROGRAM]` tabs. `h` opens a bounded 64-stop Session
 history, `tab` switches to Persisted history, `j`/`k` select history rows, and
 `esc` returns focus to Requests. Persisted history is optional: when
-`VERIFOXX_DATABASE_URL` is set, the TUI lazily loads at most 64 newest audit
+`NORNRUNE_DATABASE_URL` is set, the TUI lazily loads at most 64 newest audit
 findings for the selected request; when unset, that tab reports that persistence
 is not configured. Database failures remain inside the history pane and never
 stop stepping. Credentials are not displayed.
@@ -149,8 +156,8 @@ and quit.
 Build and run the isolated demonstration:
 
 ```bash
-timeout 600s docker build -t verifoxx:local .
-timeout 120s docker run --rm verifoxx:local demo
+timeout 600s docker build -t nornrune:local .
+timeout 120s docker run --rm nornrune:local demo
 ```
 
 The image is a non-root `scratch` image. Its default command is `evaluate`.
@@ -178,11 +185,11 @@ timeout 120s docker compose down -v
 `evaluate`, `demo`, `graph`, `tui`, and `debug-worker` accept three JSON documents:
 
 - `--policy PATH`: semantic policy; default
-  [`policies/verifoxx/policy.json`](policies/verifoxx/policy.json).
+  [`policies/nornrune/policy.json`](policies/nornrune/policy.json).
 - `--requests PATH`: request pack; default
-  [`internal/fixtures/verifoxx-requests.json`](internal/fixtures/verifoxx-requests.json).
+  [`internal/fixtures/nornrune-requests.json`](internal/fixtures/nornrune-requests.json).
 - `--evidence PATH`: evidence pack; default
-  [`internal/fixtures/verifoxx-evidence.json`](internal/fixtures/verifoxx-evidence.json).
+  [`internal/fixtures/nornrune-evidence.json`](internal/fixtures/nornrune-evidence.json).
 
 Omit a flag to use its embedded document. For non-interactive commands, one path
 may be `-` to read that document from standard input; more than one stdin source
@@ -190,10 +197,10 @@ is rejected. `tui` reserves stdin for terminal input and requires embedded or
 file-based sources.
 
 ```bash
-timeout 120s go run ./cmd/verifoxx evaluate \
-  --policy policies/verifoxx/policy.json \
-  --requests internal/fixtures/verifoxx-requests.json \
-  --evidence internal/fixtures/verifoxx-evidence.json
+timeout 120s go run ./cmd/nornrune evaluate \
+  --policy policies/nornrune/policy.json \
+  --requests internal/fixtures/nornrune-requests.json \
+  --evidence internal/fixtures/nornrune-evidence.json
 ```
 
 The policy declares versioned evidence and outcome catalogs, applicability
@@ -210,7 +217,7 @@ oversized inputs are rejected.
 or Cedar sources with a strict binding file:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx compile \
+timeout 120s go run ./cmd/nornrune compile \
   --format cel --policy policy.cel --bindings bindings.json
 ```
 
@@ -277,3 +284,14 @@ See the one-page [design note](docs/design-note.md) for the semantic model and
 - [Debugging](docs/debugging.md): Neovim DAP, semantic TUI, and graph viewer setup.
 - [Performance](docs/performance.md): SIMD boundaries, benchmarks, measurements,
   and methodology.
+
+## Project
+
+- [License](LICENSE): Apache License 2.0.
+- [Contributing](CONTRIBUTING.md): development, testing, performance, review,
+  and Developer Certificate of Origin requirements.
+- [Code of Conduct](CODE_OF_CONDUCT.md): Contributor Covenant 2.1.
+- [Security](SECURITY.md): private reporting and supported versions.
+- [Support](SUPPORT.md): best-effort support scope.
+- [Versioning](docs/versioning.md): compatibility and release policy.
+- [Dependency licenses](docs/dependency-licenses.md): direct-module audit.

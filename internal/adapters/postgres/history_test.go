@@ -11,8 +11,8 @@ import (
 func TestDecisionHistoryStoreLoadsNewestBoundedRows(t *testing.T) {
 	now := time.Date(2026, time.August, 24, 14, 0, 0, 0, time.UTC)
 	queryer := &historyTestQueryer{rows: &historyTestRows{values: []DecisionHistoryEntry{
-		{CompletedAt: now, Policy: "verifoxx", Version: "2.0.0", Decision: "Reject"},
-		{CompletedAt: now.Add(-time.Hour), Policy: "verifoxx", Version: "1.0.0", Decision: "Approve"},
+		{CompletedAt: now, Policy: "nornrune", Version: "2.0.0", Decision: "Reject"},
+		{CompletedAt: now.Add(-time.Hour), Policy: "nornrune", Version: "1.0.0", Decision: "Approve"},
 	}}}
 	store := newDecisionHistoryStore(queryer)
 
@@ -24,7 +24,7 @@ func TestDecisionHistoryStoreLoadsNewestBoundedRows(t *testing.T) {
 	if len(got) != 2 || got[0].Decision != "Reject" || got[1].Version != "1.0.0" {
 		t.Fatalf("Load() = %+v", got)
 	}
-	if !strings.Contains(queryer.query, "JOIN verifoxx.evaluation_runs") ||
+	if !strings.Contains(queryer.query, "JOIN nornrune.evaluation_runs") ||
 		!strings.Contains(queryer.query, "ORDER BY run.completed_at DESC, run.id DESC, finding.row_index DESC") {
 		t.Fatalf("history query lacks stable newest-first joins/order: %s", queryer.query)
 	}
@@ -38,7 +38,7 @@ func TestDecisionHistoryStoreLoadsNewestBoundedRows(t *testing.T) {
 
 func TestDecisionHistoryStoreRejectsInvalidInputAndRows(t *testing.T) {
 	store := newDecisionHistoryStore(&historyTestQueryer{rows: &historyTestRows{values: []DecisionHistoryEntry{{
-		CompletedAt: time.Now(), Policy: "verifoxx", Version: "1.0.0", Decision: "Maybe",
+		CompletedAt: time.Now(), Policy: "nornrune", Version: "1.0.0", Decision: "Maybe",
 	}}}})
 	if _, err := store.Load(context.Background(), "R1", nil); !errors.Is(err, ErrInvalidDecisionHistory) {
 		t.Fatalf("invalid decision error = %v", err)

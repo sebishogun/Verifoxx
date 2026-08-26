@@ -381,7 +381,7 @@ Expected: all tests pass; formatting and whitespace checks print nothing.
 **Step 4: Request separate specification and code-quality reviews**
 
 Review against roadmap Task 23,
-`docs/plans/2026-08-20-verifoxx-policy-engine-design.md`, and the approved design.
+`docs/plans/2026-08-20-nornrune-policy-engine-design.md`, and the approved design.
 Fix every Critical and Important finding, add a RED regression for each behavior
 defect, and rerun the affected bounded commands plus the full repository test.
 Do not commit; the roadmap commit message, if later requested, is

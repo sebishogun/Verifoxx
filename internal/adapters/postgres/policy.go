@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/persistence"
 )
 
 const (
@@ -25,16 +25,16 @@ const (
 const selectPolicyVersionByHashSQL = `
 SELECT p.id, v.id, p.name, v.semantic_version, v.source,
        v.content_hash, v.compiler_version, v.published_at
-FROM verifoxx.policy_versions AS v
-JOIN verifoxx.policies AS p ON p.id = v.policy_id
+FROM nornrune.policy_versions AS v
+JOIN nornrune.policies AS p ON p.id = v.policy_id
 WHERE v.content_hash = $1
 `
 
 const selectActivePolicyVersionSQL = `
 SELECT p.id, v.id, p.name, v.semantic_version, v.source,
        v.content_hash, v.compiler_version, v.published_at
-FROM verifoxx.policies AS p
-JOIN verifoxx.policy_versions AS v ON v.id = p.active_version_id
+FROM nornrune.policies AS p
+JOIN nornrune.policy_versions AS v ON v.id = p.active_version_id
 WHERE p.name = $1
 `
 
@@ -93,7 +93,7 @@ func (store *PolicyStore) PublishActive(
 	}
 
 	tag, err := tx.Exec(ctx, `
-		UPDATE verifoxx.policies
+		UPDATE nornrune.policies
 		SET active_version_id = $1
 		WHERE id = $2
 	`, version.ID, policyID)
@@ -164,14 +164,14 @@ func (store *PolicyStore) validContext(ctx context.Context) error {
 func ensurePolicy(ctx context.Context, tx pgx.Tx, name string) (persistence.PolicyID, error) {
 	var id int64
 	err := tx.QueryRow(ctx, `
-		INSERT INTO verifoxx.policies (name)
+		INSERT INTO nornrune.policies (name)
 		VALUES ($1)
 		ON CONFLICT (name) DO NOTHING
 		RETURNING id
 	`, name).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = tx.QueryRow(ctx,
-			"SELECT id FROM verifoxx.policies WHERE name = $1",
+			"SELECT id FROM nornrune.policies WHERE name = $1",
 			name,
 		).Scan(&id)
 	}
@@ -192,7 +192,7 @@ func insertPolicyVersion(
 ) error {
 	var id int64
 	err := tx.QueryRow(ctx, `
-		INSERT INTO verifoxx.policy_versions
+		INSERT INTO nornrune.policy_versions
 		    (policy_id, semantic_version, source, content_hash, compiler_version)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (content_hash) DO NOTHING

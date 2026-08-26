@@ -100,7 +100,7 @@ completion are visible.
 
 ### Persisted
 
-When `VERIFOXX_DATABASE_URL` is unset, the Persisted tab states that persistence
+When `NORNRUNE_DATABASE_URL` is unset, the Persisted tab states that persistence
 is not configured while Session history remains usable. When set, a cold-path
 PostgreSQL loader queries at most 64 newest audit findings for the selected
 request key, ordered by completion time and stable IDs. Returned rows contain

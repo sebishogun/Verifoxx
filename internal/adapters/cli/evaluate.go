@@ -7,18 +7,18 @@ import (
 
 	"github.com/spf13/cobra"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonbatch"
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonpolicy"
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonresult"
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/scheduler"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonbatch"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonpolicy"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonresult"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/scheduler"
+	"github.com/sebishogun/nornrune/internal/schema"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 var errInvalidPolicy = errors.New("policy validation failed")
@@ -144,7 +144,7 @@ func newEvaluateCommand(deps dependencies) *cobra.Command {
 }
 
 func (e *engine) decodePolicy(source []byte) (decodedPolicy, error) {
-	fields, symbols, err := verifoxx.NewSchema()
+	fields, symbols, err := nornrune.NewSchema()
 	if err != nil {
 		return decodedPolicy{}, pipelineFailure("schema", err)
 	}

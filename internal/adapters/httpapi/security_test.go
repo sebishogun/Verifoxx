@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/security"
-	coreservice "github.com/sebishogun/verifoxx/internal/service"
+	"github.com/sebishogun/nornrune/internal/security"
+	coreservice "github.com/sebishogun/nornrune/internal/service"
 )
 
 func TestSecurityRejectsOversizedPolicyBeforeService(t *testing.T) {

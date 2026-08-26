@@ -20,7 +20,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/persistence"
 )
 
 const (
@@ -49,13 +49,13 @@ func TestPostgreSQLMigrations(t *testing.T) {
 	initRolesPath := filepath.Join(root, "docker", "postgres", "init-roles.sh")
 
 	container, err := tcpostgres.Run(ctx, postgresImage,
-		tcpostgres.WithDatabase("verifoxx"),
+		tcpostgres.WithDatabase("nornrune"),
 		tcpostgres.WithUsername("postgres"),
 		tcpostgres.WithPassword(adminPassword),
 		tcpostgres.WithInitScripts(initRolesPath),
 		testcontainers.WithEnv(map[string]string{
-			"VERIFOXX_MIGRATION_PASSWORD": migrationPassword,
-			"VERIFOXX_RUNTIME_PASSWORD":   runtimePassword,
+			"NORNRUNE_MIGRATION_PASSWORD": migrationPassword,
+			"NORNRUNE_RUNTIME_PASSWORD":   runtimePassword,
 		}),
 		tcpostgres.BasicWaitStrategies(),
 	)
@@ -70,8 +70,8 @@ func TestPostgreSQLMigrations(t *testing.T) {
 	}
 	environment := postgresTestEnvironment{
 		admin:    openTestPool(t, ctx, adminURL, "postgres", adminPassword),
-		migrator: openTestPool(t, ctx, adminURL, "verifoxx_migrator", migrationPassword),
-		runtime:  openTestPool(t, ctx, adminURL, "verifoxx_runtime", runtimePassword),
+		migrator: openTestPool(t, ctx, adminURL, "nornrune_migrator", migrationPassword),
+		runtime:  openTestPool(t, ctx, adminURL, "nornrune_runtime", runtimePassword),
 		adminURL: adminURL,
 		root:     root,
 	}
@@ -278,8 +278,8 @@ func testBootstrapRoles(t *testing.T, ctx context.Context, environment *postgres
 		t.Fatalf("PostgreSQL major version = %d, want 19", major)
 	}
 
-	assertCurrentRole(t, ctx, environment.migrator, "verifoxx_migrator")
-	assertCurrentRole(t, ctx, environment.runtime, "verifoxx_runtime")
+	assertCurrentRole(t, ctx, environment.migrator, "nornrune_migrator")
+	assertCurrentRole(t, ctx, environment.runtime, "nornrune_runtime")
 
 	if _, err := environment.runtime.Exec(ctx, "CREATE SCHEMA runtime_must_not_create"); err == nil {
 		_, _ = environment.admin.Exec(ctx, "DROP SCHEMA runtime_must_not_create CASCADE")
@@ -336,7 +336,7 @@ func testMigrationUpDown(t *testing.T, ctx context.Context, pool *pgxpool.Pool) 
 	)
 	if err := pool.QueryRow(ctx, `
 		SELECT version, name, checksum, applied_at
-		FROM public.verifoxx_schema_migrations
+		FROM public.nornrune_schema_migrations
 	`).Scan(&version, &name, &checksum, &applied); err != nil {
 		t.Fatalf("read migration ledger: %v", err)
 	}
@@ -361,7 +361,7 @@ func testMigrationUpDown(t *testing.T, ctx context.Context, pool *pgxpool.Pool) 
 		t.Fatalf("down count = %d, want 1", changed)
 	}
 	assertRelationExists(t, ctx, pool, "migration_probe.items", false)
-	if got := queryCount(t, ctx, pool, "SELECT count(*) FROM public.verifoxx_schema_migrations"); got != 0 {
+	if got := queryCount(t, ctx, pool, "SELECT count(*) FROM public.nornrune_schema_migrations"); got != 0 {
 		t.Fatalf("ledger count after down = %d, want 0", got)
 	}
 
@@ -422,7 +422,7 @@ func testInitialSchema(t *testing.T, ctx context.Context, environment *postgresT
 	gotTables := queryStrings(t, ctx, environment.migrator, `
 		SELECT table_name
 		FROM information_schema.tables
-		WHERE table_schema = 'verifoxx' AND table_type = 'BASE TABLE'
+		WHERE table_schema = 'nornrune' AND table_type = 'BASE TABLE'
 		ORDER BY table_name
 	`)
 	if !slices.Equal(gotTables, wantTables) {
@@ -433,12 +433,12 @@ func testInitialSchema(t *testing.T, ctx context.Context, environment *postgresT
 	if err := environment.migrator.QueryRow(ctx, `
 		SELECT pg_get_userbyid(nspowner)
 		FROM pg_namespace
-		WHERE nspname = 'verifoxx'
+		WHERE nspname = 'nornrune'
 	`).Scan(&owner); err != nil {
 		t.Fatalf("query schema owner: %v", err)
 	}
-	if owner != "verifoxx_migrator" {
-		t.Fatalf("schema owner = %q, want verifoxx_migrator", owner)
+	if owner != "nornrune_migrator" {
+		t.Fatalf("schema owner = %q, want nornrune_migrator", owner)
 	}
 
 	wantIndexes := []string{
@@ -454,7 +454,7 @@ func testInitialSchema(t *testing.T, ctx context.Context, environment *postgresT
 		"policy_versions_policy_idx",
 	}
 	for _, index := range wantIndexes {
-		assertRelationExists(t, ctx, environment.migrator, "verifoxx."+index, true)
+		assertRelationExists(t, ctx, environment.migrator, "nornrune."+index, true)
 	}
 
 	wantConstraints := []string{
@@ -470,7 +470,7 @@ func testInitialSchema(t *testing.T, ctx context.Context, environment *postgresT
 	gotConstraints := queryStrings(t, ctx, environment.migrator, `
 		SELECT conname
 		FROM pg_constraint
-		WHERE connamespace = 'verifoxx'::regnamespace
+		WHERE connamespace = 'nornrune'::regnamespace
 		  AND contype IN ('f', 'u')
 		  AND conname = ANY($1::text[])
 		ORDER BY conname
@@ -492,14 +492,14 @@ func testInitialSchema(t *testing.T, ctx context.Context, environment *postgresT
 	if err := environment.migrator.QueryRow(ctx, `
 		SELECT pg_get_constraintdef(oid)
 		FROM pg_constraint
-		WHERE connamespace = 'verifoxx'::regnamespace
+		WHERE connamespace = 'nornrune'::regnamespace
 		  AND conname = 'policies_active_version_fkey'
 	`).Scan(&activeVersionDefinition); err != nil {
 		t.Fatalf("query active-version constraint: %v", err)
 	}
 	for _, fragment := range []string{
 		"FOREIGN KEY (id, active_version_id)",
-		"REFERENCES verifoxx.policy_versions(policy_id, id)",
+		"REFERENCES nornrune.policy_versions(policy_id, id)",
 		"DEFERRABLE INITIALLY DEFERRED",
 	} {
 		if !strings.Contains(activeVersionDefinition, fragment) {
@@ -507,8 +507,8 @@ func testInitialSchema(t *testing.T, ctx context.Context, environment *postgresT
 		}
 	}
 
-	assertRelationExists(t, ctx, environment.migrator, "verifoxx.policy_nodes", true)
-	assertRelationExists(t, ctx, environment.migrator, "verifoxx.policy_edges", true)
+	assertRelationExists(t, ctx, environment.migrator, "nornrune.policy_nodes", true)
+	assertRelationExists(t, ctx, environment.migrator, "nornrune.policy_edges", true)
 }
 
 func queryStrings(t *testing.T, ctx context.Context, pool *pgxpool.Pool, query string, args ...any) []string {
@@ -543,7 +543,7 @@ func assertColumnType(t *testing.T, ctx context.Context, pool *pgxpool.Pool, tab
 		FROM pg_attribute AS attribute
 		JOIN pg_class AS relation ON relation.oid = attribute.attrelid
 		JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
-		WHERE namespace.nspname = 'verifoxx'
+		WHERE namespace.nspname = 'nornrune'
 		  AND relation.relname = $1
 		  AND attribute.attname = $2
 		  AND attribute.attnum > 0
@@ -581,34 +581,34 @@ func testSchemaIntegrity(t *testing.T, ctx context.Context, pool *pgxpool.Pool) 
 
 	seed := seedAuditBase(t, ctx, pool, 4)
 	assertSQLState(t, execError(ctx, pool,
-		"INSERT INTO verifoxx.policies (name) VALUES ('   ')",
+		"INSERT INTO nornrune.policies (name) VALUES ('   ')",
 	), "23514")
 	assertSQLState(t, execError(ctx, pool, `
-		INSERT INTO verifoxx.policy_versions
+		INSERT INTO nornrune.policy_versions
 		    (policy_id, semantic_version, source, content_hash, compiler_version)
 		VALUES ($1, 'bad-hash', 'x', $2, 'test')
 	`, seed.policyID, bytes.Repeat([]byte{9}, 31)), "23514")
 	assertSQLState(t, execError(ctx, pool, `
-		INSERT INTO verifoxx.requests (request_key, content_hash, payload)
+		INSERT INTO nornrune.requests (request_key, content_hash, payload)
 		VALUES ('bad-json-shape', $1, '[]'::jsonb)
 	`, bytes.Repeat([]byte{10}, 32)), "23514")
 	assertSQLState(t, execError(ctx, pool, `
-		INSERT INTO verifoxx.evidence_snapshots
+		INSERT INTO nornrune.evidence_snapshots
 		    (evidence_key, content_hash, payload, captured_at, expires_at)
 		VALUES ('bad-expiry', $1, '{}'::jsonb, clock_timestamp(), clock_timestamp() - interval '1 second')
 	`, bytes.Repeat([]byte{11}, 32)), "23514")
 	assertSQLState(t, execError(ctx, pool, `
-		INSERT INTO verifoxx.evaluation_runs
+		INSERT INTO nornrune.evaluation_runs
 		    (idempotency_key, policy_version_id, engine_version, started_at, completed_at, row_count, execution_metadata)
 		VALUES ('negative-count', $1, 'test', clock_timestamp(), clock_timestamp(), -1, '{}'::jsonb)
 	`, seed.policyVersionID), "23514")
 	assertSQLState(t, execError(ctx, pool, `
-		INSERT INTO verifoxx.evaluation_runs
+		INSERT INTO nornrune.evaluation_runs
 		    (idempotency_key, policy_version_id, engine_version, started_at, completed_at, row_count, execution_metadata)
 		VALUES ('bad-time', $1, 'test', clock_timestamp(), clock_timestamp() - interval '1 second', 0, '{}'::jsonb)
 	`, seed.policyVersionID), "23514")
 	assertSQLState(t, execError(ctx, pool, `
-		INSERT INTO verifoxx.evaluation_runs
+		INSERT INTO nornrune.evaluation_runs
 		    (idempotency_key, policy_version_id, engine_version, started_at, completed_at, row_count, execution_metadata)
 		VALUES ('bad-metadata', $1, 'test', clock_timestamp(), clock_timestamp(), 0, '[]'::jsonb)
 	`, seed.policyVersionID), "23514")
@@ -616,7 +616,7 @@ func testSchemaIntegrity(t *testing.T, ctx context.Context, pool *pgxpool.Pool) 
 	assertSQLState(t, insertFinding(ctx, pool, seed.evaluationRunID, 10, seed.requestID, "Unknown", "[]"), "23514")
 	assertSQLState(t, insertFinding(ctx, pool, seed.evaluationRunID, 11, seed.requestID, "Approve", "{}"), "23514")
 	assertSQLState(t, execError(ctx, pool, `
-		INSERT INTO verifoxx.debug_traces
+		INSERT INTO nornrune.debug_traces
 		    (policy_version_id, format, payload, content_hash, created_at, expires_at)
 		VALUES ($1, 'binary', 'x', $2, clock_timestamp(), clock_timestamp() - interval '1 second')
 	`, seed.policyVersionID, bytes.Repeat([]byte{12}, 32)), "23514")
@@ -627,7 +627,7 @@ func testSchemaIntegrity(t *testing.T, ctx context.Context, pool *pgxpool.Pool) 
 		}
 	}
 	if got := queryCount(t, ctx, pool,
-		"SELECT count(*) FROM verifoxx.evaluation_findings WHERE run_id = $1",
+		"SELECT count(*) FROM nornrune.evaluation_findings WHERE run_id = $1",
 		seed.evaluationRunID,
 	); got != 4 {
 		t.Fatalf("valid decision count = %d, want 4", got)
@@ -649,13 +649,13 @@ func testRuntimePrivilegesAndImmutability(t *testing.T, ctx context.Context, env
 		"debug_traces",
 		"benchmark_runs",
 	} {
-		if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM verifoxx."+table); got == 0 {
+		if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM nornrune."+table); got == 0 {
 			t.Fatalf("runtime sees no rows in %s", table)
 		}
 	}
 
 	if _, err := environment.runtime.Exec(ctx,
-		"UPDATE verifoxx.policies SET active_version_id = $1 WHERE id = $2",
+		"UPDATE nornrune.policies SET active_version_id = $1 WHERE id = $2",
 		seed.policyVersionID, seed.policyID,
 	); err != nil {
 		t.Fatalf("runtime update active version: %v", err)
@@ -663,12 +663,12 @@ func testRuntimePrivilegesAndImmutability(t *testing.T, ctx context.Context, env
 
 	var otherPolicyID, otherVersionID int64
 	if err := environment.runtime.QueryRow(ctx,
-		"INSERT INTO verifoxx.policies (name) VALUES ('other-policy') RETURNING id",
+		"INSERT INTO nornrune.policies (name) VALUES ('other-policy') RETURNING id",
 	).Scan(&otherPolicyID); err != nil {
 		t.Fatalf("insert second policy: %v", err)
 	}
 	if err := environment.runtime.QueryRow(ctx, `
-		INSERT INTO verifoxx.policy_versions
+		INSERT INTO nornrune.policy_versions
 		    (policy_id, semantic_version, source, content_hash, compiler_version)
 		VALUES ($1, '1.0.0', 'other-source', $2, 'test')
 		RETURNING id
@@ -676,18 +676,18 @@ func testRuntimePrivilegesAndImmutability(t *testing.T, ctx context.Context, env
 		t.Fatalf("insert second policy version: %v", err)
 	}
 	assertSQLState(t, execError(ctx, environment.runtime,
-		"UPDATE verifoxx.policies SET active_version_id = $1 WHERE id = $2",
+		"UPDATE nornrune.policies SET active_version_id = $1 WHERE id = $2",
 		otherVersionID, seed.policyID,
 	), "23503")
 
 	assertSQLState(t, execError(ctx, environment.runtime,
-		"CREATE TABLE verifoxx.runtime_must_not_create (id integer)",
+		"CREATE TABLE nornrune.runtime_must_not_create (id integer)",
 	), "42501")
 	assertSQLState(t, execError(ctx, environment.runtime,
-		"SELECT count(*) FROM public.verifoxx_schema_migrations",
+		"SELECT count(*) FROM public.nornrune_schema_migrations",
 	), "42501")
 	if _, err := environment.migrator.Exec(ctx,
-		"GRANT SELECT ON public.verifoxx_schema_migrations TO verifoxx_runtime",
+		"GRANT SELECT ON public.nornrune_schema_migrations TO nornrune_runtime",
 	); err != nil {
 		t.Fatalf("grant temporary runtime ledger access: %v", err)
 	}
@@ -702,25 +702,25 @@ func testRuntimePrivilegesAndImmutability(t *testing.T, ctx context.Context, env
 		t.Fatalf("idempotent privilege repair = (%d, %v), want (0, nil)", changed, err)
 	}
 	assertSQLState(t, execError(ctx, environment.runtime,
-		"SELECT count(*) FROM public.verifoxx_schema_migrations",
+		"SELECT count(*) FROM public.nornrune_schema_migrations",
 	), "42501")
 	assertSQLState(t, execError(ctx, environment.runtime,
-		"UPDATE verifoxx.policies SET name = 'renamed' WHERE id = $1", seed.policyID,
+		"UPDATE nornrune.policies SET name = 'renamed' WHERE id = $1", seed.policyID,
 	), "42501")
 
 	immutableStatements := []string{
-		"UPDATE verifoxx.policy_versions SET compiler_version = compiler_version",
-		"DELETE FROM verifoxx.policy_versions",
-		"UPDATE verifoxx.requests SET payload = payload",
-		"DELETE FROM verifoxx.requests",
-		"UPDATE verifoxx.evidence_snapshots SET payload = payload",
-		"DELETE FROM verifoxx.evidence_snapshots",
-		"UPDATE verifoxx.evaluation_runs SET engine_version = engine_version",
-		"DELETE FROM verifoxx.evaluation_runs",
-		"UPDATE verifoxx.evaluation_findings SET rationale = rationale",
-		"DELETE FROM verifoxx.evaluation_findings",
-		"UPDATE verifoxx.evaluation_evidence SET evidence_snapshot_id = evidence_snapshot_id",
-		"DELETE FROM verifoxx.evaluation_evidence",
+		"UPDATE nornrune.policy_versions SET compiler_version = compiler_version",
+		"DELETE FROM nornrune.policy_versions",
+		"UPDATE nornrune.requests SET payload = payload",
+		"DELETE FROM nornrune.requests",
+		"UPDATE nornrune.evidence_snapshots SET payload = payload",
+		"DELETE FROM nornrune.evidence_snapshots",
+		"UPDATE nornrune.evaluation_runs SET engine_version = engine_version",
+		"DELETE FROM nornrune.evaluation_runs",
+		"UPDATE nornrune.evaluation_findings SET rationale = rationale",
+		"DELETE FROM nornrune.evaluation_findings",
+		"UPDATE nornrune.evaluation_evidence SET evidence_snapshot_id = evidence_snapshot_id",
+		"DELETE FROM nornrune.evaluation_evidence",
 	}
 	for _, statement := range immutableStatements {
 		assertSQLState(t, execError(ctx, environment.runtime, statement), "42501")
@@ -728,15 +728,15 @@ func testRuntimePrivilegesAndImmutability(t *testing.T, ctx context.Context, env
 	}
 
 	assertSQLState(t, execError(ctx, environment.migrator,
-		"UPDATE verifoxx.policies SET name = 'renamed' WHERE id = $1", seed.policyID,
+		"UPDATE nornrune.policies SET name = 'renamed' WHERE id = $1", seed.policyID,
 	), "55000")
 	assertSQLState(t, execError(ctx, environment.migrator,
-		"DELETE FROM verifoxx.policies WHERE id = $1", seed.policyID,
+		"DELETE FROM nornrune.policies WHERE id = $1", seed.policyID,
 	), "55000")
-	if _, err := environment.migrator.Exec(ctx, "DELETE FROM verifoxx.debug_traces"); err != nil {
+	if _, err := environment.migrator.Exec(ctx, "DELETE FROM nornrune.debug_traces"); err != nil {
 		t.Fatalf("migrator prune debug traces: %v", err)
 	}
-	if _, err := environment.migrator.Exec(ctx, "DELETE FROM verifoxx.benchmark_runs"); err != nil {
+	if _, err := environment.migrator.Exec(ctx, "DELETE FROM nornrune.benchmark_runs"); err != nil {
 		t.Fatalf("migrator prune benchmark runs: %v", err)
 	}
 }
@@ -746,12 +746,12 @@ func seedAuditBase(t *testing.T, ctx context.Context, pool *pgxpool.Pool, rowCou
 
 	var seed seededAuditRows
 	if err := pool.QueryRow(ctx,
-		"INSERT INTO verifoxx.policies (name) VALUES ('policy') RETURNING id",
+		"INSERT INTO nornrune.policies (name) VALUES ('policy') RETURNING id",
 	).Scan(&seed.policyID); err != nil {
 		t.Fatalf("seed policy: %v", err)
 	}
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO verifoxx.policy_versions
+		INSERT INTO nornrune.policy_versions
 		    (policy_id, semantic_version, source, content_hash, compiler_version)
 		VALUES ($1, '1.0.0', 'policy-source', $2, 'test')
 		RETURNING id
@@ -759,21 +759,21 @@ func seedAuditBase(t *testing.T, ctx context.Context, pool *pgxpool.Pool, rowCou
 		t.Fatalf("seed policy version: %v", err)
 	}
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO verifoxx.requests (request_key, content_hash, payload)
+		INSERT INTO nornrune.requests (request_key, content_hash, payload)
 		VALUES ('request-1', $1, '{"request":"R1"}'::jsonb)
 		RETURNING id
 	`, bytes.Repeat([]byte{2}, 32)).Scan(&seed.requestID); err != nil {
 		t.Fatalf("seed request: %v", err)
 	}
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO verifoxx.evidence_snapshots (evidence_key, content_hash, payload, expires_at)
+		INSERT INTO nornrune.evidence_snapshots (evidence_key, content_hash, payload, expires_at)
 		VALUES ('evidence-1', $1, '{"state":"valid"}'::jsonb, clock_timestamp() + interval '1 hour')
 		RETURNING id
 	`, bytes.Repeat([]byte{3}, 32)).Scan(&seed.evidenceID); err != nil {
 		t.Fatalf("seed evidence: %v", err)
 	}
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO verifoxx.evaluation_runs
+		INSERT INTO nornrune.evaluation_runs
 		    (idempotency_key, policy_version_id, engine_version, started_at, completed_at, row_count, execution_metadata)
 		VALUES ('run-1', $1, 'test', clock_timestamp() - interval '1 second', clock_timestamp(), $2, '{}'::jsonb)
 		RETURNING id
@@ -791,21 +791,21 @@ func seedCompleteAudit(t *testing.T, ctx context.Context, pool *pgxpool.Pool) se
 		t.Fatalf("seed finding: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO verifoxx.evaluation_evidence
+		INSERT INTO nornrune.evaluation_evidence
 		    (run_id, row_index, evidence_ordinal, evidence_snapshot_id)
 		VALUES ($1, 0, 0, $2)
 	`, seed.evaluationRunID, seed.evidenceID); err != nil {
 		t.Fatalf("seed finding evidence: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO verifoxx.debug_traces
+		INSERT INTO nornrune.debug_traces
 		    (policy_version_id, evaluation_run_id, format, payload, content_hash, expires_at)
 		VALUES ($1, $2, 'binary', 'trace', $3, clock_timestamp() + interval '1 hour')
 	`, seed.policyVersionID, seed.evaluationRunID, bytes.Repeat([]byte{4}, 32)); err != nil {
 		t.Fatalf("seed debug trace: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO verifoxx.benchmark_runs
+		INSERT INTO nornrune.benchmark_runs
 		    (policy_version_id, engine_version, environment, parameters, measurements)
 		VALUES ($1, 'test', '{}'::jsonb, '{}'::jsonb, '{}'::jsonb)
 	`, seed.policyVersionID); err != nil {
@@ -821,7 +821,7 @@ func insertFinding(
 	decision, appliedRequirements string,
 ) error {
 	_, err := pool.Exec(ctx, `
-		INSERT INTO verifoxx.evaluation_findings
+		INSERT INTO nornrune.evaluation_findings
 		    (run_id, row_index, request_id, decision, rationale,
 		     applied_requirements, missing_or_conflicting_evidence,
 		     assumptions, unresolved_uncertainty, remediation)
@@ -879,7 +879,7 @@ func testMigrationDrift(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 		t.Fatalf("drift error = %v, want ErrMigrationDrift", err)
 	}
 	assertRelationExists(t, ctx, pool, "migration_probe.pending", false)
-	if got := queryCount(t, ctx, pool, "SELECT count(*) FROM public.verifoxx_schema_migrations"); got != 1 {
+	if got := queryCount(t, ctx, pool, "SELECT count(*) FROM public.nornrune_schema_migrations"); got != 1 {
 		t.Fatalf("ledger count after drift = %d, want 1", got)
 	}
 }
@@ -912,7 +912,7 @@ func testMigrationRollback(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 
 	assertRelationExists(t, ctx, pool, "migration_probe.first", false)
 	assertRelationExists(t, ctx, pool, "migration_probe.second", false)
-	assertRelationExists(t, ctx, pool, "public.verifoxx_schema_migrations", false)
+	assertRelationExists(t, ctx, pool, "public.nornrune_schema_migrations", false)
 }
 
 type migrationRunResult struct {
@@ -923,7 +923,7 @@ type migrationRunResult struct {
 func testMigrationSerialization(t *testing.T, ctx context.Context, environment *postgresTestEnvironment) {
 	t.Helper()
 
-	secondPool := openTestPool(t, ctx, environment.adminURL, "verifoxx_migrator", migrationPassword)
+	secondPool := openTestPool(t, ctx, environment.adminURL, "nornrune_migrator", migrationPassword)
 	source := fstest.MapFS{
 		"000001_probe.up.sql": {
 			Data: []byte("CREATE SCHEMA migration_probe; SELECT pg_sleep(0.25); CREATE TABLE migration_probe.items (id integer);"),
@@ -970,7 +970,7 @@ func testMigrationSerialization(t *testing.T, ctx context.Context, environment *
 	}
 	assertRelationExists(t, ctx, environment.migrator, "migration_probe.items", true)
 	if got := queryCount(t, ctx, environment.migrator,
-		"SELECT count(*) FROM public.verifoxx_schema_migrations",
+		"SELECT count(*) FROM public.nornrune_schema_migrations",
 	); got != 1 {
 		t.Fatalf("serialized ledger count = %d, want 1", got)
 	}
@@ -992,7 +992,7 @@ func testMigrationCancellation(t *testing.T, ctx context.Context, environment *p
 		t.Fatalf("hold migration lock: %v", err)
 	}
 
-	contenderPool := openTestPool(t, ctx, environment.adminURL, "verifoxx_migrator", migrationPassword)
+	contenderPool := openTestPool(t, ctx, environment.adminURL, "nornrune_migrator", migrationPassword)
 	source := fstest.MapFS{
 		"000001_probe.up.sql":   {Data: []byte("CREATE SCHEMA migration_probe; CREATE TABLE migration_probe.items (id integer);")},
 		"000001_probe.down.sql": {Data: []byte("DROP SCHEMA migration_probe CASCADE;")},
@@ -1023,10 +1023,10 @@ func testMigratorWithoutRuntimeRole(t *testing.T, ctx context.Context, environme
 	t.Helper()
 
 	environment.runtime.Close()
-	if _, err := environment.admin.Exec(ctx, "DROP OWNED BY verifoxx_runtime"); err != nil {
+	if _, err := environment.admin.Exec(ctx, "DROP OWNED BY nornrune_runtime"); err != nil {
 		t.Fatalf("drop runtime grants: %v", err)
 	}
-	if _, err := environment.admin.Exec(ctx, "DROP ROLE verifoxx_runtime"); err != nil {
+	if _, err := environment.admin.Exec(ctx, "DROP ROLE nornrune_runtime"); err != nil {
 		t.Fatalf("drop runtime role: %v", err)
 	}
 
@@ -1042,16 +1042,16 @@ func testMigratorWithoutRuntimeRole(t *testing.T, ctx context.Context, environme
 		t.Fatalf("standalone migrate up = (%d, %v), want (1, nil)", changed, err)
 	}
 	assertRelationExists(t, ctx, environment.migrator, "migration_probe.items", true)
-	assertRelationExists(t, ctx, environment.migrator, "public.verifoxx_schema_migrations", true)
+	assertRelationExists(t, ctx, environment.migrator, "public.nornrune_schema_migrations", true)
 }
 
 func resetDatabase(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 
 	for _, statement := range []string{
-		"DROP SCHEMA IF EXISTS verifoxx CASCADE",
+		"DROP SCHEMA IF EXISTS nornrune CASCADE",
 		"DROP SCHEMA IF EXISTS migration_probe CASCADE",
-		"DROP TABLE IF EXISTS public.verifoxx_schema_migrations",
+		"DROP TABLE IF EXISTS public.nornrune_schema_migrations",
 	} {
 		if _, err := pool.Exec(ctx, statement); err != nil {
 			t.Fatalf("reset database with %q: %v", statement, err)

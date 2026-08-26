@@ -13,7 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sebishogun/verifoxx/internal/debug"
+	"github.com/sebishogun/nornrune/internal/debug"
 )
 
 var (

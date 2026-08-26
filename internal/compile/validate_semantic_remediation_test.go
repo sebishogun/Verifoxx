@@ -3,8 +3,8 @@ package compile
 import (
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 // TestValidateSemanticRemediationCanonicalShapes proves both canonical

@@ -1,6 +1,6 @@
 package rego
 
-import public "github.com/sebishogun/verifoxx/frontend"
+import public "github.com/sebishogun/nornrune/frontend"
 
 var capabilities = [...]public.Capability{
 	{Name: "rego_v1_modules", Support: public.SupportSupported},

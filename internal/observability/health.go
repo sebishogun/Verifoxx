@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	coreservice "github.com/sebishogun/verifoxx/internal/service"
+	coreservice "github.com/sebishogun/nornrune/internal/service"
 )
 
 var (

@@ -1,4 +1,4 @@
-# Verifoxx CLI Demo Performance Design
+# NornRune CLI Demo Performance Design
 
 **Status:** Approved
 
@@ -6,7 +6,7 @@
 
 ## Goal
 
-Add one presentation-oriented `verifoxx demo` command that exercises the
+Add one presentation-oriented `nornrune demo` command that exercises the
 complete embedded policy workflow in one process while keeping every existing
 command's JSON contract unchanged.
 
@@ -19,7 +19,7 @@ daemon, disk cache, serialized Program, or other cross-process state.
 
 ## Command Contract
 
-`verifoxx demo` accepts the existing `--policy`, `--requests`, and `--evidence`
+`nornrune demo` accepts the existing `--policy`, `--requests`, and `--evidence`
 source flags and no positional arguments. It writes a plain-text report to
 stdout and errors to stderr under the existing exit-code contract.
 

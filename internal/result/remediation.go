@@ -1,6 +1,6 @@
 package result
 
-import "github.com/sebishogun/verifoxx/internal/schema"
+import "github.com/sebishogun/nornrune/internal/schema"
 
 // RemediationKind enumerates the bounded remediation shapes a policy row may
 // carry: set a field to an interned value, or require one additional evidence

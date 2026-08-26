@@ -401,7 +401,7 @@ func TestWriteInstallTestExecutablePublishesClosedInode(t *testing.T) {
 	defer held.Close()
 
 	writeInstallTestExecutable(t, path, []byte("#!/bin/sh\nprintf 'ready\\n'\n"))
-	output, err := runInstallTestScript(t, path, nil, []string{"PATH=/usr/bin:/bin"})
+	output, err := runInstallTestExecutable(t, path, []string{"PATH=/usr/bin:/bin"})
 	if err != nil || output != "ready\n" {
 		t.Fatalf("published executable = (%q, %v), want ready", output, err)
 	}
@@ -448,12 +448,26 @@ func runInstallTestScript(t *testing.T, script string, arguments, environment []
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, script, arguments...)
+	command := exec.CommandContext(ctx, "/bin/sh", append([]string{script}, arguments...)...)
 	command.Dir = installTestRepository(t)
 	command.Env = environment
 	output, err := command.CombinedOutput()
 	if ctx.Err() != nil {
 		t.Fatalf("%s timed out: %v\n%s", script, ctx.Err(), output)
+	}
+	return string(output), err
+}
+
+func runInstallTestExecutable(t *testing.T, executable string, environment []string) (string, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, executable)
+	command.Dir = installTestRepository(t)
+	command.Env = environment
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("%s timed out: %v\n%s", executable, ctx.Err(), output)
 	}
 	return string(output), err
 }

@@ -13,18 +13,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/grpcapi"
-	"github.com/sebishogun/verifoxx/internal/adapters/httpapi"
-	postgresadapter "github.com/sebishogun/verifoxx/internal/adapters/postgres"
-	"github.com/sebishogun/verifoxx/internal/buildinfo"
-	"github.com/sebishogun/verifoxx/internal/config"
-	"github.com/sebishogun/verifoxx/internal/observability"
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/security"
-	"github.com/sebishogun/verifoxx/internal/service"
-	"github.com/sebishogun/verifoxx/internal/simdops"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/adapters/grpcapi"
+	"github.com/sebishogun/nornrune/internal/adapters/httpapi"
+	postgresadapter "github.com/sebishogun/nornrune/internal/adapters/postgres"
+	"github.com/sebishogun/nornrune/internal/buildinfo"
+	"github.com/sebishogun/nornrune/internal/config"
+	"github.com/sebishogun/nornrune/internal/observability"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/security"
+	"github.com/sebishogun/nornrune/internal/service"
+	"github.com/sebishogun/nornrune/internal/simdops"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 type serveFailure struct {
@@ -123,7 +123,7 @@ func Serve(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	defer func() { _ = engine.Close(context.Background()) }()
-	if _, err := engine.CompilePolicy(ctx, []byte(verifoxx.Source())); err != nil {
+	if _, err := engine.CompilePolicy(ctx, []byte(nornrune.Source())); err != nil {
 		_ = journal.Close(context.Background())
 		pool.Close()
 		return fmt.Errorf("server: publish embedded policy: %w", err)

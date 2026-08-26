@@ -137,13 +137,13 @@ starts `postgres:19beta3`, and runs sequential subtests. Use:
 
 ```go
 container, err := tcpostgres.Run(ctx, "postgres:19beta3",
-    tcpostgres.WithDatabase("verifoxx"),
+    tcpostgres.WithDatabase("nornrune"),
     tcpostgres.WithUsername("postgres"),
     tcpostgres.WithPassword(adminPassword),
     tcpostgres.WithInitScripts(initRolesPath),
     testcontainers.WithEnv(map[string]string{
-        "VERIFOXX_MIGRATION_PASSWORD": migrationPassword,
-        "VERIFOXX_RUNTIME_PASSWORD": runtimePassword,
+        "NORNRUNE_MIGRATION_PASSWORD": migrationPassword,
+        "NORNRUNE_RUNTIME_PASSWORD": runtimePassword,
     }),
     tcpostgres.BasicWaitStrategies(),
 )
@@ -182,11 +182,11 @@ Add `.env` to `.gitignore`. Add local-only defaults to `.env.example`:
 
 ```dotenv
 POSTGRES_IMAGE=postgres:19beta3
-POSTGRES_DB=verifoxx
+POSTGRES_DB=nornrune
 POSTGRES_PORT=5432
-POSTGRES_ADMIN_PASSWORD=verifoxx-admin-local
-VERIFOXX_MIGRATION_PASSWORD=verifoxx-migrator-local
-VERIFOXX_RUNTIME_PASSWORD=verifoxx-runtime-local
+POSTGRES_ADMIN_PASSWORD=nornrune-admin-local
+NORNRUNE_MIGRATION_PASSWORD=nornrune-migrator-local
+NORNRUNE_RUNTIME_PASSWORD=nornrune-runtime-local
 ```
 
 `compose.yaml` must define one `postgres` service with:
@@ -206,13 +206,13 @@ The shell script must use `set -eu`, fixed role identifiers, and psql variables
 for every password/database value:
 
 ```sql
-CREATE ROLE verifoxx_migrator LOGIN PASSWORD :'migration_password'
+CREATE ROLE nornrune_migrator LOGIN PASSWORD :'migration_password'
   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
-CREATE ROLE verifoxx_runtime LOGIN PASSWORD :'runtime_password'
+CREATE ROLE nornrune_runtime LOGIN PASSWORD :'runtime_password'
   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
-ALTER DATABASE :"database_name" OWNER TO verifoxx_migrator;
+ALTER DATABASE :"database_name" OWNER TO nornrune_migrator;
 REVOKE ALL ON DATABASE :"database_name" FROM PUBLIC;
-GRANT CONNECT ON DATABASE :"database_name" TO verifoxx_runtime;
+GRANT CONNECT ON DATABASE :"database_name" TO nornrune_runtime;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 ```
 
@@ -238,7 +238,7 @@ Expected: PASS.
 **Step 1: Write failing migration-runner subtests**
 
 Use `fstest.MapFS` with one migration that creates/drops a scratch table. Reset
-`public.verifoxx_schema_migrations` and scratch objects before the subtest.
+`public.nornrune_schema_migrations` and scratch objects before the subtest.
 Assert:
 
 - first `Up` returns 1 and creates the object plus one ledger row;
@@ -268,10 +268,10 @@ or bounded `Down`:
    `context.WithoutCancel(ctx)` so a canceled caller cannot retain a pooled
    transaction.
 3. Execute `SELECT pg_advisory_xact_lock($1)`.
-4. Create `public.verifoxx_schema_migrations` in the same transaction with
+4. Create `public.nornrune_schema_migrations` in the same transaction with
    positive integer version, non-empty name, exact 32-byte checksum, and
    `applied_at timestamptz NOT NULL DEFAULT clock_timestamp()`. Revoke public
-   access and conditionally revoke `verifoxx_runtime` access when that role
+   access and conditionally revoke `nornrune_runtime` access when that role
    exists, without making the generic migrator depend on the application role.
 5. Read applied rows ordered by version and require an exact local prefix:
    versions, names, and checksums must match before executing any SQL.
@@ -303,7 +303,7 @@ Expected: PASS.
 **Step 1: Write failing schema-shape tests**
 
 Run the real migration directory through `os.DirFS`. Assert these nine tables
-exist in schema `verifoxx` and no graph table/property graph exists yet:
+exist in schema `nornrune` and no graph table/property graph exists yet:
 
 ```text
 policies
@@ -338,7 +338,7 @@ Expected: FAIL because `000001_initial` does not exist.
 
 **Step 3: Write `000001_initial.up.sql`**
 
-Create schema `verifoxx` owned by `verifoxx_migrator`, revoke public access,
+Create schema `nornrune` owned by `nornrune_migrator`, revoke public access,
 set a safe search path, and create the tables below with `bigint GENERATED
 ALWAYS AS IDENTITY` internal IDs and `timestamptz` timestamps:
 
@@ -375,9 +375,9 @@ request/evidence snapshots, evaluation runs/findings/evidence links. Add a row
 trigger on `policies` that rejects deletion and any update changing columns
 other than `active_version_id`.
 
-Grant `verifoxx_runtime` only:
+Grant `nornrune_runtime` only:
 
-- `USAGE` on schema `verifoxx`;
+- `USAGE` on schema `nornrune`;
 - `SELECT, INSERT` on all nine tables;
 - sequence `USAGE, SELECT`; and
 - `UPDATE(active_version_id)` on `policies`.
@@ -392,7 +392,7 @@ sequence explicitly.
 `000001_initial.down.sql` must contain only the bounded reversal:
 
 ```sql
-DROP SCHEMA IF EXISTS verifoxx CASCADE;
+DROP SCHEMA IF EXISTS nornrune CASCADE;
 ```
 
 It must not drop roles, the database, or the public migration ledger.
@@ -480,7 +480,7 @@ Add sequential scenarios with a clean schema/ledger before each:
 - **Cancellation:** hold the advisory lock in one transaction, call `Up` with a
   short context through another pool, require `context.DeadlineExceeded`, then
   release the holder and prove a fresh `Up` succeeds so no pooled lock leaked.
-- **Standalone role boundary:** remove `verifoxx_runtime`, then prove a generic
+- **Standalone role boundary:** remove `nornrune_runtime`, then prove a generic
   fixture migration still succeeds and creates a migration-only ledger.
 
 Bound every goroutine result receive with the parent context; do not use sleep
@@ -532,7 +532,7 @@ Expected: modules verify and no files or whitespace diagnostics are printed.
 
 ```bash
 timeout 120s docker compose --env-file .env.example config --quiet
-timeout 240s bash -c 'set -eu; cleanup() { docker compose --env-file .env.example down --volumes; }; trap cleanup EXIT; docker compose --env-file .env.example up --detach --wait; docker compose --env-file .env.example exec -T postgres pg_isready -U postgres -d verifoxx'
+timeout 240s bash -c 'set -eu; cleanup() { docker compose --env-file .env.example down --volumes; }; trap cleanup EXIT; docker compose --env-file .env.example up --detach --wait; docker compose --env-file .env.example exec -T postgres pg_isready -U postgres -d nornrune'
 ```
 
 Expected: valid configuration, healthy PostgreSQL, successful readiness, and
@@ -573,8 +573,8 @@ access-locality-oriented order.
 **Step 6: Recheck the shipped CLI contract and build**
 
 ```bash
-timeout 120s go build -trimpath -o /tmp/opencode/verifoxx-task27 ./cmd/verifoxx
-timeout 120s go run ./cmd/verifoxx evaluate > /tmp/opencode/task27-results.json
+timeout 120s go build -trimpath -o /tmp/opencode/nornrune-task27 ./cmd/nornrune
+timeout 120s go run ./cmd/nornrune evaluate > /tmp/opencode/task27-results.json
 cmp /tmp/opencode/task27-results.json results/requests.json
 ```
 

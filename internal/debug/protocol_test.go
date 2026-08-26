@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func TestProtocolFrameRoundTrip(t *testing.T) {

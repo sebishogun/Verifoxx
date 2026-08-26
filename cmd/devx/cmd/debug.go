@@ -11,7 +11,7 @@ func debugCommandPlan(name string) ([]commandSpec, bool) {
 	case "debug:tui":
 		return []commandSpec{{
 			executable:              "go",
-			arguments:               []string{"run", "-tags=debug", "./cmd/verifoxx", "tui", "--socket", ".verifoxx/debug.sock"},
+			arguments:               []string{"run", "-tags=debug", "./cmd/nornrune", "tui", "--socket", ".nornrune/debug.sock"},
 			repositoryPathArguments: []uint8{5},
 			timeout:                 30 * time.Minute,
 		}}, true

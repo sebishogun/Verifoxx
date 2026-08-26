@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "policy": {
-    "name": "verifoxx",
+    "name": "nornrune",
     "version": "1.0.0",
-    "sha256": "a92ffd1c00e823652bed47acf3955f5559543eeba4f02ebf16965bc2966d0a22"
+    "sha256": "2b26fdb9304cb045f4490039061090da01e10e0140e7e16a22e3b71816fc8245"
   },
   "engine_version": "devel",
   "results": [

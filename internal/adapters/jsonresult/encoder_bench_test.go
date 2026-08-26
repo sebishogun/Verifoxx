@@ -3,7 +3,7 @@ package jsonresult
 import (
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/buildinfo"
+	"github.com/sebishogun/nornrune/internal/buildinfo"
 )
 
 var benchmarkEncoded []byte

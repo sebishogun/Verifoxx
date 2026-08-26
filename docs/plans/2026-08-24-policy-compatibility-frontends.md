@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add bounded CEL, Rego, Cedar, and Protobuf compatibility frontends that compile documented subsets into the existing Verifoxx AST and immutable Program without changing native-policy behavior or forking evaluation.
+**Goal:** Add bounded CEL, Rego, Cedar, and Protobuf compatibility frontends that compile documented subsets into the existing NornRune AST and immutable Program without changing native-policy behavior or forking evaluation.
 
 **Architecture:** Public `frontend` types hold one bounded struct-of-arrays semantic policy with CSR child and list edges, exact byte spans, stable diagnostics, field bindings, and capability metadata. CEL, Rego, and Cedar packages use their official parsers, translate only documented constructs into that table, and reject everything else; `internal/frontend` validates and lowers the table through `ast.Builder` and `compile.Lowerer`. A single Boolean-literal node/opcode extends the shared core so source defaults and static authorization policies remain exact, while all parser objects and reflection stay outside evaluator packages.
 
@@ -304,7 +304,7 @@ Pin `cel.dev/cel-go v0.32.0`. Tests must cover:
 - `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `!`, and `in` over a nonempty homogeneous constant list;
 - reversed literal/field comparisons with the ordered operator reversed correctly;
 - Boolean field shorthand lowered as `field == true` and Boolean literals lowered as constants;
-- missing activation values mapped to Verifoxx unknown/Escalate;
+- missing activation values mapped to NornRune unknown/Escalate;
 - syntax/type errors and unsupported calls, member dispatch, maps, messages, comprehensions, macros, optional syntax, dynamic field-to-field comparisons, unsupported scalar types, and mixed lists;
 - exact Unicode byte spans and deterministic capabilities/diagnostics;
 - source, node, depth, field, literal, child, and diagnostic limits;
@@ -339,7 +339,7 @@ Call parse and check separately so syntax and type diagnostics retain distinct s
 
 **Step 4: Implement differential tests and fuzzing**
 
-Evaluate the same typed rows through CEL and the lowered Verifoxx Program. Map a CEL unknown/error caused solely by an omitted declared value to Escalate. Any other official evaluator error fails the corpus test rather than being treated as compatible.
+Evaluate the same typed rows through CEL and the lowered NornRune Program. Map a CEL unknown/error caused solely by an omitted declared value to Escalate. Any other official evaluator error fails the corpus test rather than being treated as compatible.
 
 Run:
 
@@ -502,7 +502,7 @@ Expected: PASS.
 - Create: `frontend/proto/options.pb.go` (generated)
 - Create: `frontend/proto/plugin.go`
 - Create: `frontend/proto/plugin_test.go`
-- Create: `cmd/protoc-gen-verifoxx/main.go`
+- Create: `cmd/protoc-gen-nornrune/main.go`
 - Create: `buf.frontend.gen.yaml`
 - Modify: `buf.yaml`
 - Modify: `buf.gen.yaml`
@@ -511,7 +511,7 @@ Expected: PASS.
 - Modify: `cmd/devx/cmd/root_test.go`
 - Modify: `internal/adapters/grpcapi/generated_test.go`
 - Create: `testdata/frontends/proto/policy.proto`
-- Create: `testdata/frontends/proto/policy_verifoxx.pb.go`
+- Create: `testdata/frontends/proto/policy_nornrune.pb.go`
 - Create: `testdata/frontends/proto/want_binding.go`
 
 **Step 1: Write failing option/plugin tests**
@@ -531,14 +531,14 @@ Define message options for policy name, version, and CEL expression plus one fie
 Run:
 
 ```bash
-timeout 120s go test -count=1 -timeout 90s ./frontend/proto ./cmd/protoc-gen-verifoxx
+timeout 120s go test -count=1 -timeout 90s ./frontend/proto ./cmd/protoc-gen-nornrune
 ```
 
 Expected: FAIL because options and plugin packages do not exist.
 
 **Step 3: Generate options and implement the plugin**
 
-Use non-conflicting custom option numbers above 50000 and a `go_package` of `github.com/sebishogun/verifoxx/frontend/proto;frontproto`. Keep option reflection inside `frontend/proto/plugin.go`; generated bindings contain only static literals and `frontend` value enums.
+Use non-conflicting custom option numbers above 50000 and a `go_package` of `github.com/sebishogun/nornrune/frontend/proto;frontproto`. Keep option reflection inside `frontend/proto/plugin.go`; generated bindings contain only static literals and `frontend` value enums.
 
 Expose:
 
@@ -547,7 +547,7 @@ func Generate(request *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorRe
 func GeneratePlugin(plugin *protogen.Plugin) error
 ```
 
-`cmd/protoc-gen-verifoxx` contains only `protogen.Options{}.Run(frontproto.GeneratePlugin)` and process error handling.
+`cmd/protoc-gen-nornrune` contains only `protogen.Options{}.Run(frontproto.GeneratePlugin)` and process error handling.
 
 Add a separate pinned Buf template for the frontend option output and teach `devx proto:gen`/`proto:check` to run both templates. Extend the containerized drift test inputs and expected generated files rather than adding an unpinned local protoc path.
 
@@ -556,8 +556,8 @@ Add a separate pinned Buf template for the frontend option output and teach `dev
 Run:
 
 ```bash
-timeout 180s go test -count=1 -timeout 150s ./frontend/proto ./cmd/protoc-gen-verifoxx ./internal/adapters/grpcapi ./cmd/devx/cmd
-timeout 300s env PATH="/tmp/opencode/verifoxx-tools:$PATH" go run ./cmd/devx proto:check
+timeout 180s go test -count=1 -timeout 150s ./frontend/proto ./cmd/protoc-gen-nornrune ./internal/adapters/grpcapi ./cmd/devx/cmd
+timeout 300s env PATH="/tmp/opencode/nornrune-tools:$PATH" go run ./cmd/devx proto:check
 timeout 30s git diff --check
 ```
 
@@ -609,8 +609,8 @@ Run:
 
 ```bash
 timeout 240s go test -count=1 -timeout 210s ./internal/adapters/cli ./internal/conformance
-timeout 60s go run ./cmd/verifoxx compile
-timeout 60s go run ./cmd/verifoxx evaluate
+timeout 60s go run ./cmd/nornrune compile
+timeout 60s go run ./cmd/nornrune evaluate
 ```
 
 Expected: PASS. Native command output matches checked-in canonical fixtures.
@@ -627,7 +627,7 @@ Expected: PASS. Native command output matches checked-in canonical fixtures.
 
 **Step 1: Write failing cross-frontend and boundary tests**
 
-Build equivalent CEL, Rego, and Cedar policies for Boolean, integer, string, conjunction, disjunction, negation, and missing-field cases. Require identical Verifoxx decisions and stable semantic diagnostics.
+Build equivalent CEL, Rego, and Cedar policies for Boolean, integer, string, conjunction, disjunction, negation, and missing-field cases. Require identical NornRune decisions and stable semantic diagnostics.
 
 Add static import checks proving `internal/eval`, `internal/scheduler`, `internal/program`, `internal/result`, `internal/truth`, and `internal/index` do not import `frontend`, CEL, OPA, Cedar, or protobuf reflection. Check capability docs contain every stable capability name and pinned upstream version.
 
@@ -726,11 +726,11 @@ timeout 360s go test -count=1 -timeout 300s -race -gcflags=all=-d=checkptr=2 ./.
 timeout 300s env GOARCH=386 go test -count=1 -timeout 240s ./...
 timeout 300s go test -count=1 -tags=purego -timeout 240s ./...
 timeout 420s go test -count=1 -tags=integration -timeout 360s ./...
-timeout 300s env PATH="/tmp/opencode/verifoxx-tools:$PATH" go run ./cmd/devx policy:check
-timeout 300s env PATH="/tmp/opencode/verifoxx-tools:$PATH" go run ./cmd/devx results:check
-timeout 300s env PATH="/tmp/opencode/verifoxx-tools:$PATH" go run ./cmd/devx proto:check
+timeout 300s env PATH="/tmp/opencode/nornrune-tools:$PATH" go run ./cmd/devx policy:check
+timeout 300s env PATH="/tmp/opencode/nornrune-tools:$PATH" go run ./cmd/devx results:check
+timeout 300s env PATH="/tmp/opencode/nornrune-tools:$PATH" go run ./cmd/devx proto:check
 timeout 300s go run ./cmd/devx build
-timeout 300s go build -trimpath ./cmd/protoc-gen-verifoxx
+timeout 300s go build -trimpath ./cmd/protoc-gen-nornrune
 timeout 300s go run github.com/goreleaser/goreleaser/v2@v2.12.3 check
 ```
 
@@ -742,12 +742,12 @@ Use `superpowers:requesting-code-review`. Review against the approved design, ca
 
 **Step 5: Stage only Task 52 files and commit**
 
-Inspect `git status`, `git diff`, `git diff --check`, and `git log --oneline -10`. Never stage `/home/sebishogun/Learning/Go/Verifoxx/AGENTS.md` or unrelated user changes.
+Inspect `git status`, `git diff`, `git diff --check`, and `git log --oneline -10`. Never stage `/home/sebishogun/Learning/Go/NornRune/AGENTS.md` or unrelated user changes.
 
 Commit and push:
 
 ```bash
-git add frontend cmd/protoc-gen-verifoxx internal/frontend testdata/frontends \
+git add frontend cmd/protoc-gen-nornrune internal/frontend testdata/frontends \
   docs/plans/2026-08-24-policy-compatibility-frontends-design.md \
   docs/plans/2026-08-24-policy-compatibility-frontends.md \
   go.mod go.sum buf.yaml buf.gen.yaml buf.frontend.gen.yaml \

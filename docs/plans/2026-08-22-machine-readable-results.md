@@ -154,7 +154,7 @@ Expected: PASS. Do not commit.
 
 **Files:**
 - Create: `internal/adapters/jsonresult/encoder_bench_test.go`
-- Modify: `internal/conformance/verifoxx_test.go`
+- Modify: `internal/conformance/nornrune_test.go`
 - Verify: `results/requests.json`
 - Verify: `testdata/golden/requests.json`
 

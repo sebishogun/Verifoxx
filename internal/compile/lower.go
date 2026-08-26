@@ -4,10 +4,10 @@ import (
 	"errors"
 	"math"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	policyindex "github.com/sebishogun/verifoxx/internal/index"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	policyindex "github.com/sebishogun/nornrune/internal/index"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 // Bounded lowering-stage errors. Detailed validation diagnostics remain the

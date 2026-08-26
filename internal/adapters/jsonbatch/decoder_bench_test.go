@@ -3,8 +3,8 @@ package jsonbatch
 import (
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/fixtures"
 )
 
 func BenchmarkDecodeBatch(b *testing.B) {

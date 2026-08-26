@@ -30,8 +30,8 @@ func TestLauncherPlanBuildsLoopbackDAPCommand(t *testing.T) {
 	targetArguments := []string{"demo", "--output", "json"}
 	plan, err := launcher.Plan(context.Background(), Config{
 		DelvePath:        "/opt/dlv",
-		WorkingDirectory: "/workspace/verifoxx",
-		Target:           "./cmd/verifoxx",
+		WorkingDirectory: "/workspace/nornrune",
+		Target:           "./cmd/nornrune",
 		TargetArguments:  targetArguments,
 	})
 	if err != nil {
@@ -40,7 +40,7 @@ func TestLauncherPlanBuildsLoopbackDAPCommand(t *testing.T) {
 	if !selected {
 		t.Fatal("Plan() did not select a port")
 	}
-	if plan.Executable != "/opt/dlv" || plan.WorkingDirectory != "/workspace/verifoxx" ||
+	if plan.Executable != "/opt/dlv" || plan.WorkingDirectory != "/workspace/nornrune" ||
 		plan.Address != "127.0.0.1:43210" {
 		t.Fatalf("Plan() process = %+v", plan)
 	}
@@ -49,7 +49,7 @@ func TestLauncherPlanBuildsLoopbackDAPCommand(t *testing.T) {
 	}
 	configuration := plan.Configuration
 	if configuration.Type != "go" || configuration.Request != "launch" || configuration.Mode != "debug" ||
-		configuration.Program != "./cmd/verifoxx" || configuration.WorkingDirectory != "/workspace/verifoxx" ||
+		configuration.Program != "./cmd/nornrune" || configuration.WorkingDirectory != "/workspace/nornrune" ||
 		configuration.BuildFlags != "-tags=debug -gcflags='all=-N -l'" ||
 		!slices.Equal(configuration.Arguments, targetArguments) {
 		t.Fatalf("Plan() DAP configuration = %+v", configuration)
@@ -68,7 +68,7 @@ func TestLauncherPlanPreservesCancellation(t *testing.T) {
 	_, err := (Launcher{}).Plan(ctx, Config{
 		DelvePath:        "dlv",
 		WorkingDirectory: ".",
-		Target:           "./cmd/verifoxx",
+		Target:           "./cmd/nornrune",
 	})
 	if !errors.Is(err, ErrInvalidLaunch) || !errors.Is(err, context.Canceled) {
 		t.Fatalf("Plan() error = %v, want ErrInvalidLaunch and context.Canceled", err)
@@ -85,7 +85,7 @@ func TestLauncherPlanUsesFixedPortWithoutSelection(t *testing.T) {
 	plan, err := launcher.Plan(context.Background(), Config{
 		DelvePath:        "dlv",
 		WorkingDirectory: ".",
-		Target:           "./cmd/verifoxx",
+		Target:           "./cmd/nornrune",
 		Port:             45678,
 	})
 	if err != nil {
@@ -102,7 +102,7 @@ func TestLauncherPlanEnablesDelveLogging(t *testing.T) {
 	plan, err := (Launcher{}).Plan(context.Background(), Config{
 		DelvePath:        "dlv",
 		WorkingDirectory: ".",
-		Target:           "./cmd/verifoxx",
+		Target:           "./cmd/nornrune",
 		Port:             45678,
 		Log:              true,
 	})
@@ -122,7 +122,7 @@ func TestLauncherPlanReportsPortSelectionFailure(t *testing.T) {
 	_, err := launcher.Plan(context.Background(), Config{
 		DelvePath:        "dlv",
 		WorkingDirectory: ".",
-		Target:           "./cmd/verifoxx",
+		Target:           "./cmd/nornrune",
 	})
 	if !errors.Is(err, ErrInvalidLaunch) || !errors.Is(err, wantErr) {
 		t.Fatalf("Plan() error = %v, want ErrInvalidLaunch and selector error", err)
@@ -135,7 +135,7 @@ func TestLauncherPlanRejectsInvalidConfiguration(t *testing.T) {
 	valid := Config{
 		DelvePath:        "dlv",
 		WorkingDirectory: ".",
-		Target:           "./cmd/verifoxx",
+		Target:           "./cmd/nornrune",
 		Port:             45678,
 	}
 	tooManyArguments := make([]string, maxArguments+1)
@@ -147,19 +147,19 @@ func TestLauncherPlanRejectsInvalidConfiguration(t *testing.T) {
 		config Config
 	}{
 		{name: "empty", config: Config{}},
-		{name: "missing delve", config: Config{WorkingDirectory: ".", Target: "./cmd/verifoxx", Port: 45678}},
-		{name: "missing directory", config: Config{DelvePath: "dlv", Target: "./cmd/verifoxx", Port: 45678}},
+		{name: "missing delve", config: Config{WorkingDirectory: ".", Target: "./cmd/nornrune", Port: 45678}},
+		{name: "missing directory", config: Config{DelvePath: "dlv", Target: "./cmd/nornrune", Port: 45678}},
 		{name: "missing target", config: Config{DelvePath: "dlv", WorkingDirectory: ".", Port: 45678}},
 		{name: "too many arguments", config: Config{
-			DelvePath: "dlv", WorkingDirectory: ".", Target: "./cmd/verifoxx", Port: 45678,
+			DelvePath: "dlv", WorkingDirectory: ".", Target: "./cmd/nornrune", Port: 45678,
 			TargetArguments: tooManyArguments,
 		}},
 		{name: "nul argument", config: Config{
-			DelvePath: "dlv", WorkingDirectory: ".", Target: "./cmd/verifoxx", Port: 45678,
+			DelvePath: "dlv", WorkingDirectory: ".", Target: "./cmd/nornrune", Port: 45678,
 			TargetArguments: []string{"bad\x00argument"},
 		}},
 		{name: "oversized argument", config: Config{
-			DelvePath: "dlv", WorkingDirectory: ".", Target: "./cmd/verifoxx", Port: 45678,
+			DelvePath: "dlv", WorkingDirectory: ".", Target: "./cmd/nornrune", Port: 45678,
 			TargetArguments: []string{strings.Repeat("x", maxArgumentSize+1)},
 		}},
 	} {
@@ -192,13 +192,13 @@ func TestLauncherCancellationStopsDelve(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	launcher := Launcher{commandContext: func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestDAPHelperProcess$")
-		command.Env = append(os.Environ(), "VERIFOXX_DAP_HELPER=sleep")
+		command.Env = append(os.Environ(), "NORNRUNE_DAP_HELPER=sleep")
 		return command
 	}}
 	server, err := launcher.Launch(ctx, Config{
 		DelvePath:        "dlv",
 		WorkingDirectory: ".",
-		Target:           "./cmd/verifoxx",
+		Target:           "./cmd/nornrune",
 		Port:             45678,
 	})
 	if err != nil {
@@ -227,16 +227,16 @@ func TestLauncherCancellationLetsDelveCleanUp(t *testing.T) {
 	launcher := Launcher{commandContext: func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestDAPHelperProcess$")
 		command.Env = append(os.Environ(),
-			"VERIFOXX_DAP_HELPER=graceful",
-			"VERIFOXX_DAP_READY="+readyPath,
-			"VERIFOXX_DAP_CLEANED="+cleanedPath,
+			"NORNRUNE_DAP_HELPER=graceful",
+			"NORNRUNE_DAP_READY="+readyPath,
+			"NORNRUNE_DAP_CLEANED="+cleanedPath,
 		)
 		return command
 	}}
 	server, err := launcher.Launch(ctx, Config{
 		DelvePath:        "dlv",
 		WorkingDirectory: ".",
-		Target:           "./cmd/verifoxx",
+		Target:           "./cmd/nornrune",
 		Port:             45678,
 	})
 	if err != nil {
@@ -256,7 +256,7 @@ func TestDelveInterruptDoesNotMarkExitedProcess(t *testing.T) {
 	t.Parallel()
 
 	command := exec.Command(os.Args[0], "-test.run=^TestDAPHelperProcess$")
-	command.Env = append(os.Environ(), "VERIFOXX_DAP_HELPER=fail")
+	command.Env = append(os.Environ(), "NORNRUNE_DAP_HELPER=fail")
 	if err := command.Run(); err == nil {
 		t.Fatal("helper process error = nil")
 	}
@@ -276,7 +276,7 @@ func TestLauncherReportsProcessStartFailure(t *testing.T) {
 	_, err := (Launcher{}).Launch(context.Background(), Config{
 		DelvePath:        filepath.Join(t.TempDir(), "missing-dlv"),
 		WorkingDirectory: ".",
-		Target:           "./cmd/verifoxx",
+		Target:           "./cmd/nornrune",
 		Port:             45678,
 	})
 	if !errors.Is(err, ErrLaunchProcess) {
@@ -290,11 +290,11 @@ func TestLauncherCloseIsIdempotent(t *testing.T) {
 	readyPath := filepath.Join(t.TempDir(), "ready")
 	launcher := Launcher{commandContext: func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestDAPHelperProcess$")
-		command.Env = append(os.Environ(), "VERIFOXX_DAP_HELPER=sleep", "VERIFOXX_DAP_READY="+readyPath)
+		command.Env = append(os.Environ(), "NORNRUNE_DAP_HELPER=sleep", "NORNRUNE_DAP_READY="+readyPath)
 		return command
 	}}
 	server, err := launcher.Launch(context.Background(), Config{
-		DelvePath: "dlv", WorkingDirectory: ".", Target: "./cmd/verifoxx", Port: 45678,
+		DelvePath: "dlv", WorkingDirectory: ".", Target: "./cmd/nornrune", Port: 45678,
 	})
 	if err != nil {
 		t.Fatalf("Launch() error = %v", err)
@@ -314,11 +314,11 @@ func TestLauncherRoutesDelveOutput(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	launcher := Launcher{commandContext: func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestDAPHelperProcess$")
-		command.Env = append(os.Environ(), "VERIFOXX_DAP_HELPER=output")
+		command.Env = append(os.Environ(), "NORNRUNE_DAP_HELPER=output")
 		return command
 	}}
 	server, err := launcher.Launch(context.Background(), Config{
-		DelvePath: "dlv", WorkingDirectory: ".", Target: "./cmd/verifoxx", Port: 45678,
+		DelvePath: "dlv", WorkingDirectory: ".", Target: "./cmd/nornrune", Port: 45678,
 		Stdout: &stdout, Stderr: &stderr,
 	})
 	if err != nil {
@@ -333,11 +333,11 @@ func TestLauncherRoutesDelveOutput(t *testing.T) {
 }
 
 func TestDAPHelperProcess(t *testing.T) {
-	switch os.Getenv("VERIFOXX_DAP_HELPER") {
+	switch os.Getenv("NORNRUNE_DAP_HELPER") {
 	case "":
 		return
 	case "sleep":
-		if path := os.Getenv("VERIFOXX_DAP_READY"); path != "" {
+		if path := os.Getenv("NORNRUNE_DAP_READY"); path != "" {
 			if err := os.WriteFile(path, []byte("ready"), 0o600); err != nil {
 				t.Fatalf("write ready marker: %v", err)
 			}
@@ -347,7 +347,7 @@ func TestDAPHelperProcess(t *testing.T) {
 		interrupt := make(chan os.Signal, 1)
 		signal.Notify(interrupt, os.Interrupt)
 		defer signal.Stop(interrupt)
-		if err := os.WriteFile(os.Getenv("VERIFOXX_DAP_READY"), []byte("ready"), 0o600); err != nil {
+		if err := os.WriteFile(os.Getenv("NORNRUNE_DAP_READY"), []byte("ready"), 0o600); err != nil {
 			t.Fatalf("write ready marker: %v", err)
 		}
 		select {
@@ -355,7 +355,7 @@ func TestDAPHelperProcess(t *testing.T) {
 		case <-time.After(30 * time.Second):
 			t.Fatal("helper did not receive interrupt")
 		}
-		if err := os.WriteFile(os.Getenv("VERIFOXX_DAP_CLEANED"), []byte("cleaned"), 0o600); err != nil {
+		if err := os.WriteFile(os.Getenv("NORNRUNE_DAP_CLEANED"), []byte("cleaned"), 0o600); err != nil {
 			t.Fatalf("write cleanup marker: %v", err)
 		}
 	case "output":
@@ -368,7 +368,7 @@ func TestDAPHelperProcess(t *testing.T) {
 	case "fail":
 		os.Exit(23)
 	default:
-		t.Fatalf("unknown helper mode %q", os.Getenv("VERIFOXX_DAP_HELPER"))
+		t.Fatalf("unknown helper mode %q", os.Getenv("NORNRUNE_DAP_HELPER"))
 	}
 }
 
@@ -410,13 +410,13 @@ func TestSharedLaunchConfiguration(t *testing.T) {
 		t.Fatalf("launch.json header = version:%q configurations:%d", document.Version, len(document.Configurations))
 	}
 	configuration := document.Configurations[0]
-	if configuration.Name != "Debug Verifoxx" || configuration.Type != "go" ||
+	if configuration.Name != "Debug NornRune" || configuration.Type != "go" ||
 		configuration.Request != "launch" || configuration.Mode != "debug" ||
-		configuration.Program != "${workspaceFolder}/cmd/verifoxx" ||
+		configuration.Program != "${workspaceFolder}/cmd/nornrune" ||
 		configuration.WorkingDirectory != "${workspaceFolder}" ||
 		configuration.BuildFlags != "-tags=debug -gcflags='all=-N -l'" ||
 		!slices.Equal(configuration.Arguments, []string{
-			"debug-worker", "--socket", "${workspaceFolder}/.verifoxx/debug.sock",
+			"debug-worker", "--socket", "${workspaceFolder}/.nornrune/debug.sock",
 		}) {
 		t.Fatalf("launch.json configuration = %+v", configuration)
 	}

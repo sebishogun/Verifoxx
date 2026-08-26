@@ -1,4 +1,4 @@
-VERIFOXX SEMANTIC DEBUGGER  |  AST  |  R1 Approve  |  Invalid / None
+NORNRUNE SEMANTIC DEBUGGER  |  AST  |  R1 Approve  |  Invalid / None
 ┌──────────────────┐ ┌────────────────────────────────────────────────────────────────┐ ┌──────────────────────────────┐
 │ REQUESTS         │ │ AST GRAPH  [AST]  PROGRAM                                      │ │ RUNTIME STATE                │
 │ > R1 Approve     │ │              ┌──────────────────┐                              │ │ DEBUG TARGET DISCONNECTED    │

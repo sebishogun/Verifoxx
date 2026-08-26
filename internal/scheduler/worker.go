@@ -1,6 +1,6 @@
 package scheduler
 
-import "github.com/sebishogun/verifoxx/internal/eval"
+import "github.com/sebishogun/nornrune/internal/eval"
 
 func (scheduler *Scheduler) worker() {
 	defer scheduler.workerDone.Done()

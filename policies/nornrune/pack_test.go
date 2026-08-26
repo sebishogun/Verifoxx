@@ -1,14 +1,14 @@
-package verifoxx_test
+package nornrune_test
 
 import (
 	"bytes"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonpolicy"
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonpolicy"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/schema"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 var wantFields = []struct {
@@ -25,12 +25,12 @@ var wantFields = []struct {
 }
 
 func TestPackOwnsSemanticPolicyAndSchema(t *testing.T) {
-	source := verifoxx.Source()
+	source := nornrune.Source()
 	if source == "" || !bytes.Contains([]byte(source), []byte(`"requirements"`)) {
 		t.Fatalf("Source() does not contain a semantic policy: %q", source)
 	}
 
-	fields, symbols, err := verifoxx.NewSchema()
+	fields, symbols, err := nornrune.NewSchema()
 	if err != nil {
 		t.Fatalf("NewSchema: %v", err)
 	}

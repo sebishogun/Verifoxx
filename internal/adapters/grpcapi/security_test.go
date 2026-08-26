@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	verifoxxv1 "github.com/sebishogun/verifoxx/api/gen/verifoxx/v1"
-	"github.com/sebishogun/verifoxx/internal/security"
-	coreservice "github.com/sebishogun/verifoxx/internal/service"
+	nornrunev1 "github.com/sebishogun/nornrune/api/gen/nornrune/v1"
+	"github.com/sebishogun/nornrune/internal/security"
+	coreservice "github.com/sebishogun/nornrune/internal/service"
 	"google.golang.org/grpc/codes"
 )
 
@@ -25,7 +25,7 @@ func TestSecurityRejectsOversizedPolicyBeforeService(t *testing.T) {
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := harness.client.ValidatePolicy(ctx, &verifoxxv1.ValidatePolicyRequest{
+	_, err := harness.client.ValidatePolicy(ctx, &nornrunev1.ValidatePolicyRequest{
 		SourceJson: make([]byte, security.MaximumPolicyBytes+1),
 	})
 	assertGRPCCode(t, err, codes.ResourceExhausted)

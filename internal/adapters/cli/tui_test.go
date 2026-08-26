@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	postgresadapter "github.com/sebishogun/verifoxx/internal/adapters/postgres"
-	tuiadapter "github.com/sebishogun/verifoxx/internal/adapters/tui"
-	"github.com/sebishogun/verifoxx/internal/config"
-	"github.com/sebishogun/verifoxx/internal/debug"
-	"github.com/sebishogun/verifoxx/internal/graphview"
+	postgresadapter "github.com/sebishogun/nornrune/internal/adapters/postgres"
+	tuiadapter "github.com/sebishogun/nornrune/internal/adapters/tui"
+	"github.com/sebishogun/nornrune/internal/config"
+	"github.com/sebishogun/nornrune/internal/debug"
+	"github.com/sebishogun/nornrune/internal/graphview"
 )
 
 func TestRootExposesSemanticTUICommand(t *testing.T) {
@@ -146,7 +146,7 @@ func TestTUIRunsWithEmbeddedSourcesAndDefaultSocket(t *testing.T) {
 		if ctx == nil || stdin == nil || stdout == nil {
 			t.Fatal("TUI runner received a nil dependency")
 		}
-		if options.socketPath != ".verifoxx/debug.sock" || options.browser {
+		if options.socketPath != ".nornrune/debug.sock" || options.browser {
 			t.Fatalf("options = %+v, want default socket without browser", options)
 		}
 		if string(input.policy) != deps.policy || string(input.requests) != deps.requests || string(input.evidence) != deps.evidence {
@@ -166,7 +166,7 @@ func TestTUIRunsWithEmbeddedSourcesAndDefaultSocket(t *testing.T) {
 
 func TestTUICommandPassesOptionalPersistedHistoryConfiguration(t *testing.T) {
 	deps := productTestDependencies()
-	databaseURL := config.SecretURL("postgres://history:secret@database/verifoxx")
+	databaseURL := config.SecretURL("postgres://history:secret@database/nornrune")
 	deps.databaseURL = func() config.SecretURL { return databaseURL }
 	called := false
 	deps.runTUI = func(_ context.Context, options tuiRunOptions, _ sources, _ io.Reader, _ io.Writer) error {
@@ -203,14 +203,14 @@ func TestTUIHistoryLoaderMapsPersistedRowsAndSanitizesFailures(t *testing.T) {
 		t.Fatalf("LoadHistory() request=%q entries=%+v", store.requestKey, entries)
 	}
 
-	store.err = errors.New("postgres://history:super-secret@database/verifoxx")
+	store.err = errors.New("postgres://history:super-secret@database/nornrune")
 	if _, err := loader.LoadHistory(context.Background(), tuiadapter.RequestItem{ID: 2, Name: "R2"}); !errors.Is(err, errPersistedHistoryUnavailable) || strings.Contains(err.Error(), "super-secret") {
 		t.Fatalf("sanitized history error = %v", err)
 	}
 }
 
 func TestTUIHistoryLoaderIsLazyAndClosesItsPool(t *testing.T) {
-	loader := newTUIHistoryLoader(config.SecretURL("postgres://history:secret@database/verifoxx"))
+	loader := newTUIHistoryLoader(config.SecretURL("postgres://history:secret@database/nornrune"))
 	if loader == nil || loader.store != nil || loader.pool != nil {
 		t.Fatalf("new history loader is not lazy: %+v", loader)
 	}

@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/simdops"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/simdops"
 )
 
 var batchIndexBenchmarkSink uint64

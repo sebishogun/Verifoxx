@@ -83,11 +83,11 @@ func (store *DecisionHistoryStore) Load(
 	}
 	rows, err := store.queryer.Query(ctx, `
 		SELECT run.completed_at, policy.name, version.semantic_version, finding.decision
-		FROM verifoxx.evaluation_findings AS finding
-		JOIN verifoxx.evaluation_runs AS run ON run.id = finding.run_id
-		JOIN verifoxx.requests AS request ON request.id = finding.request_id
-		JOIN verifoxx.policy_versions AS version ON version.id = run.policy_version_id
-		JOIN verifoxx.policies AS policy ON policy.id = version.policy_id
+		FROM nornrune.evaluation_findings AS finding
+		JOIN nornrune.evaluation_runs AS run ON run.id = finding.run_id
+		JOIN nornrune.requests AS request ON request.id = finding.request_id
+		JOIN nornrune.policy_versions AS version ON version.id = run.policy_version_id
+		JOIN nornrune.policies AS policy ON policy.id = version.policy_id
 		WHERE request.request_key = $1
 		ORDER BY run.completed_at DESC, run.id DESC, finding.row_index DESC
 		LIMIT $2

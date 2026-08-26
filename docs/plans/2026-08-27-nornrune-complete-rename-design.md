@@ -37,8 +37,8 @@ The rename covers:
   repository itself remains live and keeps its current name.
 
 The original assignment PDF remains byte-identical as a historical source
-artifact. Its filename and embedded wording are the only intentional old-name
-allowlist. Git history is not rewritten.
+artifact, but its filename follows the new brand. Its embedded wording is the
+only intentional old-name exception. Git history is not rewritten.
 
 ## Regression Contract
 
@@ -60,7 +60,7 @@ the following invariants:
   workflows consistently expose only NornRune names.
 
 A repository-wide doc check rejects `Verifoxx`, `verifoxx`, and `VERIFOXX` in
-tracked text outside the explicit PDF exception and migration design history
+tracked text outside the migration design history
 needed to describe the old name. Binary and generated-file searches run after
 regeneration. This converts the 369-file rename surface into a maintained
 contract rather than a one-time search.

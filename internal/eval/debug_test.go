@@ -5,9 +5,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/truth"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/truth"
 )
 
 func TestRetainedExecutorStepsAndMatchesScalar(t *testing.T) {

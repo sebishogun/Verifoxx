@@ -1,6 +1,6 @@
 # Development
 
-Verifoxx targets Go 1.27.0. The repository developer surface is `devx`, a Cobra
+NornRune targets Go 1.27.0. The repository developer surface is `devx`, a Cobra
 command whose no-argument mode opens a fuzzy menu and whose named workflows are
 scriptable. The [`Makefile`](../Makefile) is a one-to-one facade over the same
 commands; workflow logic stays in Go.
@@ -26,7 +26,7 @@ for the nearest repository with `cli/devx`.
 
 ## Build And Run
 
-Build the product binary at `bin/verifoxx`:
+Build the product binary at `bin/nornrune`:
 
 ```bash
 timeout 180s ./cli/devx build
@@ -86,7 +86,7 @@ timeout 120s go test -timeout 90s -run '^$' \
 Run the semantic worker and TUI in separate terminals for resize and
 alternate-screen checks. Exercise `[AST]`/`[PROGRAM]`, Session/Persisted
 history, request focus, stepping, restart, and clean exit. PostgreSQL history is
-optional and reads `VERIFOXX_DATABASE_URL`; the Session timeline remains usable
+optional and reads `NORNRUNE_DATABASE_URL`; the Session timeline remains usable
 without it.
 
 ## Generated And Canonical Files

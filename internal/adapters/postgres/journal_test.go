@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/persistence"
 )
 
 func setAuditKey(t *testing.T, batch *persistence.AuditBatch, key string) {
@@ -90,7 +90,7 @@ func testDecisionAuditJournal(t *testing.T, ctx context.Context, environment *po
 	if err := off.Close(ctx); err != nil {
 		t.Fatalf("close off audit: %v", err)
 	}
-	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM verifoxx.evaluation_runs"); got != 0 {
+	if got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM nornrune.evaluation_runs"); got != 0 {
 		t.Fatalf("run count after off mode = %d, want 0", got)
 	}
 
@@ -136,7 +136,7 @@ func testDecisionAuditJournal(t *testing.T, ctx context.Context, environment *po
 		"evaluation_evidence": 3,
 	}
 	for table, want := range wantCounts {
-		got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM verifoxx."+table)
+		got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM nornrune."+table)
 		if got != want {
 			t.Fatalf("%s count = %d, want %d", table, got, want)
 		}
@@ -160,12 +160,12 @@ func testDecisionAuditJournal(t *testing.T, ctx context.Context, environment *po
 		       finding.row_index, request.request_key, request.captured_at,
 		       finding.decision, link.evidence_ordinal, evidence.evidence_key,
 		       evidence.captured_at, evidence.expires_at
-		FROM verifoxx.evaluation_runs AS run
-		JOIN verifoxx.evaluation_findings AS finding ON finding.run_id = run.id
-		JOIN verifoxx.requests AS request ON request.id = finding.request_id
-		JOIN verifoxx.evaluation_evidence AS link
+		FROM nornrune.evaluation_runs AS run
+		JOIN nornrune.evaluation_findings AS finding ON finding.run_id = run.id
+		JOIN nornrune.requests AS request ON request.id = finding.request_id
+		JOIN nornrune.evaluation_evidence AS link
 		  ON link.run_id = finding.run_id AND link.row_index = finding.row_index
-		JOIN verifoxx.evidence_snapshots AS evidence ON evidence.id = link.evidence_snapshot_id
+		JOIN nornrune.evidence_snapshots AS evidence ON evidence.id = link.evidence_snapshot_id
 		WHERE run.idempotency_key = 'audit-3'
 	`).Scan(
 		&idempotencyKey,
@@ -201,18 +201,18 @@ func testDecisionAuditJournal(t *testing.T, ctx context.Context, environment *po
 	wantCounts["evaluation_findings"] = 6
 	wantCounts["evaluation_evidence"] = 6
 	for table, want := range wantCounts {
-		got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM verifoxx."+table)
+		got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM nornrune."+table)
 		if got != want {
 			t.Fatalf("%s count after multi-row audit = %d, want %d", table, got, want)
 		}
 	}
 	links, err := environment.runtime.Query(ctx, `
 		SELECT finding.row_index, link.evidence_ordinal, evidence.evidence_key
-		FROM verifoxx.evaluation_runs AS run
-		JOIN verifoxx.evaluation_findings AS finding ON finding.run_id = run.id
-		JOIN verifoxx.evaluation_evidence AS link
+		FROM nornrune.evaluation_runs AS run
+		JOIN nornrune.evaluation_findings AS finding ON finding.run_id = run.id
+		JOIN nornrune.evaluation_evidence AS link
 		  ON link.run_id = finding.run_id AND link.row_index = finding.row_index
-		JOIN verifoxx.evidence_snapshots AS evidence ON evidence.id = link.evidence_snapshot_id
+		JOIN nornrune.evidence_snapshots AS evidence ON evidence.id = link.evidence_snapshot_id
 		WHERE run.idempotency_key = 'audit-6'
 		ORDER BY finding.row_index, link.evidence_ordinal
 	`)
@@ -249,15 +249,15 @@ func testDecisionAuditJournal(t *testing.T, ctx context.Context, environment *po
 	}
 
 	if _, err := environment.migrator.Exec(ctx, `
-		CREATE FUNCTION verifoxx.reject_test_finding() RETURNS trigger
+		CREATE FUNCTION nornrune.reject_test_finding() RETURNS trigger
 		LANGUAGE plpgsql SET search_path = pg_catalog AS $$
 		BEGIN
 			RAISE EXCEPTION 'forced finding failure' USING ERRCODE = 'P0001';
 		END;
 		$$;
 		CREATE TRIGGER reject_test_finding
-		BEFORE INSERT ON verifoxx.evaluation_findings
-		FOR EACH STATEMENT EXECUTE FUNCTION verifoxx.reject_test_finding();
+		BEFORE INSERT ON nornrune.evaluation_findings
+		FOR EACH STATEMENT EXECUTE FUNCTION nornrune.reject_test_finding();
 	`); err != nil {
 		t.Fatalf("install finding failure trigger: %v", err)
 	}
@@ -265,8 +265,8 @@ func testDecisionAuditJournal(t *testing.T, ctx context.Context, environment *po
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_, _ = environment.migrator.Exec(cleanupCtx, `
-			DROP TRIGGER IF EXISTS reject_test_finding ON verifoxx.evaluation_findings;
-			DROP FUNCTION IF EXISTS verifoxx.reject_test_finding();
+			DROP TRIGGER IF EXISTS reject_test_finding ON nornrune.evaluation_findings;
+			DROP FUNCTION IF EXISTS nornrune.reject_test_finding();
 		`)
 	})
 	setAuditKey(t, &batch, "audit-4")
@@ -274,13 +274,13 @@ func testDecisionAuditJournal(t *testing.T, ctx context.Context, environment *po
 		t.Fatal("forced late audit failure returned nil")
 	}
 	for table, want := range wantCounts {
-		got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM verifoxx."+table)
+		got := queryCount(t, ctx, environment.runtime, "SELECT count(*) FROM nornrune."+table)
 		if got != want {
 			t.Fatalf("%s count after rollback = %d, want %d", table, got, want)
 		}
 	}
 
-	closedPool := openTestPool(t, ctx, environment.adminURL, "verifoxx_runtime", runtimePassword)
+	closedPool := openTestPool(t, ctx, environment.adminURL, "nornrune_runtime", runtimePassword)
 	closedStore, err := NewAuditStore(closedPool)
 	if err != nil {
 		t.Fatalf("construct closed-pool store: %v", err)

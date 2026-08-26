@@ -4,9 +4,9 @@ import (
 	"math"
 	"sync/atomic"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonbatch"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/result"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonbatch"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/result"
 )
 
 // Capacity supplies cold allocation hints for one reusable worker context.

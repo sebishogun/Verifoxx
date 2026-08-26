@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/sebishogun/verifoxx/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/persistence"
 )
 
 const (
@@ -98,7 +98,7 @@ func insertAuditRun(
 ) (int64, bool, error) {
 	var runID int64
 	err := tx.QueryRow(ctx, `
-		INSERT INTO verifoxx.evaluation_runs
+		INSERT INTO nornrune.evaluation_runs
 		    (idempotency_key, policy_version_id, engine_version,
 		     started_at, completed_at, row_count, execution_metadata)
 		VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
@@ -129,7 +129,7 @@ func insertAuditSnapshots(ctx context.Context, tx pgx.Tx, batch *persistence.Aud
 	var commands pgx.Batch
 	for row := range batch.Requests.Keys {
 		commands.Queue(`
-			INSERT INTO verifoxx.requests (request_key, content_hash, payload, captured_at)
+			INSERT INTO nornrune.requests (request_key, content_hash, payload, captured_at)
 			VALUES ($1, $2, $3::jsonb,
 			        timestamptz 'epoch'
 			        + ($4::bigint / 1000000) * interval '1 second'
@@ -148,7 +148,7 @@ func insertAuditSnapshots(ctx context.Context, tx pgx.Tx, batch *persistence.Aud
 			expires = batch.Evidence.ExpiresAt[row].UnixMicro()
 		}
 		commands.Queue(`
-			INSERT INTO verifoxx.evidence_snapshots
+			INSERT INTO nornrune.evidence_snapshots
 			    (evidence_key, content_hash, payload, captured_at, expires_at)
 			VALUES ($1, $2, $3::jsonb,
 			        timestamptz 'epoch'
@@ -182,13 +182,13 @@ func resolveAuditSnapshotIDs(ctx context.Context, tx pgx.Tx, batch *persistence.
 	var queries pgx.Batch
 	for row := range batch.Requests.Keys {
 		queries.Queue(`
-			SELECT id FROM verifoxx.requests
+			SELECT id FROM nornrune.requests
 			WHERE request_key = $1 AND content_hash = $2
 		`, batch.Requests.Keys[row].Bytes(batch.Bytes), batch.Requests.Hashes[row][:])
 	}
 	for row := range batch.Evidence.Keys {
 		queries.Queue(`
-			SELECT id FROM verifoxx.evidence_snapshots
+			SELECT id FROM nornrune.evidence_snapshots
 			WHERE evidence_key = $1 AND content_hash = $2
 		`, batch.Evidence.Keys[row].Bytes(batch.Bytes), batch.Evidence.Hashes[row][:])
 	}
@@ -229,7 +229,7 @@ func copyAuditFindings(ctx context.Context, tx pgx.Tx, runID int64, batch *persi
 	source := auditFindingSource{runID: runID, batch: batch}
 	copied, err := tx.CopyFrom(
 		ctx,
-		pgx.Identifier{"verifoxx", "evaluation_findings"},
+		pgx.Identifier{"nornrune", "evaluation_findings"},
 		[]string{
 			"run_id",
 			"row_index",
@@ -263,7 +263,7 @@ func copyAuditEvidence(ctx context.Context, tx pgx.Tx, runID int64, batch *persi
 	source := auditEvidenceSource{runID: runID, batch: batch}
 	copied, err := tx.CopyFrom(
 		ctx,
-		pgx.Identifier{"verifoxx", "evaluation_evidence"},
+		pgx.Identifier{"nornrune", "evaluation_evidence"},
 		[]string{"run_id", "row_index", "evidence_ordinal", "evidence_snapshot_id"},
 		&source,
 	)

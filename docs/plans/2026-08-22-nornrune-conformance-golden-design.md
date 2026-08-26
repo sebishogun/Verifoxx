@@ -1,4 +1,4 @@
-# Verifoxx Conformance And Golden Design
+# NornRune Conformance And Golden Design
 
 **Date:** 2026-08-22
 
@@ -28,7 +28,7 @@ before-execution timing without request-specific branches.
 ## Conformance Path
 
 One test builds the seven-field symbolic schema, decodes and compiles
-`policies/verifoxx/policy.json`, decodes the exact embedded request/evidence
+`policies/nornrune/policy.json`, decodes the exact embedded request/evidence
 fixtures, and runs `eval.Executor`. It asserts decisions and applied
 requirement IDs for all five rows.
 

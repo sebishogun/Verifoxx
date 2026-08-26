@@ -1,9 +1,9 @@
 # Policy Language
 
-The Verifoxx policy format is bounded JSON that preserves applicability,
+The NornRune policy format is bounded JSON that preserves applicability,
 assertions, evidence obligations, uncertainty, outcome precedence, provenance,
 and corrective actions. The checked-in policy is
-[`policies/verifoxx/policy.json`](../policies/verifoxx/policy.json).
+[`policies/nornrune/policy.json`](../policies/nornrune/policy.json).
 
 ## Document Shape
 
@@ -97,7 +97,7 @@ conditions to policy-defined outcomes.
 ## Outcomes And Resolution
 
 The engine uses integer outcome IDs. The policy catalog supplies names and
-precedence. The Verifoxx pack defines exactly:
+precedence. The NornRune pack defines exactly:
 
 | Outcome | Use |
 |---|---|
@@ -140,8 +140,8 @@ workflows:
 For another file, use the product commands directly:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx validate --policy /path/to/policy.json
-timeout 120s go run ./cmd/verifoxx compile --policy /path/to/policy.json
+timeout 120s go run ./cmd/nornrune validate --policy /path/to/policy.json
+timeout 120s go run ./cmd/nornrune compile --policy /path/to/policy.json
 ```
 
 `validate` reports stable diagnostics without publication. The database-backed

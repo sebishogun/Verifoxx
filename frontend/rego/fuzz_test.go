@@ -3,14 +3,14 @@ package rego
 import (
 	"testing"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	internalfrontend "github.com/sebishogun/verifoxx/internal/frontend"
+	public "github.com/sebishogun/nornrune/frontend"
+	internalfrontend "github.com/sebishogun/nornrune/internal/frontend"
 )
 
 func FuzzCompile(f *testing.F) {
-	f.Add([]byte("package verifoxx\nallow if { input.team == \"blue\" }"))
-	f.Add([]byte("package verifoxx\nallow if { not input.enabled }"))
-	f.Add([]byte("package verifoxx\nallow if { data.unsupported }"))
+	f.Add([]byte("package nornrune\nallow if { input.team == \"blue\" }"))
+	f.Add([]byte("package nornrune\nallow if { not input.enabled }"))
+	f.Add([]byte("package nornrune\nallow if { data.unsupported }"))
 	f.Add([]byte{0xff, 0xfe})
 	bindings := regoBindings()
 	limits := public.DefaultLimits()

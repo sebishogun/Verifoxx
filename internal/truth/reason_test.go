@@ -3,7 +3,7 @@ package truth
 import (
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 var testReasons = [...]schema.ReasonID{

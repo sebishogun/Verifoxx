@@ -8,7 +8,7 @@ import (
 
 	opaast "github.com/open-policy-agent/opa/v1/ast"
 
-	public "github.com/sebishogun/verifoxx/frontend"
+	public "github.com/sebishogun/nornrune/frontend"
 )
 
 type lowerResult struct {

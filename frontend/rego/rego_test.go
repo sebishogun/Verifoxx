@@ -10,11 +10,11 @@ import (
 	opaast "github.com/open-policy-agent/opa/v1/ast"
 	oparego "github.com/open-policy-agent/opa/v1/rego"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	internalfrontend "github.com/sebishogun/verifoxx/internal/frontend"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/eval"
+	internalfrontend "github.com/sebishogun/nornrune/internal/frontend"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func regoBindings() public.BindingSet {
@@ -29,7 +29,7 @@ func regoBindings() public.BindingSet {
 }
 
 func TestCompileLowersCompleteBooleanDecisionRules(t *testing.T) {
-	source := []byte(`package verifoxx
+	source := []byte(`package nornrune
 
 allow if {
 	input.team == "blue"
@@ -81,7 +81,7 @@ func TestCompileHandlesBooleanAtomsComparisonsAndMembership(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			source := []byte("package verifoxx\n\nallow if { " + test.body + " }")
+			source := []byte("package nornrune\n\nallow if { " + test.body + " }")
 			policy := requirePolicy(t, source, regoBindings(), public.DefaultLimits())
 			row := policy.Root - 1
 			if policy.NodeKinds[row] != test.kind {
@@ -95,7 +95,7 @@ func TestCompileHandlesBooleanAtomsComparisonsAndMembership(t *testing.T) {
 }
 
 func TestCompileNegatesConstantsWithoutDefinednessExpansion(t *testing.T) {
-	policy := requirePolicy(t, []byte("package verifoxx\nallow if { not false }"), regoBindings(), public.DefaultLimits())
+	policy := requirePolicy(t, []byte("package nornrune\nallow if { not false }"), regoBindings(), public.DefaultLimits())
 	if policy.NodeKinds[policy.Root-1] != public.NodeKindNot {
 		t.Fatalf("root kind = %v, want not", policy.NodeKinds[policy.Root-1])
 	}
@@ -113,10 +113,10 @@ func TestCompileMapsRegoDefaults(t *testing.T) {
 		wantDefault public.DefaultDecision
 		wantBoolean *bool
 	}{
-		{name: "no default", source: "package verifoxx\nallow if { input.enabled }", wantDefault: public.DefaultEscalate},
-		{name: "false default", source: "package verifoxx\ndefault allow := false\nallow if { input.enabled }", wantDefault: public.DefaultReject},
-		{name: "true default", source: "package verifoxx\ndefault allow := true\nallow if { input.enabled }", wantDefault: public.DefaultEscalate, wantBoolean: boolPointer(true)},
-		{name: "default only false", source: "package verifoxx\ndefault allow := false", wantDefault: public.DefaultReject, wantBoolean: boolPointer(false)},
+		{name: "no default", source: "package nornrune\nallow if { input.enabled }", wantDefault: public.DefaultEscalate},
+		{name: "false default", source: "package nornrune\ndefault allow := false\nallow if { input.enabled }", wantDefault: public.DefaultReject},
+		{name: "true default", source: "package nornrune\ndefault allow := true\nallow if { input.enabled }", wantDefault: public.DefaultEscalate, wantBoolean: boolPointer(true)},
+		{name: "default only false", source: "package nornrune\ndefault allow := false", wantDefault: public.DefaultReject, wantBoolean: boolPointer(false)},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -132,14 +132,14 @@ func TestCompileMapsRegoDefaults(t *testing.T) {
 			}
 		})
 	}
-	policy, diagnostics := Compile([]byte("package verifoxx"), regoBindings(), public.DefaultLimits())
+	policy, diagnostics := Compile([]byte("package nornrune"), regoBindings(), public.DefaultLimits())
 	if policy != nil || !hasDiagnostic(diagnostics, public.CodeInvalidPolicy) {
 		t.Fatalf("empty decision = (%v,%+v), want invalid policy", policy, diagnostics)
 	}
 }
 
 func TestNegationMatchesOPAForPresentAndMissingFields(t *testing.T) {
-	source := []byte("package verifoxx\n\nallow if { not input.enabled }")
+	source := []byte("package nornrune\n\nallow if { not input.enabled }")
 	policy := requirePolicy(t, source, regoBindings(), public.DefaultLimits())
 	foundDefined := false
 	for _, kind := range policy.NodeKinds {
@@ -166,14 +166,14 @@ func TestNegationMatchesOPAForPresentAndMissingFields(t *testing.T) {
 				t.Fatalf("OPA = (%v,%v), want (%v,%v)", value, found, test.wantOPA, test.wantFound)
 			}
 			if got := evaluatePolicy(t, policy, test.input); got != test.want {
-				t.Fatalf("Verifoxx outcome = %d, want %d", got, test.want)
+				t.Fatalf("NornRune outcome = %d, want %d", got, test.want)
 			}
 		})
 	}
 }
 
 func TestParseAndLowerAreSeparateAndOwned(t *testing.T) {
-	original := []byte("package verifoxx\nallow if { input.team == \"blue\" }")
+	original := []byte("package nornrune\nallow if { input.team == \"blue\" }")
 	source := bytes.Clone(original)
 	bindings := regoBindings()
 	parsed, diagnostics := Parse(source, bindings, public.DefaultLimits())
@@ -195,7 +195,7 @@ func TestParseAndLowerAreSeparateAndOwned(t *testing.T) {
 }
 
 func TestCompilePreservesOPAUnicodeByteSpans(t *testing.T) {
-	source := []byte("package verifoxx\n\nallow if { # café\n\tinput.team == \"café\"\n}")
+	source := []byte("package nornrune\n\nallow if { # café\n\tinput.team == \"café\"\n}")
 	policy := requirePolicy(t, source, regoBindings(), public.DefaultLimits())
 	found := false
 	for row, kind := range policy.NodeKinds {
@@ -213,7 +213,7 @@ func TestCompilePreservesOPAUnicodeByteSpans(t *testing.T) {
 }
 
 func TestUnknownComparisonFieldDiagnosticUsesExactReferenceSpan(t *testing.T) {
-	source := []byte("package verifoxx\n\n# café\nallow if { input.unknown == \"blue\" }")
+	source := []byte("package nornrune\n\n# café\nallow if { input.unknown == \"blue\" }")
 	policy, diagnostics := Compile(source, regoBindings(), public.DefaultLimits())
 	if policy != nil || len(diagnostics) != 1 || diagnostics[0].Code != public.CodeUnknownField {
 		t.Fatalf("Compile = (%v,%+v), want one unknown-field diagnostic", policy, diagnostics)
@@ -230,23 +230,23 @@ func TestCompileRejectsUnsupportedRego(t *testing.T) {
 		source string
 		code   public.DiagnosticCode
 	}{
-		{name: "syntax", source: "package verifoxx\nallow if {", code: public.CodeSyntax},
-		{name: "import", source: "package verifoxx\nimport data.foo\nallow if { true }", code: public.CodeUnsupported},
-		{name: "data", source: "package verifoxx\nallow if { data.foo }", code: public.CodeUnsupported},
-		{name: "function", source: "package verifoxx\nallow(x) if { true }", code: public.CodeUnsupported},
-		{name: "else", source: "package verifoxx\nallow := true if { true } else := true if { true }", code: public.CodeUnsupported},
-		{name: "recursion", source: "package verifoxx\nallow if { allow }", code: public.CodeUnsupported},
-		{name: "comprehension", source: "package verifoxx\nallow if { [x | x := 1] }", code: public.CodeUnsupported},
-		{name: "variable assignment", source: "package verifoxx\nallow if { x := input.count; x > 1 }", code: public.CodeUnsupported},
-		{name: "unification", source: "package verifoxx\nallow if { input.count = 1 }", code: public.CodeUnsupported},
-		{name: "partial document", source: "package verifoxx\nallow contains input.team if { true }", code: public.CodeUnsupported},
-		{name: "non boolean head", source: "package verifoxx\nallow := \"yes\"", code: public.CodeType},
-		{name: "with", source: "package verifoxx\nallow if { input.enabled with input.enabled as true }", code: public.CodeUnsupported},
-		{name: "builtin", source: "package verifoxx\nallow if { startswith(input.team, \"b\") }", code: public.CodeUnsupported},
-		{name: "field to field", source: "package verifoxx\nallow if { input.team == input.team }", code: public.CodeUnsupported},
-		{name: "unrelated rule", source: "package verifoxx\ndeny if { true }\nallow if { true }", code: public.CodeUnsupported},
-		{name: "duplicate default", source: "package verifoxx\ndefault allow := false\ndefault allow := false", code: public.CodeDuplicate},
-		{name: "unknown input", source: "package verifoxx\nallow if { input.unknown }", code: public.CodeUnknownField},
+		{name: "syntax", source: "package nornrune\nallow if {", code: public.CodeSyntax},
+		{name: "import", source: "package nornrune\nimport data.foo\nallow if { true }", code: public.CodeUnsupported},
+		{name: "data", source: "package nornrune\nallow if { data.foo }", code: public.CodeUnsupported},
+		{name: "function", source: "package nornrune\nallow(x) if { true }", code: public.CodeUnsupported},
+		{name: "else", source: "package nornrune\nallow := true if { true } else := true if { true }", code: public.CodeUnsupported},
+		{name: "recursion", source: "package nornrune\nallow if { allow }", code: public.CodeUnsupported},
+		{name: "comprehension", source: "package nornrune\nallow if { [x | x := 1] }", code: public.CodeUnsupported},
+		{name: "variable assignment", source: "package nornrune\nallow if { x := input.count; x > 1 }", code: public.CodeUnsupported},
+		{name: "unification", source: "package nornrune\nallow if { input.count = 1 }", code: public.CodeUnsupported},
+		{name: "partial document", source: "package nornrune\nallow contains input.team if { true }", code: public.CodeUnsupported},
+		{name: "non boolean head", source: "package nornrune\nallow := \"yes\"", code: public.CodeType},
+		{name: "with", source: "package nornrune\nallow if { input.enabled with input.enabled as true }", code: public.CodeUnsupported},
+		{name: "builtin", source: "package nornrune\nallow if { startswith(input.team, \"b\") }", code: public.CodeUnsupported},
+		{name: "field to field", source: "package nornrune\nallow if { input.team == input.team }", code: public.CodeUnsupported},
+		{name: "unrelated rule", source: "package nornrune\ndeny if { true }\nallow if { true }", code: public.CodeUnsupported},
+		{name: "duplicate default", source: "package nornrune\ndefault allow := false\ndefault allow := false", code: public.CodeDuplicate},
+		{name: "unknown input", source: "package nornrune\nallow if { input.unknown }", code: public.CodeUnknownField},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -269,8 +269,8 @@ func TestParseRejectsInvalidBindingsAndMalformedSource(t *testing.T) {
 		code     public.DiagnosticCode
 	}{
 		{name: "invalid utf8", source: []byte{0xff}, bindings: regoBindings(), code: public.CodeSyntax},
-		{name: "missing decision", source: []byte("package verifoxx"), bindings: func() public.BindingSet { b := regoBindings(); b.Decision = ""; return b }(), code: public.CodeInvalidBinding},
-		{name: "non input binding", source: []byte("package verifoxx"), bindings: func() public.BindingSet { b := regoBindings(); b.Fields[0].Source = "team"; return b }(), code: public.CodeInvalidBinding},
+		{name: "missing decision", source: []byte("package nornrune"), bindings: func() public.BindingSet { b := regoBindings(); b.Decision = ""; return b }(), code: public.CodeInvalidBinding},
+		{name: "non input binding", source: []byte("package nornrune"), bindings: func() public.BindingSet { b := regoBindings(); b.Fields[0].Source = "team"; return b }(), code: public.CodeInvalidBinding},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -289,13 +289,13 @@ func TestCompileEnforcesSharedLimits(t *testing.T) {
 		source string
 		limits func(public.Limits) public.Limits
 	}{
-		{name: "source", source: "package verifoxx\nallow if { true }", limits: func(l public.Limits) public.Limits { l.MaxSourceBytes = 5; return l }},
-		{name: "fields", source: "package verifoxx\nallow if { true }", limits: func(l public.Limits) public.Limits { l.MaxFields = 2; return l }},
-		{name: "binding strings", source: "package verifoxx\nallow if { true }", limits: func(l public.Limits) public.Limits { l.MaxStringBytes = 1; return l }},
-		{name: "nodes", source: "package verifoxx\nallow if { input.enabled; true }", limits: func(l public.Limits) public.Limits { l.MaxNodes = 1; return l }},
-		{name: "depth", source: "package verifoxx\nallow if { not input.enabled }", limits: func(l public.Limits) public.Limits { l.MaxDepth = 2; return l }},
-		{name: "literals", source: "package verifoxx\nallow if { input.count == 1; input.count == 2 }", limits: func(l public.Limits) public.Limits { l.MaxLiterals = 1; return l }},
-		{name: "children", source: "package verifoxx\nallow if { input.enabled; true }", limits: func(l public.Limits) public.Limits { l.MaxChildren = 1; return l }},
+		{name: "source", source: "package nornrune\nallow if { true }", limits: func(l public.Limits) public.Limits { l.MaxSourceBytes = 5; return l }},
+		{name: "fields", source: "package nornrune\nallow if { true }", limits: func(l public.Limits) public.Limits { l.MaxFields = 2; return l }},
+		{name: "binding strings", source: "package nornrune\nallow if { true }", limits: func(l public.Limits) public.Limits { l.MaxStringBytes = 1; return l }},
+		{name: "nodes", source: "package nornrune\nallow if { input.enabled; true }", limits: func(l public.Limits) public.Limits { l.MaxNodes = 1; return l }},
+		{name: "depth", source: "package nornrune\nallow if { not input.enabled }", limits: func(l public.Limits) public.Limits { l.MaxDepth = 2; return l }},
+		{name: "literals", source: "package nornrune\nallow if { input.count == 1; input.count == 2 }", limits: func(l public.Limits) public.Limits { l.MaxLiterals = 1; return l }},
+		{name: "children", source: "package nornrune\nallow if { input.enabled; true }", limits: func(l public.Limits) public.Limits { l.MaxChildren = 1; return l }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -371,14 +371,14 @@ allow if { input.team == "green" }`, input: map[string]any{"team": "green"}, wan
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			source := []byte("package verifoxx\n" + test.source)
+			source := []byte("package nornrune\n" + test.source)
 			value, found := evaluateOPA(t, source, test.input)
 			if value != test.wantOPA || found != test.wantFound {
 				t.Fatalf("OPA = (%v,%v), want (%v,%v)", value, found, test.wantOPA, test.wantFound)
 			}
 			policy := requirePolicy(t, source, regoBindings(), public.DefaultLimits())
 			if got := evaluatePolicy(t, policy, test.input); got != test.want {
-				t.Fatalf("Verifoxx outcome = %d, want %d", got, test.want)
+				t.Fatalf("NornRune outcome = %d, want %d", got, test.want)
 			}
 		})
 	}
@@ -486,7 +486,7 @@ func evaluatePolicy(t *testing.T, policy *public.Policy, input map[string]any) s
 func evaluateOPA(t *testing.T, source []byte, input map[string]any) (bool, bool) {
 	t.Helper()
 	results, err := oparego.New(
-		oparego.Query("data.verifoxx.allow"),
+		oparego.Query("data.nornrune.allow"),
 		oparego.Module("policy.rego", string(source)),
 		oparego.Input(input),
 		oparego.SetRegoVersion(opaast.RegoV1),

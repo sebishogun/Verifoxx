@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	coreservice "github.com/sebishogun/verifoxx/internal/service"
+	coreservice "github.com/sebishogun/nornrune/internal/service"
 )
 
 var (

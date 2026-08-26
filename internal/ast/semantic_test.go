@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func TestOutcomesClausesRequirementsAndRemediation(t *testing.T) {
@@ -134,7 +134,7 @@ func TestPolicyMetadataAndEvidenceCatalogs(t *testing.T) {
 	if err := b.SetSource(source); err != nil {
 		t.Fatal(err)
 	}
-	pack := mustSymbolValue(t, b, "verifoxx")
+	pack := mustSymbolValue(t, b, "nornrune")
 	version := mustSymbolValue(t, b, "1.0.0")
 	kindName := mustSymbolValue(t, b, "approval_record")
 	stateName := mustSymbolValue(t, b, "current")

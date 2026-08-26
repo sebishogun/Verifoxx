@@ -268,23 +268,23 @@ Expected: PASS.
 ### Task 4: Verify Real Browser Geometry And Keyboard Behavior
 
 **Files:**
-- Temporary only: `/tmp/opencode/verifoxx-browser-graph-e2e.mjs`
-- Temporary output: `/tmp/opencode/verifoxx-browser-graph.html`
-- Temporary screenshots: `/tmp/opencode/verifoxx-browser-{desktop,mobile}.png`
+- Temporary only: `/tmp/opencode/nornrune-browser-graph-e2e.mjs`
+- Temporary output: `/tmp/opencode/nornrune-browser-graph.html`
+- Temporary screenshots: `/tmp/opencode/nornrune-browser-{desktop,mobile}.png`
 
 **Step 1: Build a fresh bounded CLI**
 
 ```bash
 timeout 150s go build -tags=debug -gcflags=all='-N -l' \
-  -o /tmp/opencode/verifoxx-browser-e2e ./cmd/verifoxx
+  -o /tmp/opencode/nornrune-browser-e2e ./cmd/nornrune
 ```
 
 **Step 2: Export the real policy graph**
 
 ```bash
-timeout 60s /tmp/opencode/verifoxx-browser-e2e graph \
+timeout 60s /tmp/opencode/nornrune-browser-e2e graph \
   --view ast --format html \
-  --output /tmp/opencode/verifoxx-browser-graph.html --force
+  --output /tmp/opencode/nornrune-browser-graph.html --force
 ```
 
 **Step 3: Write the bounded Playwright check**
@@ -314,7 +314,7 @@ The script must:
 ```bash
 timeout 90s env \
   NODE_PATH=/home/sebishogun/.local/share/mise/installs/npm-playwright/1.62.1/node_modules \
-  node /tmp/opencode/verifoxx-browser-graph-e2e.mjs
+  node /tmp/opencode/nornrune-browser-graph-e2e.mjs
 ```
 
 Expected: PASS with no overlaps, browser errors, or leaked Chromium process.

@@ -22,7 +22,7 @@ Both maintained Neovim configurations launch Delve as
 configuration calls the deprecated `dap.ext.vscode.load_launchjs` API.
 
 Zed already imports `.vscode/launch.json` when a project does not define
-`.zed/debug.json`. Verifoxx therefore keeps one repository launch definition for
+`.zed/debug.json`. NornRune therefore keeps one repository launch definition for
 Neovim, Zed, and VS Code rather than duplicating it in user-level dotfiles. The
 existing Zed debugger keybindings remain unchanged.
 

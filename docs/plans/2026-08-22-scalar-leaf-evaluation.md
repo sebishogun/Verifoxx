@@ -475,7 +475,7 @@ Expected: PASS.
 ```bash
 go test -timeout 60s ./... -count=1
 timeout 60s go vet ./...
-timeout 60s go build -o /dev/null ./cmd/verifoxx
+timeout 60s go build -o /dev/null ./cmd/nornrune
 timeout 30s gofmt -l .
 timeout 60s go mod tidy -diff
 ```

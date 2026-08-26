@@ -26,7 +26,7 @@ var file_options_proto_extTypes = []protoimpl.ExtensionInfo{
 		ExtendedType:  (*descriptorpb.MessageOptions)(nil),
 		ExtensionType: (*string)(nil),
 		Field:         51001,
-		Name:          "verifoxx.frontend.policy_name",
+		Name:          "nornrune.frontend.policy_name",
 		Tag:           "bytes,51001,opt,name=policy_name",
 		Filename:      "options.proto",
 	},
@@ -34,7 +34,7 @@ var file_options_proto_extTypes = []protoimpl.ExtensionInfo{
 		ExtendedType:  (*descriptorpb.MessageOptions)(nil),
 		ExtensionType: (*string)(nil),
 		Field:         51002,
-		Name:          "verifoxx.frontend.policy_version",
+		Name:          "nornrune.frontend.policy_version",
 		Tag:           "bytes,51002,opt,name=policy_version",
 		Filename:      "options.proto",
 	},
@@ -42,7 +42,7 @@ var file_options_proto_extTypes = []protoimpl.ExtensionInfo{
 		ExtendedType:  (*descriptorpb.MessageOptions)(nil),
 		ExtensionType: (*string)(nil),
 		Field:         51003,
-		Name:          "verifoxx.frontend.cel_expression",
+		Name:          "nornrune.frontend.cel_expression",
 		Tag:           "bytes,51003,opt,name=cel_expression",
 		Filename:      "options.proto",
 	},
@@ -50,7 +50,7 @@ var file_options_proto_extTypes = []protoimpl.ExtensionInfo{
 		ExtendedType:  (*descriptorpb.FieldOptions)(nil),
 		ExtensionType: (*string)(nil),
 		Field:         51004,
-		Name:          "verifoxx.frontend.canonical_target",
+		Name:          "nornrune.frontend.canonical_target",
 		Tag:           "bytes,51004,opt,name=canonical_target",
 		Filename:      "options.proto",
 	},
@@ -76,22 +76,22 @@ var File_options_proto protoreflect.FileDescriptor
 
 const file_options_proto_rawDesc = "" +
 	"\n" +
-	"\roptions.proto\x12\x11verifoxx.frontend\x1a google/protobuf/descriptor.proto:B\n" +
+	"\roptions.proto\x12\x11nornrune.frontend\x1a google/protobuf/descriptor.proto:B\n" +
 	"\vpolicy_name\x12\x1f.google.protobuf.MessageOptions\x18\xb9\x8e\x03 \x01(\tR\n" +
 	"policyName:H\n" +
 	"\x0epolicy_version\x12\x1f.google.protobuf.MessageOptions\x18\xba\x8e\x03 \x01(\tR\rpolicyVersion:H\n" +
 	"\x0ecel_expression\x12\x1f.google.protobuf.MessageOptions\x18\xbb\x8e\x03 \x01(\tR\rcelExpression:J\n" +
-	"\x10canonical_target\x12\x1d.google.protobuf.FieldOptions\x18\xbc\x8e\x03 \x01(\tR\x0fcanonicalTargetB:Z8github.com/sebishogun/verifoxx/frontend/proto;frontprotob\x06proto3"
+	"\x10canonical_target\x12\x1d.google.protobuf.FieldOptions\x18\xbc\x8e\x03 \x01(\tR\x0fcanonicalTargetB:Z8github.com/sebishogun/nornrune/frontend/proto;frontprotob\x06proto3"
 
 var file_options_proto_goTypes = []any{
 	(*descriptorpb.MessageOptions)(nil), // 0: google.protobuf.MessageOptions
 	(*descriptorpb.FieldOptions)(nil),   // 1: google.protobuf.FieldOptions
 }
 var file_options_proto_depIdxs = []int32{
-	0, // 0: verifoxx.frontend.policy_name:extendee -> google.protobuf.MessageOptions
-	0, // 1: verifoxx.frontend.policy_version:extendee -> google.protobuf.MessageOptions
-	0, // 2: verifoxx.frontend.cel_expression:extendee -> google.protobuf.MessageOptions
-	1, // 3: verifoxx.frontend.canonical_target:extendee -> google.protobuf.FieldOptions
+	0, // 0: nornrune.frontend.policy_name:extendee -> google.protobuf.MessageOptions
+	0, // 1: nornrune.frontend.policy_version:extendee -> google.protobuf.MessageOptions
+	0, // 2: nornrune.frontend.cel_expression:extendee -> google.protobuf.MessageOptions
+	1, // 3: nornrune.frontend.canonical_target:extendee -> google.protobuf.FieldOptions
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name

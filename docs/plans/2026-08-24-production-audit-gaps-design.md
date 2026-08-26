@@ -52,7 +52,7 @@ which production path ran; no per-row instrumentation is added.
 
 ## Offline Benchmark Command
 
-`verifoxx bench` is a local command, not a service endpoint. It accepts only
+`nornrune bench` is a local command, not a service endpoint. It accepts only
 bounded shape controls:
 
 ```text

@@ -243,7 +243,7 @@ Use a narrow query interface in unit tests. Require a parameterized query by exa
 
 CLI tests require:
 
-- unset `VERIFOXX_DATABASE_URL` starts TUI with Persisted marked “not configured”;
+- unset `NORNRUNE_DATABASE_URL` starts TUI with Persisted marked “not configured”;
 - a configured URL constructs the loader lazily;
 - parse/connect/query failure appears in the history pane and does not end the Bubble Tea program;
 - loader resources close when TUI exits.
@@ -262,11 +262,11 @@ Query:
 
 ```sql
 SELECT run.completed_at, policy.name, version.semantic_version, finding.decision
-FROM verifoxx.evaluation_findings AS finding
-JOIN verifoxx.evaluation_runs AS run ON run.id = finding.run_id
-JOIN verifoxx.requests AS request ON request.id = finding.request_id
-JOIN verifoxx.policy_versions AS version ON version.id = run.policy_version_id
-JOIN verifoxx.policies AS policy ON policy.id = version.policy_id
+FROM nornrune.evaluation_findings AS finding
+JOIN nornrune.evaluation_runs AS run ON run.id = finding.run_id
+JOIN nornrune.requests AS request ON request.id = finding.request_id
+JOIN nornrune.policy_versions AS version ON version.id = run.policy_version_id
+JOIN nornrune.policies AS policy ON policy.id = version.policy_id
 WHERE request.request_key = $1
 ORDER BY run.completed_at DESC, run.id DESC, finding.row_index DESC
 LIMIT $2
@@ -293,7 +293,7 @@ Expected: unit tests pass. Integration passes when Docker/PostgreSQL is availabl
 
 **Step 1: Update golden contracts**
 
-Regenerate the two fixed terminal frames at their explicit test dimensions. Add concise documentation for full-screen behavior, AST/Program tabs, history tabs, optional `VERIFOXX_DATABASE_URL`, and the browser's richer labeled graph.
+Regenerate the two fixed terminal frames at their explicit test dimensions. Add concise documentation for full-screen behavior, AST/Program tabs, history tabs, optional `NORNRUNE_DATABASE_URL`, and the browser's richer labeled graph.
 
 **Step 2: Run focused verification**
 

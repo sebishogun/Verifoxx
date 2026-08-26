@@ -190,7 +190,7 @@ timeout 120s go test -count=1 -timeout 60s ./internal/graphview
 
 Expected: exporter and model tests pass.
 
-### Task 5: Add The Static `verifoxx graph` Command
+### Task 5: Add The Static `nornrune graph` Command
 
 **Files:**
 - Create: `internal/adapters/cli/graph.go`
@@ -222,9 +222,9 @@ and rename. Reject overwrite unless `--force`.
 **Step 4: Run GREEN and CLI smoke tests**
 
 ```bash
-timeout 120s go test -count=1 -timeout 60s ./internal/adapters/cli ./cmd/verifoxx
-timeout 120s go run ./cmd/verifoxx graph --view ast --format svg --output /tmp/verifoxx-ast.svg --force
-timeout 120s go run ./cmd/verifoxx graph --view program --format html --output /tmp/verifoxx-program.html --force
+timeout 120s go test -count=1 -timeout 60s ./internal/adapters/cli ./cmd/nornrune
+timeout 120s go run ./cmd/nornrune graph --view ast --format svg --output /tmp/nornrune-ast.svg --force
+timeout 120s go run ./cmd/nornrune graph --view program --format html --output /tmp/nornrune-program.html --force
 ```
 
 Expected: tests pass and both output files are nonempty.
@@ -311,7 +311,7 @@ timeout 300s go test -count=1 -timeout 240s -tags=purego ./...
 timeout 360s go test -count=1 -timeout 300s -tags=integration ./...
 timeout 300s go run ./cmd/devx policy:check
 timeout 300s go run ./cmd/devx results:check
-timeout 300s env PATH="/tmp/opencode/verifoxx-tools:$PATH" go run ./cmd/devx proto:check
+timeout 300s env PATH="/tmp/opencode/nornrune-tools:$PATH" go run ./cmd/devx proto:check
 timeout 300s go run ./cmd/devx build
 git diff --check
 ```

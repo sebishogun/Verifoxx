@@ -7,17 +7,17 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonbatch"
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonpolicy"
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/buildinfo"
-	"github.com/sebishogun/verifoxx/internal/compile"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
-	"github.com/sebishogun/verifoxx/internal/truth"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonbatch"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonpolicy"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/buildinfo"
+	"github.com/sebishogun/nornrune/internal/compile"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
+	"github.com/sebishogun/nornrune/internal/truth"
 )
 
 type encodingFixture struct {
@@ -211,7 +211,7 @@ func TestEncoderEncodesEmptyResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
-	want := []byte("{\n  \"schema_version\": 1,\n  \"policy\": {\n    \"name\": \"verifoxx\",\n    \"version\": \"1.0.0\",\n    \"sha256\": \"a92ffd1c00e823652bed47acf3955f5559543eeba4f02ebf16965bc2966d0a22\"\n  },\n  \"engine_version\": \"devel\",\n  \"results\": []\n}\n")
+	want := []byte("{\n  \"schema_version\": 1,\n  \"policy\": {\n    \"name\": \"nornrune\",\n    \"version\": \"1.0.0\",\n    \"sha256\": \"2b26fdb9304cb045f4490039061090da01e10e0140e7e16a22e3b71816fc8245\"\n  },\n  \"engine_version\": \"devel\",\n  \"results\": []\n}\n")
 	if !bytes.Equal(got, want) {
 		t.Fatalf("empty result mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
@@ -422,7 +422,7 @@ func TestEncoderWarmAppendAllocatesNothing(t *testing.T) {
 func loadEncodingFixture(tb testing.TB) encodingFixture {
 	tb.Helper()
 	fields, symbols := encodingSchema(tb)
-	policySource, err := os.ReadFile("../../../policies/verifoxx/policy.json")
+	policySource, err := os.ReadFile("../../../policies/nornrune/policy.json")
 	if err != nil {
 		tb.Fatal(err)
 	}

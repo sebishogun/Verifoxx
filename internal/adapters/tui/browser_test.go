@@ -13,8 +13,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/sebishogun/verifoxx/internal/debug"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/debug"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func TestBrowserServesLoopbackHTMLAndBoundedState(t *testing.T) {

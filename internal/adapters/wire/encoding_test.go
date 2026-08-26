@@ -28,7 +28,7 @@ func TestAppendJSONStringPreservesAdapterEncoding(t *testing.T) {
 }
 
 func TestSHA256HexRoundTrip(t *testing.T) {
-	hash := sha256.Sum256([]byte("verifoxx"))
+	hash := sha256.Sum256([]byte("nornrune"))
 	want := hex.EncodeToString(hash[:])
 	if got := string(AppendSHA256(nil, hash)); got != want {
 		t.Fatalf("AppendSHA256() = %q, want %q", got, want)
@@ -48,13 +48,13 @@ func TestSHA256HexRoundTrip(t *testing.T) {
 }
 
 func TestWireEncodingWarmPathDoesNotAllocate(t *testing.T) {
-	hash := sha256.Sum256([]byte("verifoxx"))
+	hash := sha256.Sum256([]byte("nornrune"))
 	encoded := hex.EncodeToString(hash[:])
 	stringDst := make([]byte, 0, 128)
 	hashDst := make([]byte, 0, sha256.Size*2)
 	var decoded [sha256.Size]byte
 	if allocations := testing.AllocsPerRun(100, func() {
-		stringDst = AppendJSONString(stringDst[:0], []byte("<verifoxx>"))
+		stringDst = AppendJSONString(stringDst[:0], []byte("<nornrune>"))
 		hashDst = AppendSHA256(hashDst[:0], hash)
 		decoded, _ = DecodeSHA256(encoded)
 	}); allocations != 0 {

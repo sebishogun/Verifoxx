@@ -29,7 +29,7 @@ func TestRenderDOTIsStableEscapedAndSemantic(t *testing.T) {
 	}
 	output := string(first)
 	for _, required := range []string{
-		"digraph verifoxx", `n1 -> n2 [label="requires evidence"`,
+		"digraph nornrune", `n1 -> n2 [label="requires evidence"`,
 		`compare \"quoted\" & <bounded>`, `tooltip="line one\nline two"`,
 		`color="#f59e0b"`, `style="dashed"`, `source_start="1"`, `source_end="10"`,
 	} {

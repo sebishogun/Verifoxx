@@ -13,14 +13,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	tuiadapter "github.com/sebishogun/verifoxx/internal/adapters/tui"
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/config"
-	"github.com/sebishogun/verifoxx/internal/debug"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	tuiadapter "github.com/sebishogun/nornrune/internal/adapters/tui"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/config"
+	"github.com/sebishogun/nornrune/internal/debug"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 var errInvalidTUIData = errors.New("tui: invalid semantic display data")
@@ -72,7 +72,7 @@ func newTUICommand(deps dependencies) *cobra.Command {
 			}, inputs, cmd.InOrStdin(), cmd.OutOrStdout()))
 		},
 	}
-	cmd.Flags().StringVar(&socketPath, "socket", ".verifoxx/debug.sock", "semantic debug Unix socket path")
+	cmd.Flags().StringVar(&socketPath, "socket", ".nornrune/debug.sock", "semantic debug Unix socket path")
 	cmd.Flags().BoolVar(&browser, "browser", false, "open a synchronized IPv4-loopback graph viewer")
 	bindSourceFlags(cmd, &flags, sourceAll)
 	return cmd

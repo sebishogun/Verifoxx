@@ -6,8 +6,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/result"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/result"
 )
 
 func TestSchedulerExplanationProvenanceEndToEnd(t *testing.T) {

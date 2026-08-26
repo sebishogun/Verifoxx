@@ -9,16 +9,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonbatch"
-	"github.com/sebishogun/verifoxx/internal/adapters/jsonresult"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	"github.com/sebishogun/verifoxx/internal/observability"
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/scheduler"
-	"github.com/sebishogun/verifoxx/internal/security"
-	"github.com/sebishogun/verifoxx/internal/service"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonbatch"
+	"github.com/sebishogun/nornrune/internal/adapters/jsonresult"
+	"github.com/sebishogun/nornrune/internal/eval"
+	"github.com/sebishogun/nornrune/internal/observability"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/scheduler"
+	"github.com/sebishogun/nornrune/internal/security"
+	"github.com/sebishogun/nornrune/internal/service"
 )
 
 const maxEngineWorkers = 256

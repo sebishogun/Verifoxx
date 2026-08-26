@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package verifoxx.frontend;
+package nornrune.frontend;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/sebishogun/verifoxx/frontend/proto;frontproto";
+option go_package = "github.com/sebishogun/nornrune/frontend/proto;frontproto";
 
 extend google.protobuf.MessageOptions {
   string policy_name = 51001;

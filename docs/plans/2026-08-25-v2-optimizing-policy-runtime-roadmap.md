@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the existing allocation-free scalar SIMD evaluator as the first execution tier. A possible v2 adds typed aggregate and entity storage, language-specific semantic IRs, shared typed SSA, fused portable kernels, and a columnar general CEL fallback; native JIT compilation remains an optional measured optimization, and full Rego remains a later query-engine project.
 
-**Tech Stack:** Go 1.27, official CEL/Cedar/Rego parsers and conformance suites, existing Verifoxx SoA/CSR/bitplane kernels and fixed-worker scheduler, optional future LLVM ORC, Cranelift, or custom native backend.
+**Tech Stack:** Go 1.27, official CEL/Cedar/Rego parsers and conformance suites, existing NornRune SoA/CSR/bitplane kernels and fixed-worker scheduler, optional future LLVM ORC, Cranelift, or custom native backend.
 
 ---
 
@@ -17,8 +17,8 @@
 ## Why This Exists
 
 The v1 compatibility work deliberately accepts bounded CEL, Rego, and Cedar
-subsets and lowers them into one existing Verifoxx evaluator. During Cedar
-planning, we considered whether Verifoxx should eventually support complete
+subsets and lowers them into one existing NornRune evaluator. During Cedar
+planning, we considered whether NornRune should eventually support complete
 language semantics and compile them into a substantially broader optimizing
 runtime.
 
@@ -47,7 +47,7 @@ requests.
 
 The strongest initial wedge may be policy simulation rather than replacing a
 live authorizer. Replaying millions of historical requests naturally benefits
-from Verifoxx's batch layout, semantic diff, explanations, indexes, SIMD, and
+from NornRune's batch layout, semantic diff, explanations, indexes, SIMD, and
 fixed-worker scheduler. A useful product question is:
 
 > If this policy version is deployed, which historical requests change
@@ -151,7 +151,7 @@ SIMD bitplane kernels  aggregate/entity   columnar CEL instructions
 
 The canonical SSA must preserve language-specific states rather than flatten
 them incorrectly. CEL error/unknown, Cedar per-policy error, Rego undefined,
-and Verifoxx missing/stale/unclear/unverifiable/conflict are distinct semantic
+and NornRune missing/stale/unclear/unverifiable/conflict are distinct semantic
 concepts even when some ultimately produce the same product outcome.
 
 ## Execution Tiers

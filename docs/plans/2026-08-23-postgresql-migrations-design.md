@@ -47,8 +47,8 @@ volume, because PostgreSQL entrypoint scripts run only on first initialization.
 uses fixed role names, reads passwords from environment variables, passes them
 to `psql` as safely quoted variables, and creates:
 
-- `verifoxx_migrator`, which owns the application schema and DDL; and
-- `verifoxx_runtime`, which receives only explicit runtime grants.
+- `nornrune_migrator`, which owns the application schema and DDL; and
+- `nornrune_runtime`, which receives only explicit runtime grants.
 
 The bootstrap `postgres` role is local infrastructure and is not used by the
 application or migration library.
@@ -56,8 +56,8 @@ application or migration library.
 ## Schema Boundary
 
 The migration ledger is
-`public.verifoxx_schema_migrations`. Application data is isolated in a
-`verifoxx` schema owned by `verifoxx_migrator`. Public schema creation and
+`public.nornrune_schema_migrations`. Application data is isolated in a
+`nornrune` schema owned by `nornrune_migrator`. Public schema creation and
 default privileges are revoked where appropriate.
 
 Migration `000001_initial` creates these tables:
@@ -136,7 +136,7 @@ trigger. Corrections create new immutable rows. The trigger also protects
 against accidental mutation by the migration owner; dropping the schema in a
 down migration remains DDL and is unaffected.
 
-`verifoxx_runtime` receives schema usage, required sequence usage, explicit
+`nornrune_runtime` receives schema usage, required sequence usage, explicit
 `SELECT`/`INSERT` table grants, and column-scoped permission to update only
 `policies.active_version_id`. It cannot create schema objects or update/delete
 immutable records. Migration-ledger access remains migration-only.

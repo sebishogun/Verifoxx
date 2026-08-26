@@ -4,7 +4,7 @@
 // allocate.
 package result
 
-import "github.com/sebishogun/verifoxx/internal/schema"
+import "github.com/sebishogun/nornrune/internal/schema"
 
 // OutcomeTable maps one-based OutcomeIDs to policy-defined outcome records.
 // All columns are parallel; IDs outside every column are invalid.

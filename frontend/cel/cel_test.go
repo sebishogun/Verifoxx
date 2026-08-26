@@ -8,12 +8,12 @@ import (
 	celgo "cel.dev/cel-go/cel"
 	celtypes "cel.dev/cel-go/common/types"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/eval"
-	internalfrontend "github.com/sebishogun/verifoxx/internal/frontend"
-	coreprogram "github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/result"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/eval"
+	internalfrontend "github.com/sebishogun/nornrune/internal/frontend"
+	coreprogram "github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func scalarBindings() public.BindingSet {
@@ -354,7 +354,7 @@ func TestDifferentialEvaluationMatchesOfficialCEL(t *testing.T) {
 				}
 			}
 			if got := evaluatePolicy(t, compiled, test.activation); got != test.want {
-				t.Fatalf("Verifoxx outcome = %d, want %d", got, test.want)
+				t.Fatalf("NornRune outcome = %d, want %d", got, test.want)
 			}
 		})
 	}

@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	verifoxxv1 "github.com/sebishogun/verifoxx/api/gen/verifoxx/v1"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
+	nornrunev1 "github.com/sebishogun/nornrune/api/gen/nornrune/v1"
+	"github.com/sebishogun/nornrune/internal/fixtures"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -35,10 +35,10 @@ func TestComposeFullMode(t *testing.T) {
 	httpPort := ports[0]
 	grpcPort := ports[1]
 	postgresPort := ports[2]
-	project := fmt.Sprintf("verifoxx-e2e-%d", os.Getpid())
+	project := fmt.Sprintf("nornrune-e2e-%d", os.Getpid())
 	environment := append(os.Environ(),
-		"VERIFOXX_HTTP_PORT="+strconv.Itoa(httpPort),
-		"VERIFOXX_GRPC_PORT="+strconv.Itoa(grpcPort),
+		"NORNRUNE_HTTP_PORT="+strconv.Itoa(httpPort),
+		"NORNRUNE_GRPC_PORT="+strconv.Itoa(grpcPort),
 		"POSTGRES_PORT="+strconv.Itoa(postgresPort),
 	)
 	t.Cleanup(func() {
@@ -58,11 +58,11 @@ func TestComposeFullMode(t *testing.T) {
 	probeContext, cancelProbe := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelProbe()
 	if output, err := runCompose(probeContext, repository, environment, project,
-		"exec", "-T", "postgres", "pg_isready", "-U", "postgres", "-d", "verifoxx"); err != nil {
+		"exec", "-T", "postgres", "pg_isready", "-U", "postgres", "-d", "nornrune"); err != nil {
 		t.Fatalf("PostgreSQL health error = %v\n%s", err, output)
 	}
 	if got := queryComposePostgres(t, repository, environment, project,
-		"SELECT count(*) FROM public.verifoxx_schema_migrations"); got != "2" {
+		"SELECT count(*) FROM public.nornrune_schema_migrations"); got != "2" {
 		t.Fatalf("applied migrations = %q, want 2", got)
 	}
 
@@ -117,8 +117,8 @@ func TestComposeFullMode(t *testing.T) {
 		t.Fatalf("create gRPC client: %v", err)
 	}
 	defer connection.Close()
-	grpcResponse, err := verifoxxv1.NewPolicyServiceClient(connection).EvaluateBatch(grpcContext,
-		&verifoxxv1.EvaluateBatchRequest{
+	grpcResponse, err := nornrunev1.NewPolicyServiceClient(connection).EvaluateBatch(grpcContext,
+		&nornrunev1.EvaluateBatchRequest{
 			RequestsJson: []byte(fixtures.RequestsJSON()),
 			EvidenceJson: []byte(fixtures.EvidenceJSON()),
 		})
@@ -130,9 +130,9 @@ func TestComposeFullMode(t *testing.T) {
 	}
 
 	if got := queryComposePostgres(t, repository, environment, project, `
-		SELECT (SELECT count(*) FROM verifoxx.evaluation_runs)::text
+		SELECT (SELECT count(*) FROM nornrune.evaluation_runs)::text
 		       || '|' ||
-		       (SELECT count(*) FROM verifoxx.evaluation_findings)::text
+		       (SELECT count(*) FROM nornrune.evaluation_findings)::text
 	`); got != "2|10" {
 		t.Fatalf("persisted audit counts = %q, want 2|10", got)
 	}
@@ -225,7 +225,7 @@ func queryComposePostgres(
 	defer cancel()
 	output, err := runCompose(ctx, repository, environment, project,
 		"exec", "-T", "postgres", "psql", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1",
-		"-U", "postgres", "-d", "verifoxx", "-c", query)
+		"-U", "postgres", "-d", "nornrune", "-c", query)
 	if err != nil {
 		t.Fatalf("PostgreSQL query error = %v\n%s", err, output)
 	}

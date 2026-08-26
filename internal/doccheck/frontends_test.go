@@ -32,7 +32,7 @@ func TestFrontendCapabilityDocumentationIsComplete(t *testing.T) {
 func TestEvaluatorCoreDoesNotImportFrontendDependencies(t *testing.T) {
 	packages := []string{"eval", "scheduler", "program", "result", "truth", "index"}
 	forbidden := []string{
-		"github.com/sebishogun/verifoxx/frontend", "cel.dev/cel-go",
+		"github.com/sebishogun/nornrune/frontend", "cel.dev/cel-go",
 		"github.com/open-policy-agent/opa", "github.com/cedar-policy/cedar-go",
 		"google.golang.org/protobuf",
 	}
@@ -83,7 +83,7 @@ func TestFrontendGuideDocumentsTheBoundedContract(t *testing.T) {
 		"cel.dev/cel-go v0.32.0", "github.com/open-policy-agent/opa v1.19.1",
 		"github.com/cedar-policy/cedar-go v1.8.0", "google.golang.org/protobuf v1.36.12",
 		"Supported", "Restricted", "Rejected", "no fixed performance claim",
-		"proto:gen", "proto:check", "protoc-gen-verifoxx", "canonical_target",
+		"proto:gen", "proto:check", "protoc-gen-nornrune", "canonical_target",
 		"repeated", "oneof", "optional", "nested messages", "maps", "enums", "bytes", "floating-point",
 		"compile-time", "shared evaluator kernels", "native JSON",
 		"differential corpus", "UTF-8 byte offsets", "runtime Protobuf",

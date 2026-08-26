@@ -4,9 +4,9 @@ import (
 	"io"
 	"strconv"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/adapters/wire"
-	"github.com/sebishogun/verifoxx/internal/compile"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/adapters/wire"
+	"github.com/sebishogun/nornrune/internal/compile"
 )
 
 func writeComplete(w io.Writer, data []byte) error {

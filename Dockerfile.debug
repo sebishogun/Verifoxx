@@ -10,8 +10,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -buildvcs=false -gcflags="all=-N -l" \
-    -o /usr/local/bin/verifoxx ./cmd/verifoxx
+    -o /usr/local/bin/nornrune ./cmd/nornrune
 
 EXPOSE 40000
-ENTRYPOINT ["dlv", "exec", "/usr/local/bin/verifoxx", "--headless=true", "--listen=:40000", "--api-version=2", "--accept-multiclient", "--"]
+ENTRYPOINT ["dlv", "exec", "/usr/local/bin/nornrune", "--headless=true", "--listen=:40000", "--api-version=2", "--accept-multiclient", "--"]
 CMD ["evaluate"]

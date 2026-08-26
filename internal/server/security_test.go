@@ -8,16 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sebishogun/verifoxx/internal/buildinfo"
-	"github.com/sebishogun/verifoxx/internal/config"
-	"github.com/sebishogun/verifoxx/internal/fixtures"
-	"github.com/sebishogun/verifoxx/internal/observability"
-	"github.com/sebishogun/verifoxx/internal/persistence"
-	"github.com/sebishogun/verifoxx/internal/program"
-	"github.com/sebishogun/verifoxx/internal/security"
-	"github.com/sebishogun/verifoxx/internal/service"
-	"github.com/sebishogun/verifoxx/internal/simdops"
-	verifoxx "github.com/sebishogun/verifoxx/policies/verifoxx"
+	"github.com/sebishogun/nornrune/internal/buildinfo"
+	"github.com/sebishogun/nornrune/internal/config"
+	"github.com/sebishogun/nornrune/internal/fixtures"
+	"github.com/sebishogun/nornrune/internal/observability"
+	"github.com/sebishogun/nornrune/internal/persistence"
+	"github.com/sebishogun/nornrune/internal/program"
+	"github.com/sebishogun/nornrune/internal/security"
+	"github.com/sebishogun/nornrune/internal/service"
+	"github.com/sebishogun/nornrune/internal/simdops"
+	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 )
 
 func TestEngineEnforcesConfiguredBatchLimits(t *testing.T) {
@@ -49,9 +49,9 @@ func TestEngineEnforcesConfiguredPolicyAndOutputLimits(t *testing.T) {
 	t.Parallel()
 
 	policyLimits := security.DefaultLimits()
-	policyLimits.MaxPolicyBytes = len(verifoxx.Source()) - 1
+	policyLimits.MaxPolicyBytes = len(nornrune.Source()) - 1
 	policyEngine := newSecurityTestEngineWithoutPolicy(t, policyLimits)
-	if _, err := policyEngine.CompilePolicy(context.Background(), []byte(verifoxx.Source())); !errors.Is(err, service.ErrInvalidPolicy) {
+	if _, err := policyEngine.CompilePolicy(context.Background(), []byte(nornrune.Source())); !errors.Is(err, service.ErrInvalidPolicy) {
 		t.Fatalf("CompilePolicy() error = %v, want %v", err, service.ErrInvalidPolicy)
 	}
 
@@ -80,10 +80,10 @@ func TestEngineEnforcesConfiguredPolicyStructureLimits(t *testing.T) {
 			limits := security.DefaultLimits()
 			test.mutate(&limits)
 			engine := newSecurityTestEngineWithoutPolicy(t, limits)
-			if _, err := engine.ValidatePolicy(context.Background(), []byte(verifoxx.Source())); !errors.Is(err, service.ErrInvalidPolicy) {
+			if _, err := engine.ValidatePolicy(context.Background(), []byte(nornrune.Source())); !errors.Is(err, service.ErrInvalidPolicy) {
 				t.Fatalf("ValidatePolicy() error = %v, want %v", err, service.ErrInvalidPolicy)
 			}
-			if _, err := engine.CompilePolicy(context.Background(), []byte(verifoxx.Source())); !errors.Is(err, service.ErrInvalidPolicy) {
+			if _, err := engine.CompilePolicy(context.Background(), []byte(nornrune.Source())); !errors.Is(err, service.ErrInvalidPolicy) {
 				t.Fatalf("CompilePolicy() error = %v, want %v", err, service.ErrInvalidPolicy)
 			}
 		})
@@ -157,7 +157,7 @@ func newSecurityTestEngine(t *testing.T, limits security.Limits) *Engine {
 func newSecurityTestEngineWithWorkers(t *testing.T, limits security.Limits, workers int) *Engine {
 	t.Helper()
 	engine := newSecurityTestEngineWithoutPolicyAndWorkers(t, limits, workers)
-	if _, err := engine.CompilePolicy(context.Background(), []byte(verifoxx.Source())); err != nil {
+	if _, err := engine.CompilePolicy(context.Background(), []byte(nornrune.Source())); err != nil {
 		t.Fatalf("CompilePolicy() error = %v", err)
 	}
 	return engine

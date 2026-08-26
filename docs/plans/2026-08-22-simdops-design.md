@@ -36,7 +36,7 @@ capacity and does not support overlap.
 
 `simd.go` builds without `purego` and forwards each operation to the pinned
 v1.21 whole-slice API. Its runtime dispatcher and measured guards choose scalar
-or generated assembly. Verifoxx does not add a second guessed crossover.
+or generated assembly. NornRune does not add a second guessed crossover.
 
 `purego.go` builds with `purego` and provides direct allocation-free loops with
 the same contracts. `ops.go` holds shared types and scalar references.

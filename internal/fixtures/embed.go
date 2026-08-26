@@ -1,14 +1,14 @@
 // Package fixtures embeds the candidate-exercise input pack exactly as
-// transcribed from Verifoxx_AI_Engineer_Assignment.pdf, which is the source
+// transcribed from NornRune_AI_Engineer_Assignment.pdf, which is the source
 // of truth for these inputs.
 //
 // The three files are read-only inputs to the engine:
-//   - verifoxx-policy.json holds the three source requirement statements
+//   - nornrune-policy.json holds the three source requirement statements
 //     (requirement IDs R1-R3 and exact natural-language text, not the later
 //     compiled semantic AST);
-//   - verifoxx-requests.json holds the five candidate request records
+//   - nornrune-requests.json holds the five candidate request records
 //     (request IDs R1-R5);
-//   - verifoxx-evidence.json holds the four candidate evidence records
+//   - nornrune-evidence.json holds the four candidate evidence records
 //     (evidence IDs E1-E4).
 //
 // Ownership contract: accessors return Go strings, which are immutable by
@@ -20,13 +20,13 @@ package fixtures
 
 import _ "embed"
 
-//go:embed verifoxx-policy.json
+//go:embed nornrune-policy.json
 var policyJSON string
 
-//go:embed verifoxx-requests.json
+//go:embed nornrune-requests.json
 var requestsJSON string
 
-//go:embed verifoxx-evidence.json
+//go:embed nornrune-evidence.json
 var evidenceJSON string
 
 // PolicyJSON returns the embedded requirements-source policy fixture.

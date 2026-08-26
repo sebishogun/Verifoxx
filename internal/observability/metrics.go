@@ -66,45 +66,45 @@ func NewMetrics(config MetricsConfig) (*Metrics, error) {
 	}
 	metrics := &Metrics{
 		batches: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: "verifoxx", Subsystem: "evaluation", Name: "batches_total",
+			Namespace: "nornrune", Subsystem: "evaluation", Name: "batches_total",
 			Help: "Policy evaluation batches observed, including failures.",
 		}),
 		failures: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: "verifoxx", Subsystem: "evaluation", Name: "batch_failures_total",
+			Namespace: "nornrune", Subsystem: "evaluation", Name: "batch_failures_total",
 			Help: "Policy evaluation batches reported as failed.",
 		}),
 		rows: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: "verifoxx", Subsystem: "evaluation", Name: "rows_total",
+			Namespace: "nornrune", Subsystem: "evaluation", Name: "rows_total",
 			Help: "Request rows presented to completed or failed policy evaluation batches.",
 		}),
 		duration: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: "verifoxx", Subsystem: "evaluation", Name: "duration_seconds",
+			Namespace: "nornrune", Subsystem: "evaluation", Name: "duration_seconds",
 			Help:    "End-to-end policy evaluation batch duration.",
 			Buckets: []float64{0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10},
 		}),
 	}
 	outcomes := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "verifoxx", Subsystem: "evaluation", Name: "outcomes_total",
+		Namespace: "nornrune", Subsystem: "evaluation", Name: "outcomes_total",
 		Help: "Policy decisions completed in evaluation batches.",
 	}, []string{"outcome"})
 	for outcome, name := range outcomeNames {
 		metrics.outcomes[outcome] = outcomes.WithLabelValues(name)
 	}
 	queueDepth := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-		Namespace: "verifoxx", Subsystem: "service", Name: "queue_depth",
+		Namespace: "nornrune", Subsystem: "service", Name: "queue_depth",
 		Help: "Requests currently waiting for service admission.",
 	}, func() float64 { return float64(config.QueueDepth()) })
 	journalFailures := prometheus.NewCounterFunc(prometheus.CounterOpts{
-		Namespace: "verifoxx", Subsystem: "audit", Name: "journal_failures_total",
+		Namespace: "nornrune", Subsystem: "audit", Name: "journal_failures_total",
 		Help: "Audit journal batches that failed to persist.",
 	}, func() float64 { return float64(config.JournalFailures()) })
 	workers := prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: "verifoxx", Subsystem: "evaluation", Name: "workers",
+		Namespace: "nornrune", Subsystem: "evaluation", Name: "workers",
 		Help: "Configured evaluator worker count.",
 	})
 	workers.Set(float64(config.Workers))
 	simdTier := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "verifoxx", Subsystem: "simd", Name: "tier_info",
+		Namespace: "nornrune", Subsystem: "simd", Name: "tier_info",
 		Help: "Selected SIMD runtime tier.",
 	}, []string{"tier"})
 	simdTier.WithLabelValues(config.SIMDTier).Set(1)

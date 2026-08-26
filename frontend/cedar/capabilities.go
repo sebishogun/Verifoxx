@@ -1,6 +1,6 @@
 package cedar
 
-import public "github.com/sebishogun/verifoxx/frontend"
+import public "github.com/sebishogun/nornrune/frontend"
 
 var capabilities = [...]public.Capability{
 	{Name: "static_permit_forbid", Support: public.SupportSupported},

@@ -1,8 +1,8 @@
 package compile
 
 import (
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 func templateContextAt(doc *ast.Document, id schema.TemplateID) (ast.TemplateContext, bool) {

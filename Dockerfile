@@ -12,12 +12,12 @@ ARG TARGETARCH
 ARG VERSION=devel
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -buildvcs=false -trimpath \
-    -ldflags="-s -w -X github.com/sebishogun/verifoxx/internal/buildinfo.version=${VERSION}" \
-    -o /out/verifoxx ./cmd/verifoxx
+    -ldflags="-s -w -X github.com/sebishogun/nornrune/internal/buildinfo.version=${VERSION}" \
+    -o /out/nornrune ./cmd/nornrune
 
 FROM scratch
 
-COPY --from=build --chown=65532:65532 /out/verifoxx /verifoxx
+COPY --from=build --chown=65532:65532 /out/nornrune /nornrune
 USER 65532:65532
-ENTRYPOINT ["/verifoxx"]
+ENTRYPOINT ["/nornrune"]
 CMD ["evaluate"]

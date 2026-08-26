@@ -4,7 +4,7 @@ import (
 	"errors"
 	"math"
 
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 var (

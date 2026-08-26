@@ -2,16 +2,16 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Verifoxx",
+      "name": "Debug NornRune",
       "type": "go",
       "request": "launch",
       "mode": "debug",
-      "program": "${workspaceFolder}/cmd/verifoxx",
+      "program": "${workspaceFolder}/cmd/nornrune",
       "cwd": "${workspaceFolder}",
       "args": [
         "debug-worker",
         "--socket",
-        "${workspaceFolder}/.verifoxx/debug.sock"
+        "${workspaceFolder}/.nornrune/debug.sock"
       ],
       "buildFlags": "-tags=debug -gcflags='all=-N -l'"
     }

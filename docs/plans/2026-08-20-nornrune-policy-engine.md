@@ -1,8 +1,8 @@
-# Verifoxx Policy Engine Implementation Plan
+# NornRune Policy Engine Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build the complete production-oriented Verifoxx policy compiler, SIMD batch evaluator, audit service, semantic debugger, network adapters, developer tooling, and required candidate-exercise submission.
+**Goal:** Build the complete production-oriented NornRune policy compiler, SIMD batch evaluator, audit service, semantic debugger, network adapters, developer tooling, and required candidate-exercise submission.
 
 **Architecture:** Parse bounded policy documents into a pointerless AST, validate and lower them into an immutable SoA program, then evaluate SoA request batches through scalar, SIMD, and row-sharded executors. Keep adapters outside the core; persist canonical policy versions and immutable decisions in PostgreSQL 19 while exposing normalized AST nodes and edges through SQL/PGQ.
 
@@ -32,7 +32,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 
 ## Execution Rules
 
-- Read `AGENTS.md` and `docs/plans/2026-08-20-verifoxx-policy-engine-design.md` before each phase.
+- Read `AGENTS.md` and `docs/plans/2026-08-20-nornrune-policy-engine-design.md` before each phase.
 - Use `@superpowers/test-driven-development` for every behavioral change.
 - Use `@superpowers/systematic-debugging` for every unexpected failure.
 - Use `@superpowers/verification-before-completion` before marking a task complete.
@@ -49,30 +49,30 @@ SoA data + grouped lifetimes + zero per-record allocation
 **Files:**
 - Create: `go.mod`
 - Create: `.gitignore`
-- Create: `cmd/verifoxx/main.go`
+- Create: `cmd/nornrune/main.go`
 - Create: `internal/app/app.go`
 - Create: `internal/buildinfo/buildinfo.go`
 - Test: `internal/app/app_test.go`
 
 **Steps:**
 
-1. Initialize module `github.com/sebishogun/verifoxx` with Go 1.27.
+1. Initialize module `github.com/sebishogun/nornrune` with Go 1.27.
 2. Add `github.com/sebishogun/simd@v1.21.0`.
 3. Write a failing test asserting that `app.Run` returns exit code zero for `--version` and writes a non-empty version line into a caller-provided buffer or writer.
 4. Run `go test -timeout 60s ./internal/app`; expect failure because `Run` is missing.
 5. Implement the smallest command dispatcher needed for `--version` and `help` without introducing a CLI framework yet.
 6. Run `go test -timeout 60s ./internal/app`; expect success.
-7. Run `timeout 120s go build ./cmd/verifoxx`; expect success.
+7. Run `timeout 120s go build ./cmd/nornrune`; expect success.
 8. Run `go mod tidy` and inspect `go.mod` and `go.sum`.
-9. Commit when requested: `chore: initialize verifoxx module`.
+9. Commit when requested: `chore: initialize nornrune module`.
 
 ### Task 2: Add Embedded Assignment Inputs
 
 **Files:**
 - Create: `internal/fixtures/embed.go`
-- Create: `internal/fixtures/verifoxx-policy.json`
-- Create: `internal/fixtures/verifoxx-requests.json`
-- Create: `internal/fixtures/verifoxx-evidence.json`
+- Create: `internal/fixtures/nornrune-policy.json`
+- Create: `internal/fixtures/nornrune-requests.json`
+- Create: `internal/fixtures/nornrune-evidence.json`
 - Test: `internal/fixtures/embed_test.go`
 
 **Steps:**
@@ -364,11 +364,11 @@ SoA data + grouped lifetimes + zero per-record allocation
 7. Run `timeout 120s go build -gcflags=-m ./internal/eval` and inspect escapes.
 8. Commit when requested: `feat: execute compiled policies`.
 
-### Task 17: Add Verifoxx Conformance Tests And Golden Results
+### Task 17: Add NornRune Conformance Tests And Golden Results
 
 **Files:**
-- Create: `policies/verifoxx/policy.json`
-- Create: `internal/conformance/verifoxx_test.go`
+- Create: `policies/nornrune/policy.json`
+- Create: `internal/conformance/nornrune_test.go`
 - Create: `results/requests.json`
 - Create: `testdata/golden/requests.json`
 
@@ -381,7 +381,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 5. Correct policy semantics or evaluator behavior without branching on request IDs.
 6. Run `go test -timeout 60s ./internal/conformance`; expect success.
 7. Generate and compare deterministic golden JSON.
-8. Commit when requested: `feat: add verifoxx policy conformance`.
+8. Commit when requested: `feat: add nornrune policy conformance`.
 
 ## Phase 8: Integrate SIMD
 
@@ -559,8 +559,8 @@ SoA data + grouped lifetimes + zero per-record allocation
 4. Run `go test -timeout 60s ./internal/adapters/cli`; expect failure.
 5. Implement commands over the same compiler and evaluator APIs.
 6. Run `go test -timeout 60s ./internal/adapters/cli`; expect success.
-7. Run `timeout 120s go run ./cmd/verifoxx evaluate`; compare output with `results/requests.json`.
-8. Commit when requested: `feat: add verifoxx cli`.
+7. Run `timeout 120s go run ./cmd/nornrune evaluate`; compare output with `results/requests.json`.
+8. Commit when requested: `feat: add nornrune cli`.
 
 ## Phase 12: PostgreSQL 19 Persistence
 
@@ -698,7 +698,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 ### Task 34: Add gRPC API And Generated-Code Checks
 
 **Files:**
-- Create: `api/proto/verifoxx/v1/verifoxx.proto`
+- Create: `api/proto/nornrune/v1/nornrune.proto`
 - Create: `buf.yaml`
 - Create: `buf.gen.yaml`
 - Create: `internal/adapters/grpcapi/server.go`
@@ -811,7 +811,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 5. Implement Delve DAP launch and document nvim-dap loading of `.vscode/launch.json`.
 6. Keep Neovim as the DAP owner and the TUI on the semantic socket.
 7. Run `go test -timeout 60s ./internal/adapters/dap`; expect success.
-8. Run `timeout 120s go build -gcflags=all='-N -l' -tags=debug ./cmd/verifoxx`; expect success.
+8. Run `timeout 120s go build -gcflags=all='-N -l' -tags=debug ./cmd/nornrune`; expect success.
 9. Commit when requested: `feat: integrate delve dap debugging`.
 
 ## Phase 15: Developer Experience, Make, And Containers
@@ -892,8 +892,8 @@ SoA data + grouped lifetimes + zero per-record allocation
 2. Run `go test -timeout 600s -tags=docker ./internal/e2e`; expect failure.
 3. Implement a multi-stage Go 1.27 release image using normal SIMD runtime dispatch.
 4. Implement a debug image with Delve and unstripped symbols.
-5. Run `timeout 600s docker build -t verifoxx:test .`; expect success.
-6. Run `timeout 60s docker run --rm verifoxx:test evaluate`; compare output.
+5. Run `timeout 600s docker build -t nornrune:test .`; expect success.
+6. Run `timeout 60s docker run --rm nornrune:test evaluate`; compare output.
 7. Run `go test -timeout 600s -tags=docker ./internal/e2e`; expect success.
 8. Commit when requested: `build: add release and debug images`.
 
@@ -1039,14 +1039,14 @@ SoA data + grouped lifetimes + zero per-record allocation
 9. Run `timeout 600s go run ./cmd/devx docker:build`; expect success.
 10. Run `git diff --check`; expect no whitespace errors.
 11. Inspect `git status --short` and confirm only intended files changed.
-12. Commit when requested: `ci: verify verifoxx release`.
+12. Commit when requested: `ci: verify nornrune release`.
 
 ### Task 51: Audit And Consolidate Reusable Core Paths
 
 **Files:**
 - Modify: production and test files identified by the audit
 - Modify: `docs/performance.md`
-- Modify: `docs/plans/2026-08-20-verifoxx-policy-engine-design.md`
+- Modify: `docs/plans/2026-08-20-nornrune-policy-engine-design.md`
 
 **Steps:**
 
@@ -1099,7 +1099,7 @@ Then verify manually:
 
 This is a post-submission expansion task, not part of the bounded assignment
 deliverable. Treat each source language as a compiler frontend over the shared
-Verifoxx semantic IR. Do not claim drop-in compatibility or a fixed speedup
+NornRune semantic IR. Do not claim drop-in compatibility or a fixed speedup
 until upstream conformance suites and controlled benchmarks prove both.
 
 **Files:**
@@ -1115,7 +1115,7 @@ until upstream conformance suites and controlled benchmarks prove both.
 - Create: `frontend/proto/plugin.go`
 - Create: `internal/frontend/semantic.go`
 - Create: `internal/frontend/lower.go`
-- Create: `cmd/protoc-gen-verifoxx/main.go`
+- Create: `cmd/protoc-gen-nornrune/main.go`
 - Test: `frontend/cel/cel_test.go`
 - Test: `frontend/rego/rego_test.go`
 - Test: `frontend/cedar/cedar_test.go`
@@ -1145,7 +1145,7 @@ until upstream conformance suites and controlled benchmarks prove both.
    language's semantics rather than translating only convenient syntax.
 4. Implement the CEL frontend first. Parse standard CEL source, bind a declared
    environment, lower the supported typed expression graph into canonical
-   Verifoxx nodes, and emit explicit diagnostics for unsupported dynamic
+   NornRune nodes, and emit explicit diagnostics for unsupported dynamic
    dispatch, macros, functions, or aggregate semantics.
 5. Implement the Rego frontend second. Parse modules and data references, lower
    only the capability-matrix subset, preserve undefined/error behavior, and
@@ -1280,7 +1280,7 @@ project claim.
    columns, parameters, roles, actions, and types against an explicit schema;
    prohibit catalog or database access during evaluator execution.
 3. Define and test the exact mapping from SQL three-valued logic and evaluation
-   errors into Verifoxx truth, reason, and decision semantics. Preserve NULL,
+   errors into NornRune truth, reason, and decision semantics. Preserve NULL,
    missing input, cast failure, and unsupported function behavior rather than
    coercing them to false.
 4. Lower PostgreSQL RLS command selection, role matching, permissive OR,
@@ -1354,7 +1354,7 @@ when one is available.
 8. Add optional symbolic backends only behind the same result contract and
    validate every claimed proof against the concrete evaluator. Solver timeout
    or unsupported semantics must produce `Inconclusive`.
-9. Add `verifoxx diff` JSON and human-readable output with stable exit codes for
+9. Add `nornrune diff` JSON and human-readable output with stable exit codes for
    no change, allowed change, forbidden regression, and inconclusive analysis.
 10. Commit when requested: `feat: add semantic policy regression analysis`.
 
@@ -1373,7 +1373,7 @@ their own conformance and deployment tests.
 - Create: `target/wasm/manifest.go`
 - Create: `internal/target/wasm/layout.go`
 - Create: `internal/target/wasm/runtime.go`
-- Create: `cmd/verifoxx-wasm/main.go`
+- Create: `cmd/nornrune-wasm/main.go`
 - Test: `target/wasm/export_test.go`
 - Test: `internal/target/wasm/conformance_test.go`
 - Benchmark: `internal/target/wasm/benchmark_test.go`
@@ -1513,9 +1513,9 @@ stepping. Keep graph construction and rendering outside evaluator kernels.
 4. Add deterministic append-based DOT, SVG, and dependency-free interactive
    HTML renderers with semantic colors, edge labels, source spans, pan, zoom,
    fit, and node inspection.
-5. Add `verifoxx graph --view ast|program --format dot|svg|html --output PATH`
+5. Add `nornrune graph --view ast|program --format dot|svg|html --output PATH`
    with atomic mode-`0600` output and explicit overwrite protection.
-6. Add `verifoxx tui --browser` using an ephemeral IPv4-loopback server and
+6. Add `nornrune tui --browser` using an ephemeral IPv4-loopback server and
    fixed-size published state. Never serve protected input payloads or bind a
    non-loopback address.
 7. Add malformed-graph, cycle, shared-DAG, narrow-terminal, color/monochrome,
@@ -1566,7 +1566,7 @@ automated repository and CI gate.
    batches through it while retaining its measured serial path below the
    crossover; do not layer scheduler shards beneath another unbounded worker
    pool.
-3. Add `verifoxx bench` as a bounded offline command using reusable deterministic
+3. Add `nornrune bench` as a bounded offline command using reusable deterministic
    benchmark fixtures. Report workload shape, execution mode, SIMD tier,
    workers, elapsed time, throughput, bytes, and allocations without exposing a
    production benchmark endpoint or accepting protected row payloads.

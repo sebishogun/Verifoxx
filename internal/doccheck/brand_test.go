@@ -35,11 +35,12 @@ func TestCanonicalBrandSurface(t *testing.T) {
 		}
 	}
 
+	legacyLower := "veri" + "foxx"
 	for _, path := range []string{
-		"cmd/verifoxx", "cmd/protoc-gen-verifoxx", "policies/verifoxx",
-		"api/proto/verifoxx", "api/gen/verifoxx",
-		"internal/fixtures/verifoxx-policy.json", "internal/fixtures/verifoxx-requests.json",
-		"internal/fixtures/verifoxx-evidence.json",
+		"cmd/" + legacyLower, "cmd/protoc-gen-" + legacyLower, "policies/" + legacyLower,
+		"api/proto/" + legacyLower, "api/gen/" + legacyLower,
+		"internal/fixtures/" + legacyLower + "-policy.json", "internal/fixtures/" + legacyLower + "-requests.json",
+		"internal/fixtures/" + legacyLower + "-evidence.json",
 	} {
 		if _, err := os.Stat(filepath.Join(repositoryRoot, path)); !os.IsNotExist(err) {
 			t.Errorf("legacy path %q still exists", path)
@@ -49,11 +50,10 @@ func TestCanonicalBrandSurface(t *testing.T) {
 
 func TestTrackedTextContainsNoLegacyBrand(t *testing.T) {
 	allowed := map[string]bool{
-		"Verifoxx_AI_Engineer_Assignment.pdf":                      true,
 		"docs/plans/2026-08-27-nornrune-complete-rename-design.md": true,
 		"docs/plans/2026-08-27-nornrune-complete-rename.md":        true,
 	}
-	legacy := [...]string{"Verifoxx", "verifoxx", "VERIFOXX"}
+	legacy := [...]string{"Veri" + "foxx", "veri" + "foxx", "VERI" + "FOXX"}
 	const maxDiagnostics = 128
 	diagnostics := 0
 

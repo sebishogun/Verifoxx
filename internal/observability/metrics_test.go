@@ -49,19 +49,19 @@ func TestMetricsExposeBatchAggregates(t *testing.T) {
 		t.Fatalf("metrics Content-Type = %q", contentType)
 	}
 	assertMetricContains(t, response.Body.String(),
-		"verifoxx_evaluation_batches_total 2",
-		"verifoxx_evaluation_batch_failures_total 1",
-		"verifoxx_evaluation_rows_total 15",
-		"verifoxx_evaluation_outcomes_total{outcome=\"approve\"} 6",
-		"verifoxx_evaluation_outcomes_total{outcome=\"reject\"} 4",
-		"verifoxx_evaluation_outcomes_total{outcome=\"revise\"} 2",
-		"verifoxx_evaluation_outcomes_total{outcome=\"escalate\"} 1",
-		"verifoxx_evaluation_duration_seconds_count 2",
-		"verifoxx_evaluation_duration_seconds_sum 0.002",
-		"verifoxx_service_queue_depth 3",
-		"verifoxx_audit_journal_failures_total 2",
-		"verifoxx_evaluation_workers 4",
-		"verifoxx_simd_tier_info{tier=\"avx2\"} 1",
+		"nornrune_evaluation_batches_total 2",
+		"nornrune_evaluation_batch_failures_total 1",
+		"nornrune_evaluation_rows_total 15",
+		"nornrune_evaluation_outcomes_total{outcome=\"approve\"} 6",
+		"nornrune_evaluation_outcomes_total{outcome=\"reject\"} 4",
+		"nornrune_evaluation_outcomes_total{outcome=\"revise\"} 2",
+		"nornrune_evaluation_outcomes_total{outcome=\"escalate\"} 1",
+		"nornrune_evaluation_duration_seconds_count 2",
+		"nornrune_evaluation_duration_seconds_sum 0.002",
+		"nornrune_service_queue_depth 3",
+		"nornrune_audit_journal_failures_total 2",
+		"nornrune_evaluation_workers 4",
+		"nornrune_simd_tier_info{tier=\"avx2\"} 1",
 	)
 }
 
@@ -119,7 +119,7 @@ func TestMetricsRejectInvalidConfigurationAndBatches(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	metrics.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
-	assertMetricContains(t, response.Body.String(), "verifoxx_evaluation_batches_total 0")
+	assertMetricContains(t, response.Body.String(), "nornrune_evaluation_batches_total 0")
 }
 
 func BenchmarkMetricsObserveBatch(b *testing.B) {

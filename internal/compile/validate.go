@@ -3,8 +3,8 @@ package compile
 import (
 	"bytes"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
 // nodeStateUnsafe marks a node row that later graph traversal must skip: its

@@ -109,7 +109,7 @@ func (launcher Launcher) Plan(ctx context.Context, config Config) (Plan, error) 
 		Address:          address,
 		Arguments:        arguments,
 		Configuration: Configuration{
-			Name:             "Debug Verifoxx",
+			Name:             "Debug NornRune",
 			Type:             "go",
 			Request:          "launch",
 			Mode:             "debug",

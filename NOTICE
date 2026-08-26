@@ -1,0 +1,25 @@
+NornRune
+Copyright 2026 Sebastian Mocanu
+
+This product includes software developed by third parties:
+
+Cedar Go
+Copyright Cedar Contributors
+
+Prometheus instrumentation library for Go applications
+Copyright 2012-2015 The Prometheus Authors
+Includes software developed at SoundCloud Ltd. (http://soundcloud.com/).
+
+perks, a fork of https://github.com/bmizerany/perks
+https://github.com/beorn7/perks
+Copyright 2013-2015 Blake Mizerany, Bjorn Rabenstein
+
+Go support for Protocol Buffers - Google's data interchange format
+http://github.com/golang/protobuf/
+Copyright 2010 The Go Authors
+
+gRPC Go
+Copyright 2014 gRPC authors.
+
+License details and pinned versions are recorded in
+docs/dependency-licenses.md. NornRune is licensed under Apache-2.0; see LICENSE.

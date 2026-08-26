@@ -143,12 +143,12 @@ was statistically significant (`p>=0.132`), and every baseline and candidate
 case retained `0 B/op` and `0 allocs/op`.
 
 ```bash
-timeout 300s scripts/bench-compare.sh /tmp/verifoxx-baseline.test /tmp/verifoxx-current.test '^BenchmarkEvaluate$' 6 200ms
+timeout 300s scripts/bench-compare.sh /tmp/nornrune-baseline.test /tmp/nornrune-current.test '^BenchmarkEvaluate$' 6 200ms
 ```
 
 ## SIMD Boundary
 
-Verifoxx pins `github.com/sebishogun/simd` v1.21.0 and reaches it only through
+NornRune pins `github.com/sebishogun/simd` v1.21.0 and reaches it only through
 `internal/simdops`. The facade hands over complete contiguous slices; it never
 calls a function per row or per element.
 
@@ -156,7 +156,7 @@ Normal builds use the library's startup-selected assembly tier and measured
 kernel guards. `-tags=purego` selects direct Go loops with the same semantics.
 The slice API does not require `GOEXPERIMENT=simd`. The pinned release's
 experiment-gated vector-type file still uses Go 1.26 `archsimd` names and does
-not compile against Go 1.27; Verifoxx does not import that API. Re-enable that
+not compile against Go 1.27; NornRune does not import that API. Re-enable that
 build only after a compatible dependency release.
 
 `simdops.Runtime()` reports the selected tier, the dependency's diagnostic
@@ -256,9 +256,9 @@ Build one evaluator test binary from each source tree before measuring. Use
 separate worktrees so the comparison never switches or modifies a checkout:
 
 ```bash
-timeout 120s env GOWORK=off go test -mod=readonly -c -o /tmp/verifoxx-baseline.test ./internal/eval  # run in baseline worktree
-timeout 120s env GOWORK=off go test -mod=readonly -c -o /tmp/verifoxx-current.test ./internal/eval   # run in current worktree
-timeout 300s scripts/bench-compare.sh /tmp/verifoxx-baseline.test /tmp/verifoxx-current.test '^BenchmarkEvaluate$' 6 200ms
+timeout 120s env GOWORK=off go test -mod=readonly -c -o /tmp/nornrune-baseline.test ./internal/eval  # run in baseline worktree
+timeout 120s env GOWORK=off go test -mod=readonly -c -o /tmp/nornrune-current.test ./internal/eval   # run in current worktree
+timeout 300s scripts/bench-compare.sh /tmp/nornrune-baseline.test /tmp/nornrune-current.test '^BenchmarkEvaluate$' 6 200ms
 ```
 
 The script validates both prebuilt binaries, alternates A/B then B/A by round,
@@ -268,8 +268,8 @@ rounds is the minimum accepted sample count. The devx wrapper accepts the same
 inputs through environment variables:
 
 ```bash
-BENCH_BASELINE_BINARY=/tmp/verifoxx-baseline.test \
-BENCH_CURRENT_BINARY=/tmp/verifoxx-current.test \
+BENCH_BASELINE_BINARY=/tmp/nornrune-baseline.test \
+BENCH_CURRENT_BINARY=/tmp/nornrune-current.test \
 BENCH_COMPARE_REGEX='^BenchmarkEvaluate$' \
 BENCH_COMPARE_ROUNDS=6 BENCH_COMPARE_TIME=200ms \
 ./cli/devx bench:compare
@@ -281,7 +281,7 @@ from `benchstat`; do not select one favorable sample. For hardware-counter work,
 run one prebuilt binary directly so compilation remains outside the measurement:
 
 ```bash
-timeout 180s perf stat -r 6 -- /tmp/verifoxx-current.test -test.run='^$' -test.bench='^BenchmarkEvaluate$' -test.benchtime=1s -test.count=1 -test.cpu=1 -test.timeout=120s
+timeout 180s perf stat -r 6 -- /tmp/nornrune-current.test -test.run='^$' -test.bench='^BenchmarkEvaluate$' -test.benchtime=1s -test.count=1 -test.cpu=1 -test.timeout=120s
 ```
 
 ### Public Transport Load
@@ -417,7 +417,7 @@ go test -timeout 120s -run='^$' -bench='^BenchmarkEvaluateFactIndex$' -benchmem 
 ## Fixed Worker Scheduler
 
 Measured on 2026-08-24 with Go 1.27.0 on Linux/amd64, the AMD Ryzen AI MAX+ 395,
-and the `avx512` tier. The fixture uses the compiled Verifoxx policy, canonical
+and the `avx512` tier. The fixture uses the compiled NornRune policy, canonical
 request/evidence rows, fixed worker goroutines, private shard results, and the
 complete deterministic CSR merge. Values are the minimum of six runs after
 priming every worker context and result slot. Every case reported `0 B/op` and
@@ -458,7 +458,7 @@ timeout 240s go test -run='^$' -bench='^BenchmarkScheduler$' -benchmem -benchtim
 
 ### Offline Product Benchmark
 
-`verifoxx bench` compiles and decodes only the embedded fixture, repeats it into
+`nornrune bench` compiles and decodes only the embedded fixture, repeats it into
 an exact typed batch, verifies scheduled output against direct evaluation, and
 primes every fixed worker context and admission state before measuring. It
 accepts only bounded shape flags and does not expose a service endpoint or
@@ -470,7 +470,7 @@ accept policy, request, evidence, or stdin payloads. The JSON fields are `rows`,
 One 2026-08-24 run on the host above reported:
 
 ```bash
-timeout 120s go run ./cmd/verifoxx bench --rows 4096 --iterations 100 --workers 4
+timeout 120s go run ./cmd/nornrune bench --rows 4096 --iterations 100 --workers 4
 ```
 
 ```json
@@ -522,8 +522,8 @@ zero-allocation steady-state evaluator contract.
 | Path | ns/op | Input MB/s | B/op | allocs/op |
 |---|---:|---:|---:|---:|
 | demo pipeline, excluding Cobra | 85,476 | 219.43 | 124,824 | 701 |
-| complete `verifoxx demo` command | 106,525 | 176.07 | 166,393 | 849 |
-| complete `verifoxx evaluate` command | 131,241 | 142.91 | 201,432 | 981 |
+| complete `nornrune demo` command | 106,525 | 176.07 | 166,393 | 849 |
+| complete `nornrune evaluate` command | 131,241 | 142.91 | 201,432 | 981 |
 
 The demo compiles one immutable Program, decodes one SoA batch, evaluates the
 five baseline rows, materializes their explanations, then compacts and
@@ -553,7 +553,7 @@ Measurement commands:
 go test -timeout 120s -run='^$' -bench='Benchmark(DemoPipeline|DemoCommand|EvaluateCommand)$' -benchmem -benchtime=300ms -count=6 ./internal/adapters/cli
 go test -timeout 120s -run='^$' -bench='Benchmark(DecodeFullPolicyFresh|DecoderFullPolicyReuse)$' -benchmem ./internal/adapters/jsonpolicy
 go test -timeout 120s -run='^$' -bench='BenchmarkDecodeBatch$' -benchmem ./internal/adapters/jsonbatch
-timeout 120s go build -trimpath -o /tmp/opencode/verifoxx-task26 ./cmd/verifoxx
+timeout 120s go build -trimpath -o /tmp/opencode/nornrune-task26 ./cmd/nornrune
 ```
 
 ## Verification

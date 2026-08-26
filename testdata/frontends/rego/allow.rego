@@ -1,4 +1,4 @@
-package verifoxx
+package nornrune
 
 allow if {
     input.team == "blue"

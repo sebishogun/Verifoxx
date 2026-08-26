@@ -9,6 +9,6 @@ the approved design, compiler and evaluator invariants, automated tests, race
 checks, static analysis, and runnable commands. The submitted implementation and
 semantic decisions remain the author's responsibility.
 
-Verifoxx does not call an AI model at runtime. Policy compilation and request
+NornRune does not call an AI model at runtime. Policy compilation and request
 evaluation are deterministic and operate only on the supplied structured policy,
 request, and evidence documents.

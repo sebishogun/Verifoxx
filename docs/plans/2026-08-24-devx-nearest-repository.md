@@ -62,7 +62,7 @@ Expected: PASS.
 **Files:**
 - Modify: `cli/install.sh`
 - Modify: `cmd/devx/cmd/install_test.go`
-- Modify: `docs/plans/2026-08-20-verifoxx-policy-engine-design.md`
+- Modify: `docs/plans/2026-08-20-nornrune-policy-engine-design.md`
 
 **Step 1: Rewrite installer expectations to fail**
 
@@ -118,13 +118,13 @@ Expected: the recognized Muzz legacy symlink is replaced by an executable marked
 
 **Step 2: Verify nearest selection on the machine**
 
-From the Verifoxx worktree:
+From the NornRune worktree:
 
 ```bash
 timeout 30s devx --print-host-binary
 ```
 
-Expected: a path under the current Verifoxx worktree.
+Expected: a path under the current NornRune worktree.
 
 From Muzz:
 
@@ -155,7 +155,7 @@ Expected: PASS.
 **Step 4: Commit and push**
 
 ```bash
-git add cli/devx-dispatch cli/install.sh cmd/devx/cmd/install_test.go docs/plans/2026-08-20-verifoxx-policy-engine-design.md docs/plans/2026-08-24-devx-nearest-repository.md
+git add cli/devx-dispatch cli/install.sh cmd/devx/cmd/install_test.go docs/plans/2026-08-20-nornrune-policy-engine-design.md docs/plans/2026-08-24-devx-nearest-repository.md
 git commit -m "fix: dispatch devx to nearest repository"
 git push
 ```

@@ -5,7 +5,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/sebishogun/verifoxx/internal/adapters/cli"
+	"github.com/sebishogun/nornrune/internal/adapters/cli"
 )
 
 type emptyReader struct{}

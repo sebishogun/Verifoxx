@@ -7,17 +7,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sebishogun/verifoxx/internal/ast"
-	"github.com/sebishogun/verifoxx/internal/schema"
+	"github.com/sebishogun/nornrune/internal/ast"
+	"github.com/sebishogun/nornrune/internal/schema"
 )
 
-const basePolicy = `{"schema_version":1,"name":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`
+const basePolicy = `{"schema_version":1,"name":"nornrune","version":"1.0.0","assumptions":[],"evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`
 
-const fullPolicy = `{"schema_version":1,"name":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":[{"name":"approval_record"},{"name":"usage_adjustment"}],"evidence_states":[{"name":"current"},{"name":"stale"},{"name":"unclear"}],"outcomes":[{"terminal":true,"precedence":1,"name":"Approve"},{"name":"Reject","precedence":2,"terminal":true},{"name":"Revise","precedence":3,"terminal":false},{"name":"Escalate","precedence":4,"terminal":true}],"requirements":[]}`
+const fullPolicy = `{"schema_version":1,"name":"nornrune","version":"1.0.0","assumptions":[],"evidence_kinds":[{"name":"approval_record"},{"name":"usage_adjustment"}],"evidence_states":[{"name":"current"},{"name":"stale"},{"name":"unclear"}],"outcomes":[{"terminal":true,"precedence":1,"name":"Approve"},{"name":"Reject","precedence":2,"terminal":true},{"name":"Revise","precedence":3,"terminal":false},{"name":"Escalate","precedence":4,"terminal":true}],"requirements":[]}`
 
 // policy assembles a root document with the given catalog array bodies.
 func policy(kinds, states, outcomes string) string {
-	return `{"schema_version":1,"name":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":` + kinds + `,"evidence_states":` + states + `,"outcomes":` + outcomes + `,"requirements":[]}`
+	return `{"schema_version":1,"name":"nornrune","version":"1.0.0","assumptions":[],"evidence_kinds":` + kinds + `,"evidence_states":` + states + `,"outcomes":` + outcomes + `,"requirements":[]}`
 }
 
 // meta assembles a root document with the given identity slots.
@@ -27,7 +27,7 @@ func meta(schemaVersion, name, version string) string {
 
 // reqs assembles a root document with the given requirements value.
 func reqs(requirements string) string {
-	return `{"schema_version":1,"name":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":` + requirements + `}`
+	return `{"schema_version":1,"name":"nornrune","version":"1.0.0","assumptions":[],"evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":` + requirements + `}`
 }
 
 func mustDecode(t *testing.T, source []byte, limits Limits) *ast.Builder {
@@ -104,8 +104,8 @@ func TestDecodeMinimalPolicy(t *testing.T) {
 	if !ok {
 		t.Fatal("PolicyMetadata() = (_, false)")
 	}
-	if got := symbolString(t, d, metadata.Name); got != "verifoxx" {
-		t.Fatalf("metadata name = %q, want %q", got, "verifoxx")
+	if got := symbolString(t, d, metadata.Name); got != "nornrune" {
+		t.Fatalf("metadata name = %q, want %q", got, "nornrune")
 	}
 	if got := symbolString(t, d, metadata.Version); got != "1.0.0" {
 		t.Fatalf("metadata version = %q, want %q", got, "1.0.0")
@@ -185,7 +185,7 @@ func TestDecodeFullPolicyRoundTrip(t *testing.T) {
 }
 
 func TestDecodeAcceptsAnyRootKeyOrder(t *testing.T) {
-	src := []byte(`{"requirements":[],"outcomes":[],"evidence_states":[],"evidence_kinds":[],"assumptions":[],"version":"1.0.0","name":"verifoxx","schema_version":1}`)
+	src := []byte(`{"requirements":[],"outcomes":[],"evidence_states":[],"evidence_kinds":[],"assumptions":[],"version":"1.0.0","name":"nornrune","schema_version":1}`)
 	b := mustDecode(t, src, Limits{})
 	metadata, ok := b.Document().PolicyMetadata()
 	if !ok {
@@ -197,7 +197,7 @@ func TestDecodeAcceptsAnyRootKeyOrder(t *testing.T) {
 }
 
 func TestDecodeEscapedKeys(t *testing.T) {
-	src := []byte(`{"schema_version":1,"na\u006de":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":[{"\u006eame":"approval_record"}],"evidence_states":[],"outcomes":[{"name":"Approve","precedence":1,"term\u0069nal":true}],"requirements":[]}`)
+	src := []byte(`{"schema_version":1,"na\u006de":"nornrune","version":"1.0.0","assumptions":[],"evidence_kinds":[{"\u006eame":"approval_record"}],"evidence_states":[],"outcomes":[{"name":"Approve","precedence":1,"term\u0069nal":true}],"requirements":[]}`)
 	b := mustDecode(t, src, Limits{})
 	d := b.Document()
 	kind, ok := d.EvidenceKindName(1)
@@ -205,13 +205,13 @@ func TestDecodeEscapedKeys(t *testing.T) {
 		t.Fatalf("EvidenceKindName(1) = (%d, %v), want approval_record", kind, ok)
 	}
 	metadata, ok := d.PolicyMetadata()
-	if !ok || symbolString(t, d, metadata.Name) != "verifoxx" {
+	if !ok || symbolString(t, d, metadata.Name) != "nornrune" {
 		t.Fatalf("escaped key metadata = (%+v, %v)", metadata, ok)
 	}
 }
 
 func TestDecodeStringEscapesAndSurrogatePairs(t *testing.T) {
-	src := []byte(`{"schema_version":1,"name":"verifoxx","version":"1.0.0","assumptions":[],"evidence_kinds":[{"name":"caf\u00e9 \u4e2d\u6587 \ud83d\ude00 \t\n\"\\\/\b\f\r"}],"evidence_states":[],"outcomes":[],"requirements":[]}`)
+	src := []byte(`{"schema_version":1,"name":"nornrune","version":"1.0.0","assumptions":[],"evidence_kinds":[{"name":"caf\u00e9 \u4e2d\u6587 \ud83d\ude00 \t\n\"\\\/\b\f\r"}],"evidence_states":[],"outcomes":[],"requirements":[]}`)
 	b := mustDecode(t, src, Limits{})
 	d := b.Document()
 	name, ok := d.EvidenceKindName(1)
@@ -240,47 +240,47 @@ func TestDecodeRejects(t *testing.T) {
 		code   ErrorCode
 		offset int
 	}{
-		{"unknown root key", `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[],"extra":1}`, Limits{}, CodeUnknownKey, -1},
+		{"unknown root key", `{"schema_version":1,"name":"nornrune","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[],"extra":1}`, Limits{}, CodeUnknownKey, -1},
 		{"unknown key in evidence kind", policy(`[{"name":"a","extra":1}]`, `[]`, `[]`), Limits{}, CodeUnknownKey, -1},
 		{"unknown key in outcome", policy(`[]`, `[]`, `[{"name":"Approve","precedence":1,"terminal":true,"extra":1}]`), Limits{}, CodeUnknownKey, -1},
-		{"duplicate root key", `{"schema_version":1,"name":"verifoxx","name":"dup","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`, Limits{}, CodeDuplicateKey, -1},
+		{"duplicate root key", `{"schema_version":1,"name":"nornrune","name":"dup","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`, Limits{}, CodeDuplicateKey, -1},
 		{"duplicate key in evidence kind", policy(`[{"name":"a","name":"b"}]`, `[]`, `[]`), Limits{}, CodeDuplicateKey, -1},
 		{"duplicate key in outcome", policy(`[]`, `[]`, `[{"name":"A","precedence":1,"precedence":2,"terminal":true}]`), Limits{}, CodeDuplicateKey, -1},
 		{"empty root object", `{}`, Limits{}, CodeMissingKey, -1},
-		{"missing root key", `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[],"outcomes":[],"requirements":[]}`, Limits{}, CodeMissingKey, -1},
+		{"missing root key", `{"schema_version":1,"name":"nornrune","version":"1.0.0","evidence_kinds":[],"outcomes":[],"requirements":[]}`, Limits{}, CodeMissingKey, -1},
 		{"single root key", `{"name":"x"}`, Limits{}, CodeMissingKey, -1},
 		{"missing name in catalog entry", policy(`[{}]`, `[]`, `[]`), Limits{}, CodeMissingKey, -1},
 		{"missing outcome key", policy(`[]`, `[]`, `[{"name":"Approve","terminal":true}]`), Limits{}, CodeMissingKey, -1},
-		{"missing colon", `{"schema_version" 1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`, Limits{}, CodeMalformed, -1},
-		{"trailing comma in root", `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[],}`, Limits{}, CodeMalformed, -1},
+		{"missing colon", `{"schema_version" 1,"name":"nornrune","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`, Limits{}, CodeMalformed, -1},
+		{"trailing comma in root", `{"schema_version":1,"name":"nornrune","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[],}`, Limits{}, CodeMalformed, -1},
 		{"trailing comma in catalog array", policy(`[{"name":"a"},]`, `[]`, `[]`), Limits{}, CodeMalformed, -1},
 		{"trailing comma in catalog entry", policy(`[{"name":"a",}]`, `[]`, `[]`), Limits{}, CodeMalformed, -1},
 		{"malformed literal suffix", policy(`[]`, `[]`, `[{"name":"A","precedence":1,"terminal":truex}]`), Limits{}, CodeMalformed, -1},
-		{"leading zero", meta(`01`, `"verifoxx"`, `"1.0.0"`), Limits{}, CodeMalformed, -1},
-		{"fraction", meta(`1.0`, `"verifoxx"`, `"1.0.0"`), Limits{}, CodeMalformed, -1},
-		{"exponent", meta(`1e0`, `"verifoxx"`, `"1.0.0"`), Limits{}, CodeMalformed, -1},
+		{"leading zero", meta(`01`, `"nornrune"`, `"1.0.0"`), Limits{}, CodeMalformed, -1},
+		{"fraction", meta(`1.0`, `"nornrune"`, `"1.0.0"`), Limits{}, CodeMalformed, -1},
+		{"exponent", meta(`1e0`, `"nornrune"`, `"1.0.0"`), Limits{}, CodeMalformed, -1},
 		{"empty root", "", Limits{}, CodeTruncated, -1},
 		{"bare opening brace", `{`, Limits{}, CodeTruncated, -1},
 		{"truncated key", `{"schema_ver`, Limits{}, CodeTruncated, -1},
-		{"truncated string value", `{"schema_version":1,"name":"verifoxx`, Limits{}, CodeTruncated, -1},
+		{"truncated string value", `{"schema_version":1,"name":"nornrune`, Limits{}, CodeTruncated, -1},
 		{"truncated escape", `{"schema_version":1,"name":"a\u00`, Limits{}, CodeTruncated, -1},
 		{"truncated minus", `{"schema_version":-`, Limits{}, CodeTruncated, -1},
-		{"truncated literal", `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[{"name":"A","precedence":1,"terminal":tru`, Limits{}, CodeTruncated, -1},
-		{"malformed literal prefix", `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[{"name":"A","precedence":1,"terminal":tru}],"requirements":[]}`, Limits{}, CodeMalformed, -1},
-		{"truncated catalog", `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[{"name":"a"},{"name":"b"}`, Limits{}, CodeTruncated, -1},
+		{"truncated literal", `{"schema_version":1,"name":"nornrune","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[{"name":"A","precedence":1,"terminal":tru`, Limits{}, CodeTruncated, -1},
+		{"malformed literal prefix", `{"schema_version":1,"name":"nornrune","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[{"name":"A","precedence":1,"terminal":tru}],"requirements":[]}`, Limits{}, CodeMalformed, -1},
+		{"truncated catalog", `{"schema_version":1,"name":"nornrune","version":"1.0.0","evidence_kinds":[{"name":"a"},{"name":"b"}`, Limits{}, CodeTruncated, -1},
 		{"truncated after high surrogate", `{"schema_version":1,"name":"a\ud83d`, Limits{}, CodeTruncated, -1},
 		{"trailing data", basePolicy + `x`, Limits{}, CodeTrailing, -1},
-		{"invalid schema version", meta(`2`, `"verifoxx"`, `"1.0.0"`), Limits{}, CodeInvalidVersion, -1},
-		{"negative schema version", meta(`-1`, `"verifoxx"`, `"1.0.0"`), Limits{}, CodeInvalidVersion, -1},
-		{"string schema version", meta(`"1"`, `"verifoxx"`, `"1.0.0"`), Limits{}, CodeInvalidType, -1},
-		{"bool schema version", meta(`true`, `"verifoxx"`, `"1.0.0"`), Limits{}, CodeInvalidType, -1},
-		{"number version", meta(`1`, `"verifoxx"`, `7`), Limits{}, CodeInvalidType, -1},
-		{"null version", meta(`1`, `"verifoxx"`, `null`), Limits{}, CodeInvalidType, -1},
+		{"invalid schema version", meta(`2`, `"nornrune"`, `"1.0.0"`), Limits{}, CodeInvalidVersion, -1},
+		{"negative schema version", meta(`-1`, `"nornrune"`, `"1.0.0"`), Limits{}, CodeInvalidVersion, -1},
+		{"string schema version", meta(`"1"`, `"nornrune"`, `"1.0.0"`), Limits{}, CodeInvalidType, -1},
+		{"bool schema version", meta(`true`, `"nornrune"`, `"1.0.0"`), Limits{}, CodeInvalidType, -1},
+		{"number version", meta(`1`, `"nornrune"`, `7`), Limits{}, CodeInvalidType, -1},
+		{"null version", meta(`1`, `"nornrune"`, `null`), Limits{}, CodeInvalidType, -1},
 		{"number name", meta(`1`, `5`, `"1.0.0"`), Limits{}, CodeInvalidType, -1},
 		{"precedence string", policy(`[]`, `[]`, `[{"name":"A","precedence":"1","terminal":true}]`), Limits{}, CodeInvalidType, -1},
 		{"terminal number", policy(`[]`, `[]`, `[{"name":"A","precedence":1,"terminal":1}]`), Limits{}, CodeInvalidType, -1},
 		{"terminal null", policy(`[]`, `[]`, `[{"name":"A","precedence":1,"terminal":null}]`), Limits{}, CodeInvalidType, -1},
-		{"kinds not array", `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":{},"evidence_states":[],"outcomes":[],"requirements":[]}`, Limits{}, CodeInvalidType, -1},
+		{"kinds not array", `{"schema_version":1,"name":"nornrune","version":"1.0.0","evidence_kinds":{},"evidence_states":[],"outcomes":[],"requirements":[]}`, Limits{}, CodeInvalidType, -1},
 		{"requirements not array", reqs(`5`), Limits{}, CodeInvalidType, -1},
 		{"incomplete requirement", reqs(`[{"id":"R1"}]`), Limits{}, CodeMissingKey, -1},
 		{"negative precedence", policy(`[]`, `[]`, `[{"name":"A","precedence":-1,"terminal":true}]`), Limits{}, CodeLimit, -1},
@@ -295,9 +295,9 @@ func TestDecodeRejects(t *testing.T) {
 		{"truncated multibyte rune", `{"schema_version":1,"name":"a` + "\xe4\xb8" + `","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`, Limits{}, CodeInvalidUTF8, -1},
 		{"source limit", basePolicy, Limits{MaxSourceBytes: 10}, CodeLimit, 10},
 		{"catalog limit", policy(`[{"name":"a"},{"name":"b"}]`, `[]`, `[]`), Limits{MaxCatalogItems: 1}, CodeLimit, -1},
-		{"string limit", `{"name":"verifoxx","schema_version":1,"version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`, Limits{MaxStringBytes: 5}, CodeLimit, -1},
+		{"string limit", `{"name":"nornrune","schema_version":1,"version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`, Limits{MaxStringBytes: 5}, CodeLimit, -1},
 		{"string limit during growth", `{"name":"` + strings.Repeat("a", 1<<20) + `","schema_version":1,"version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[]}`, Limits{MaxStringBytes: 8}, CodeLimit, -1},
-		{"symbol limit", meta(`1`, `"verifoxx"`, `"1.0.0"`), Limits{MaxSymbolBytes: 4}, CodeLimit, -1},
+		{"symbol limit", meta(`1`, `"nornrune"`, `"1.0.0"`), Limits{MaxSymbolBytes: 4}, CodeLimit, -1},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -307,13 +307,13 @@ func TestDecodeRejects(t *testing.T) {
 }
 
 func TestDecodeRejectsWithExactOffsets(t *testing.T) {
-	src := `{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[],"extra":1}`
+	src := `{"schema_version":1,"name":"nornrune","version":"1.0.0","evidence_kinds":[],"evidence_states":[],"outcomes":[],"requirements":[],"extra":1}`
 	reject(t, src, Limits{}, CodeUnknownKey, offsetOf(t, src, `"extra"`))
 
-	src = meta(`2`, `"verifoxx"`, `"1.0.0"`)
+	src = meta(`2`, `"nornrune"`, `"1.0.0"`)
 	reject(t, src, Limits{}, CodeInvalidVersion, offsetOf(t, src, ":2")+1)
 
-	src = meta(`1`, `"verifoxx"`, `7`)
+	src = meta(`1`, `"nornrune"`, `7`)
 	reject(t, src, Limits{}, CodeInvalidType, offsetOf(t, src, `7`))
 
 	src = `{"schema_ver`
@@ -330,7 +330,7 @@ func TestDecodeRollbackOnErrorAndReuse(t *testing.T) {
 	if err := Decode(b, []byte(fullPolicy), schema.NewBuilder().Finish(), syms, Limits{}); err != nil {
 		t.Fatal(err)
 	}
-	bad := []byte(`{"schema_version":1,"name":"verifoxx","version":"1.0.0","evidence_kinds":[{"name":"a"`)
+	bad := []byte(`{"schema_version":1,"name":"nornrune","version":"1.0.0","evidence_kinds":[{"name":"a"`)
 	var je *Error
 	if err := Decode(b, bad, schema.NewBuilder().Finish(), syms, Limits{}); !errors.As(err, &je) {
 		t.Fatalf("Decode(bad) error = %v, want *Error", err)
@@ -367,14 +367,14 @@ func TestDecodeLeavesInternerUnchanged(t *testing.T) {
 	if syms.Len() != before || syms.ByteLen() != beforeBytes {
 		t.Fatalf("successful decode mutated interner: len %d->%d, bytes %d->%d", before, syms.Len(), beforeBytes, syms.ByteLen())
 	}
-	if _, ok := syms.Lookup([]byte("verifoxx")); ok {
-		t.Fatal("decode interned policy symbol verifoxx")
+	if _, ok := syms.Lookup([]byte("nornrune")); ok {
+		t.Fatal("decode interned policy symbol nornrune")
 	}
 	if _, ok := syms.Lookup([]byte("Approve")); ok {
 		t.Fatal("decode interned outcome symbol Approve")
 	}
 	var je *Error
-	err := Decode(ast.NewBuilder(ast.Hints{}), []byte(`{"schema_version":1,"name":"verifoxx`), schema.NewBuilder().Finish(), syms, Limits{})
+	err := Decode(ast.NewBuilder(ast.Hints{}), []byte(`{"schema_version":1,"name":"nornrune`), schema.NewBuilder().Finish(), syms, Limits{})
 	if !errors.As(err, &je) {
 		t.Fatalf("failed decode error = %v, want *Error", err)
 	}

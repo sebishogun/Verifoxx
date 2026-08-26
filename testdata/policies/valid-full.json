@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "name": "verifoxx",
+  "name": "nornrune",
   "version": "1.0.0",
   "assumptions": [
     "Policy {policy_name} version {policy_version} applies to request {request_id}."

@@ -3,8 +3,8 @@ package frontend
 import (
 	"testing"
 
-	public "github.com/sebishogun/verifoxx/frontend"
-	"github.com/sebishogun/verifoxx/internal/program"
+	public "github.com/sebishogun/nornrune/frontend"
+	"github.com/sebishogun/nornrune/internal/program"
 )
 
 func FuzzSemanticPolicy(f *testing.F) {
