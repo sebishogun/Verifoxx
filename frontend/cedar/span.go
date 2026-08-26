@@ -27,6 +27,8 @@ type policySyntax struct {
 
 type syntaxKind uint8
 
+const maxSafeParserDepth = 4096
+
 const (
 	syntaxInvalid syntaxKind = iota
 	syntaxPath
@@ -45,11 +47,13 @@ type syntaxExpr struct {
 	kind        syntaxKind
 }
 
-func lex(source []byte, maxDepth uint32) ([]token, bool) {
+func lex(source []byte, maxDepth uint32) ([]token, public.Diagnostic) {
 	tokens := make([]token, 0, len(source)/3+1)
 	sourceText := string(source)
 	depth := uint64(0)
-	depthLimit := uint64(maxDepth) + 1 // one policy scope or condition delimiter
+	semanticDepth := min(uint64(maxDepth), uint64(maxSafeParserDepth))
+	depthLimit := semanticDepth + 1 // one policy scope or condition delimiter
+	recursiveTokens := uint32(0)
 	for offset := 0; offset < len(source); {
 		switch source[offset] {
 		case ' ', '\t', '\r', '\n':
@@ -64,12 +68,13 @@ func lex(source []byte, maxDepth uint32) ([]token, bool) {
 				continue
 			}
 			if offset+1 < len(source) && source[offset+1] == '*' {
+				start := offset
 				offset += 2
 				for offset+1 < len(source) && (source[offset] != '*' || source[offset+1] != '/') {
 					offset++
 				}
 				if offset+1 >= len(source) {
-					return nil, false
+					return nil, public.Diagnostic{Span: public.Span{Start: uint32(start), End: uint32(len(source))}, Code: public.CodeSyntax}
 				}
 				offset += 2
 				continue
@@ -92,7 +97,7 @@ func lex(source []byte, maxDepth uint32) ([]token, bool) {
 				offset++
 			}
 			if len(tokens) == 0 || tokens[len(tokens)-1].start != uint32(start) {
-				return nil, false
+				return nil, public.Diagnostic{Span: public.Span{Start: uint32(start), End: uint32(len(source))}, Code: public.CodeSyntax}
 			}
 			continue
 		}
@@ -130,16 +135,21 @@ func lex(source []byte, maxDepth uint32) ([]token, bool) {
 		case "(", "{", "[":
 			depth++
 			if depth > depthLimit {
-				return nil, false
+				return nil, public.Diagnostic{Span: public.Span{Start: uint32(start), End: uint32(offset)}, Code: public.CodeLimit}
 			}
 		case ")", "}", "]":
 			if depth > 0 {
 				depth--
 			}
+		case "if":
+			recursiveTokens++
+			if recursiveTokens > maxSafeParserDepth {
+				return nil, public.Diagnostic{Span: public.Span{Start: uint32(start), End: uint32(offset)}, Code: public.CodeLimit}
+			}
 		}
 		tokens = append(tokens, token{text: text, start: uint32(start), end: uint32(offset)})
 	}
-	return tokens, true
+	return tokens, public.Diagnostic{}
 }
 
 func scanPolicySyntax(tokens []token, offsets []uint32) ([]policySyntax, bool) {

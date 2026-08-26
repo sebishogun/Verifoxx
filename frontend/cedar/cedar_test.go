@@ -2,6 +2,7 @@ package cedar
 
 import (
 	"bytes"
+	"os"
 	"reflect"
 	"testing"
 
@@ -253,10 +254,45 @@ func TestCompileRejectsMalformedUTF8AndInvalidBindings(t *testing.T) {
 	}
 }
 
-func TestLexerRejectsExcessiveNestingBeforeOfficialParser(t *testing.T) {
+func TestCompileRejectsExcessiveNestingAsLimitBeforeOfficialParser(t *testing.T) {
 	source := []byte(`permit(principal, action, resource) when { (((((true))))) };`)
-	if _, ok := lex(source, 4); ok {
-		t.Fatal("lex accepted source nesting beyond the configured depth")
+	limits := public.DefaultLimits()
+	limits.MaxDepth = 4
+	policy, diagnostics := Compile(source, cedarBindings(), limits)
+	if policy != nil || !hasCedarDiagnostic(diagnostics, public.CodeLimit) || hasCedarDiagnostic(diagnostics, public.CodeSyntax) {
+		t.Fatalf("Compile = (%v, %+v), want limit", policy, diagnostics)
+	}
+}
+
+func TestCompileRetainsSafeParserDepthWhenCallerRaisesSemanticLimit(t *testing.T) {
+	const nesting = maxSafeParserDepth + 1
+	source := make([]byte, 0, nesting*2+64)
+	source = append(source, `permit(principal, action, resource) when { `...)
+	source = append(source, bytes.Repeat([]byte{'('}, nesting)...)
+	source = append(source, "true"...)
+	source = append(source, bytes.Repeat([]byte{')'}, nesting)...)
+	source = append(source, ` };`...)
+	limits := public.DefaultLimits()
+	limits.MaxDepth = nesting * 2
+	policy, diagnostics := Compile(source, cedarBindings(), limits)
+	if policy != nil || !hasCedarDiagnostic(diagnostics, public.CodeLimit) {
+		t.Fatalf("Compile = (%v, %+v), want safe parser limit", policy, diagnostics)
+	}
+}
+
+func TestLexerFailureUsesExactSourceSpan(t *testing.T) {
+	for _, source := range [][]byte{
+		[]byte(`permit(principal, action, resource); /*`),
+		[]byte(`permit(principal, action, resource) when { context.team == "unterminated };`),
+	} {
+		policy, diagnostics := Compile(source, cedarBindings(), public.DefaultLimits())
+		if policy != nil || len(diagnostics) != 1 || diagnostics[0].Code != public.CodeSyntax {
+			t.Fatalf("Compile(%q) = (%v, %+v), want syntax", source, policy, diagnostics)
+		}
+		span := diagnostics[0].Span
+		if span.Start == 0 || span.End != uint32(len(source)) {
+			t.Fatalf("Compile(%q) span = [%d,%d), want exact suffix", source, span.Start, span.End)
+		}
 	}
 }
 
@@ -281,6 +317,70 @@ unless { context has enabled };`)
 	}
 }
 
+func TestOneLimitDiagnosticPerExpression(t *testing.T) {
+	limits := public.DefaultLimits()
+	limits.MaxDepth = 4
+	limits.MaxNodes = 4
+	policy, diagnostics := Compile(
+		[]byte(`permit(principal, action, resource) when { !!!!!context.enabled };`),
+		cedarBindings(), limits,
+	)
+	if policy != nil || len(diagnostics) != 1 || diagnostics[0].Code != public.CodeLimit {
+		t.Fatalf("Compile = (%v, %+v), want one limit diagnostic", policy, diagnostics)
+	}
+}
+
+func TestMissingForbidContextEscalatesByFrontendContract(t *testing.T) {
+	source := []byte(`permit(principal, action, resource);
+forbid(principal, action, resource) when { context.team == "blocked" };`)
+	semantic := requireCedarPolicy(t, source, cedarBindings(), public.DefaultLimits())
+	compiled, diagnostics, err := internalfrontend.Compile(semantic)
+	if err != nil || len(diagnostics) != 0 {
+		t.Fatalf("shared Compile = (%v, %+v)", err, diagnostics)
+	}
+	if got := evaluateCedarPolicy(t, compiled, nil); got != 4 {
+		t.Fatalf("missing forbid context outcome = %d, want Escalate", got)
+	}
+
+	official, err := cedargo.NewPolicySetFromBytes("policy.cedar", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision, diagnostic := cedargo.Authorize(official, nil, cedargo.Request{})
+	if decision != cedargo.Allow || len(diagnostic.Errors) != 1 {
+		t.Fatalf("official Cedar = (%v, %+v), want allow plus one policy error", decision, diagnostic)
+	}
+}
+
+func TestCedarFixtures(t *testing.T) {
+	tests := []struct {
+		name string
+		code public.DiagnosticCode
+	}{
+		{name: "permit.cedar"},
+		{name: "forbid.cedar"},
+		{name: "unsupported.cedar", code: public.CodeUnsupported},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			source, err := os.ReadFile("../../testdata/frontends/cedar/" + test.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			policy, diagnostics := Compile(source, cedarBindings(), public.DefaultLimits())
+			if test.code.Valid() {
+				if policy != nil || !hasCedarDiagnostic(diagnostics, test.code) {
+					t.Fatalf("Compile = (%v, %+v), want %v", policy, diagnostics, test.code)
+				}
+				return
+			}
+			if policy == nil || len(diagnostics) != 0 {
+				t.Fatalf("Compile = (%v, %+v), want policy", policy, diagnostics)
+			}
+		})
+	}
+}
+
 func TestCompileEnforcesCedarBounds(t *testing.T) {
 	base := public.DefaultLimits()
 	tests := []struct {
@@ -294,7 +394,10 @@ func TestCompileEnforcesCedarBounds(t *testing.T) {
 		{name: "depth", source: `permit(principal, action, resource) when { context.enabled && true };`, limits: func(l public.Limits) public.Limits { l.MaxDepth = 1; return l }},
 		{name: "literals", source: `permit(principal, action, resource) when { context.enabled && true };`, limits: func(l public.Limits) public.Limits { l.MaxLiterals = 1; return l }},
 		{name: "children", source: `permit(principal, action, resource) when { context.enabled && true };`, limits: func(l public.Limits) public.Limits { l.MaxChildren = 1; return l }},
-		{name: "strings", source: `permit(principal, action, resource) when { context.team == "blue" };`, limits: func(l public.Limits) public.Limits { l.MaxStringBytes = 150; return l }},
+		{name: "strings", source: `permit(principal, action, resource) when { context.team == "blue" };`, limits: func(l public.Limits) public.Limits {
+			l.MaxStringBytes = uint32(bindingStringBytes(cedarBindings()) + uint64(len("blu")))
+			return l
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
