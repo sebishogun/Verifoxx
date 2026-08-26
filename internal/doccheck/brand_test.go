@@ -67,12 +67,12 @@ func TestTrackedTextContainsNoLegacyBrand(t *testing.T) {
 		}
 		relative = filepath.ToSlash(relative)
 		if relative == ".git" {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if entry.IsDir() {
-			if entry.Name() == ".git" {
-				return filepath.SkipDir
-			}
 			return nil
 		}
 		if allowed[relative] {

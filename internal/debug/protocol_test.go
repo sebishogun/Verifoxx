@@ -229,9 +229,16 @@ func TestTransportCancellationPausesContinue(t *testing.T) {
 	if err := <-continueErr; !errors.Is(err, context.Canceled) {
 		t.Fatalf("Continue() cancellation error = %v, want context.Canceled", err)
 	}
-	paused, err := client.Snapshot(controlContext)
-	if err != nil {
-		t.Fatalf("Snapshot() after cancellation error = %v", err)
+	var paused State
+	for attempt := 0; attempt < 100; attempt++ {
+		var err error
+		paused, err = client.Snapshot(controlContext)
+		if err != nil {
+			t.Fatalf("Snapshot() after cancellation error = %v", err)
+		}
+		if paused.Status == StatusPaused {
+			break
+		}
 	}
 	if paused.Status != StatusPaused || paused.Stop != StopNone {
 		t.Fatalf("state after cancellation = %+v", paused)
