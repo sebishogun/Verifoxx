@@ -6,19 +6,31 @@ import (
 
 	"github.com/spf13/cobra"
 
+	public "github.com/sebishogun/verifoxx/frontend"
 	"github.com/sebishogun/verifoxx/internal/compile"
 )
 
 func newValidateCommand(deps dependencies) *cobra.Command {
 	var flags sourceFlags
+	var frontendFlags frontendFlags
 	cmd := &cobra.Command{
 		Use:   "validate",
 		Short: "Validate a policy document",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			inputs, err := loadSources(flags, cmd.InOrStdin(), deps, sourcePolicy)
+			inputs, selection, err := loadFrontendSources(flags, frontendFlags, cmd.InOrStdin(), deps, sourcePolicy)
 			if err != nil {
 				return classifyCommandError(err)
+			}
+			if selection.language != public.LanguageNative {
+				_, diagnostics, compileErr := compileFrontend(selection, inputs.policy)
+				if compileErr != nil {
+					return operationalError(compileErr)
+				}
+				if len(diagnostics) != 0 {
+					return writeFrontendDiagnostics(cmd.OutOrStdout(), diagnostics)
+				}
+				return operationalError(writeComplete(cmd.OutOrStdout(), []byte("{\"valid\":true,\"diagnostics\":[]}\n")))
 			}
 			var engine engine
 			policy, err := engine.decodePolicy(inputs.policy)
@@ -30,6 +42,7 @@ func newValidateCommand(deps dependencies) *cobra.Command {
 		},
 	}
 	bindSourceFlags(cmd, &flags, sourcePolicy)
+	bindFrontendFlags(cmd, &frontendFlags)
 	return cmd
 }
 

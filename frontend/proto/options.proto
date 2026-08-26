@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package verifoxx.frontend;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/sebishogun/verifoxx/frontend/proto;frontproto";
+
+extend google.protobuf.MessageOptions {
+  string policy_name = 51001;
+  string policy_version = 51002;
+  string cel_expression = 51003;
+}
+
+extend google.protobuf.FieldOptions {
+  string canonical_target = 51004;
+}

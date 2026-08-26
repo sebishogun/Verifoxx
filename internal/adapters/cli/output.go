@@ -4,6 +4,7 @@ import (
 	"io"
 	"strconv"
 
+	public "github.com/sebishogun/verifoxx/frontend"
 	"github.com/sebishogun/verifoxx/internal/adapters/wire"
 	"github.com/sebishogun/verifoxx/internal/compile"
 )
@@ -17,6 +18,36 @@ func writeComplete(w io.Writer, data []byte) error {
 		return io.ErrShortWrite
 	}
 	return err
+}
+
+func writeFrontendDiagnostics(w io.Writer, diagnostics []public.Diagnostic) error {
+	if err := writeComplete(w, appendFrontendDiagnostics(nil, diagnostics)); err != nil {
+		return operationalError(err)
+	}
+	return &commandError{err: errInvalidPolicy, code: 1, quiet: true}
+}
+
+func appendFrontendDiagnostics(dst []byte, diagnostics []public.Diagnostic) []byte {
+	dst = append(dst, "{\"valid\":false,\"diagnostics\":["...)
+	for row, diagnostic := range diagnostics {
+		if row != 0 {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "{\"language\":"...)
+		dst = appendOutputString(dst, []byte(diagnostic.Language.String()))
+		dst = append(dst, ",\"code\":"...)
+		dst = appendOutputString(dst, []byte(diagnostic.Code.String()))
+		dst = append(dst, ",\"span\":{\"start\":"...)
+		dst = strconv.AppendUint(dst, uint64(diagnostic.Span.Start), 10)
+		dst = append(dst, ",\"end\":"...)
+		dst = strconv.AppendUint(dst, uint64(diagnostic.Span.End), 10)
+		dst = append(dst, "},\"row\":"...)
+		dst = strconv.AppendUint(dst, uint64(diagnostic.Row), 10)
+		dst = append(dst, ",\"field\":"...)
+		dst = strconv.AppendUint(dst, uint64(diagnostic.Field), 10)
+		dst = append(dst, '}')
+	}
+	return append(dst, "]}\n"...)
 }
 
 func appendOutputString(dst, value []byte) []byte {

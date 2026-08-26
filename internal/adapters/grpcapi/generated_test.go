@@ -27,7 +27,10 @@ func TestGeneratedCodeIsCurrent(t *testing.T) {
 	inputs := []string{
 		"buf.yaml",
 		"buf.gen.yaml",
+		"buf.frontend.gen.yaml",
 		"api/proto/verifoxx/v1/verifoxx.proto",
+		"frontend/proto/options.proto",
+		"testdata/frontends/proto/policy.proto",
 	}
 	for _, relative := range inputs {
 		copyGeneratedCheckFile(t, repository, workspace, relative)
@@ -36,12 +39,17 @@ func TestGeneratedCodeIsCurrent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	user := strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
+	buildFrontendPlugin(t, ctx, repository, workspace)
 	runBufCheck(t, ctx, workspace, user, "lint")
 	runBufCheck(t, ctx, workspace, user, "generate")
+	runBufCheck(t, ctx, workspace, user, "generate", "--template", "buf.frontend.gen.yaml")
 
 	generated := []string{
 		"api/gen/verifoxx/v1/verifoxx.pb.go",
 		"api/gen/verifoxx/v1/verifoxx_grpc.pb.go",
+		"frontend/proto/options.pb.go",
+		"testdata/frontends/proto/policy.pb.go",
+		"testdata/frontends/proto/policy_verifoxx.pb.go",
 	}
 	for _, relative := range generated {
 		want, err := os.ReadFile(filepath.Join(repository, relative))
@@ -58,16 +66,31 @@ func TestGeneratedCodeIsCurrent(t *testing.T) {
 	}
 }
 
-func runBufCheck(t *testing.T, ctx context.Context, workspace, user, subcommand string) {
+func buildFrontendPlugin(t *testing.T, ctx context.Context, repository, workspace string) {
+	t.Helper()
+	destination := filepath.Join(workspace, ".verifoxx/tools/protoc-gen-verifoxx")
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		t.Fatalf("create frontend plugin directory: %v", err)
+	}
+	command := exec.CommandContext(ctx, "go", "build", "-trimpath", "-o", destination, "./cmd/protoc-gen-verifoxx")
+	command.Dir = repository
+	command.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build frontend plugin error = %v\n%s", err, output)
+	}
+}
+
+func runBufCheck(t *testing.T, ctx context.Context, workspace, user string, arguments ...string) {
 	t.Helper()
 	command := exec.CommandContext(ctx, "docker", "run", "--rm", "--user", user, "-e", "HOME=/tmp",
-		"-v", workspace+":/workspace", "-w", "/workspace", bufImage, subcommand)
+		"-v", workspace+":/workspace", "-w", "/workspace", bufImage)
+	command.Args = append(command.Args, arguments...)
 	output, err := command.CombinedOutput()
 	if err != nil {
-		t.Fatalf("containerized buf %s error = %v\n%s", subcommand, err, output)
+		t.Fatalf("containerized buf %v error = %v\n%s", arguments, err, output)
 	}
 	if err := ctx.Err(); err != nil {
-		t.Fatalf("containerized buf %s deadline = %v", subcommand, err)
+		t.Fatalf("containerized buf %v deadline = %v", arguments, err)
 	}
 }
 

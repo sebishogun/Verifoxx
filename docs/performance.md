@@ -558,6 +558,51 @@ timeout 120s go build -trimpath -o /tmp/opencode/verifoxx-task26 ./cmd/verifoxx
 
 ## Verification
 
+### Compatibility Frontend Stages
+
+Compatibility benchmarks keep official parser/checker work, semantic
+translation, shared validation/lowering, cold end-to-end compilation, and warm
+evaluation in separate cases. Parser-owned allocations are expected in the
+cold stages and are reported rather than compared across engines. Program and
+batch construction, symbol interning, scheduler construction, and priming stay
+outside warm timers.
+
+`BenchmarkFrontendWarmEvaluation` covers 1, 64, 256, and 4,096 rows through the
+automatic evaluator and a fixed warmed scheduler path. Every warm case must
+retain `0 B/op` and `0 allocs/op`. Forced scalar and SIMD evaluator coverage
+remains in `internal/eval`; parallel all-worker scheduler coverage remains in
+`internal/scheduler`. No cross-engine speed claim follows from these stage
+benchmarks.
+
+Measured 2026-08-26 on Linux/amd64, Go 1.27.0, AMD RYZEN AI MAX+ 395 with
+Radeon 8060S. Dependencies were cel-go v0.32.0, OPA v1.19.1, cedar-go v1.8.0,
+and protobuf-go v1.36.12. Each value is the minimum of six runs. The supported
+policy shape was one three-field conjunction: string equality, integer
+greater-than-or-equal, and a Boolean field.
+
+| Cold stage | CEL | Rego | Cedar |
+|---|---:|---:|---:|
+| Official parse/check | 35,783 ns/op | 21,472 ns/op | 6,017 ns/op |
+| Semantic translation | 2,018 ns/op | 1,906 ns/op | 2,419 ns/op |
+| End-to-end compilation | 55,898 ns/op | 37,105 ns/op | 22,318 ns/op |
+
+Shared validation/lowering measured 5,696 ns/op. Cold stages include their
+documented parser-owned and compiler-owned allocations. The warm measurements
+below exclude source parsing, translation, Program construction, batch setup,
+symbol interning, scheduler construction, and priming.
+
+| Rows | Automatic | Fixed warmed scheduler | Warm allocations |
+|---:|---:|---:|---:|
+| 1 | 385.1 ns/op | 793.7 ns/op | 0 B/op, 0 allocs/op |
+| 64 | 3,149 ns/op | 3,840 ns/op | 0 B/op, 0 allocs/op |
+| 256 | 11,355 ns/op | 12,834 ns/op | 0 B/op, 0 allocs/op |
+| 4,096 | 177,226 ns/op | 189,040 ns/op | 0 B/op, 0 allocs/op |
+
+```bash
+timeout 240s go test -timeout 210s -run '^$' -bench '^BenchmarkFrontend' -benchmem -count=6 ./internal/frontend
+timeout 180s go test -timeout 150s -run '^$' -bench 'BenchmarkExecutor|BenchmarkScheduled' -benchmem -count=6 ./internal/eval ./internal/scheduler
+```
+
 `internal/simdops/ops_test.go` differentially checks the accelerated and pure-Go
 backends against local scalar references at empty, tail, unaligned, alias, and
 kernel-boundary shapes. It also checks warm allocation count and runtime

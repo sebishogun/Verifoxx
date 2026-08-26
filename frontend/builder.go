@@ -19,9 +19,9 @@ var (
 
 // Builder owns one mutable semantic table. It is not safe for concurrent use.
 type Builder struct {
+	depths      []uint32
 	policy      Policy
 	limits      Limits
-	depths      []uint32
 	stringBytes uint32
 }
 

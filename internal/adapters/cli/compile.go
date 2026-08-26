@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	public "github.com/sebishogun/verifoxx/frontend"
 	"github.com/sebishogun/verifoxx/internal/program"
 )
 
@@ -13,17 +14,27 @@ var errInvalidCompiledMetadata = errors.New("compiled policy has invalid metadat
 
 func newCompileCommand(deps dependencies) *cobra.Command {
 	var flags sourceFlags
+	var formatFlags frontendFlags
 	cmd := &cobra.Command{
 		Use:   "compile",
 		Short: "Compile and summarize a policy document",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			inputs, err := loadSources(flags, cmd.InOrStdin(), deps, sourcePolicy)
+			inputs, selection, err := loadFrontendSources(flags, formatFlags, cmd.InOrStdin(), deps, sourcePolicy)
 			if err != nil {
 				return classifyCommandError(err)
 			}
-			var engine engine
-			compiled, err := engine.compilePolicy(inputs.policy)
+			var compiled *program.Program
+			if selection.language == public.LanguageNative {
+				var engine engine
+				compiled, err = engine.compilePolicy(inputs.policy)
+			} else {
+				var diagnostics []public.Diagnostic
+				compiled, diagnostics, err = compileFrontend(selection, inputs.policy)
+				if len(diagnostics) != 0 {
+					return writeFrontendDiagnostics(cmd.OutOrStdout(), diagnostics)
+				}
+			}
 			if err != nil {
 				return operationalError(err)
 			}
@@ -35,6 +46,7 @@ func newCompileCommand(deps dependencies) *cobra.Command {
 		},
 	}
 	bindSourceFlags(cmd, &flags, sourcePolicy)
+	bindFrontendFlags(cmd, &formatFlags)
 	return cmd
 }
 

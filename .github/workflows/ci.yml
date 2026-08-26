@@ -82,6 +82,21 @@ jobs:
       - name: Test race and pointer safety
         run: timeout 300s go run ./cmd/devx test:race
 
+  frontend:
+    name: Compatibility frontends
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test frontend conformance and boundaries
+        run: timeout 240s go test -count=1 -timeout 210s ./frontend/... ./internal/frontend ./internal/doccheck
+      - name: Run frontend fuzz seeds
+        run: timeout 120s go test -count=1 -timeout 90s -run '^Fuzz(Compile|SemanticPolicy)$' ./frontend/cel ./frontend/rego ./frontend/cedar ./internal/frontend
+
   generated:
     name: Generated and canonical files
     runs-on: ubuntu-latest

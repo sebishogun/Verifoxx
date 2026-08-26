@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package verifoxx.frontend.fixture;
+
+import "options.proto";
+
+option go_package = "github.com/sebishogun/verifoxx/testdata/frontends/proto;policy";
+
+message PolicyRequest {
+  option (verifoxx.frontend.policy_name) = "access-policy";
+  option (verifoxx.frontend.policy_version) = "v1";
+  option (verifoxx.frontend.cel_expression) = "teamName == \"blue\" && count >= 2 && enabled";
+
+  string team_name = 1 [json_name = "teamName", (verifoxx.frontend.canonical_target) = "subject.team"];
+  sint64 count = 2 [(verifoxx.frontend.canonical_target) = "context.count"];
+  bool enabled = 3 [(verifoxx.frontend.canonical_target) = "context.enabled"];
+}
