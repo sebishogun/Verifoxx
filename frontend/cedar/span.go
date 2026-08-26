@@ -20,9 +20,9 @@ type conditionSyntax struct {
 }
 
 type policySyntax struct {
-	span       public.Span
-	scopeSpans [3]public.Span
 	conditions []conditionSyntax
+	scopeSpans [3]public.Span
+	span       public.Span
 }
 
 type syntaxKind uint8

@@ -8,10 +8,10 @@ query PostgreSQL while evaluating a policy.
 ## System Boundary
 
 ```text
-policy JSON
+native policy JSON OR explicit CEL/Rego/Cedar source + bindings
     |
     v
-JSON decoder -> integer-indexed SoA AST -> validator -> compiler -> immutable Program
+bounded cold frontend -> integer-indexed SoA AST -> validator -> compiler -> immutable Program
                                                                |
 request JSON + evidence JSON                                  |
     |                                                          |
@@ -32,6 +32,13 @@ The AST and compiled program live in [`internal/ast`](../internal/ast) and
 [`internal/eval`](../internal/eval). Adapters may parse JSON or protobuf and may
 allocate on cold setup paths, but maps, reflection, database calls, and
 transport objects do not enter evaluator kernels.
+
+CEL, Rego, and Cedar use pinned official parsers on the CLI cold path, then
+translate only their documented subsets into the shared semantic tables.
+Protobuf descriptors run through `protoc-gen-verifoxx` at generation time and
+produce static bindings; runtime descriptor reflection is not supported.
+Persisted service registry sources remain canonical native JSON. See the
+[compatibility frontend guide](frontends.md) for the exact boundary.
 
 ## Compile And Publish
 
@@ -168,6 +175,7 @@ transactions, migrations, and recovery.
 ## Further Reading
 
 - [Policy language](policy-language.md)
+- [Compatibility frontends](frontends.md)
 - [Concurrency](concurrency.md)
 - [API](api.md)
 - [Performance](performance.md)

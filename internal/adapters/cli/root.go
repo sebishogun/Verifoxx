@@ -19,6 +19,7 @@ import (
 
 type dependencies struct {
 	readFile        func(string) ([]byte, error)
+	readBoundedFile func(string, uint32) ([]byte, error)
 	writeGraphFile  func(string, []byte, bool) error
 	migrate         func(context.Context) error
 	migrationHealth func(context.Context) error
@@ -35,8 +36,9 @@ type dependencies struct {
 
 func productionDependencies() dependencies {
 	return dependencies{
-		readFile:       os.ReadFile,
-		writeGraphFile: writeAtomicGraphFile,
+		readFile:        os.ReadFile,
+		readBoundedFile: readBoundedFile,
+		writeGraphFile:  writeAtomicGraphFile,
 		migrate: func(ctx context.Context) error {
 			cfg, err := config.LoadOS(nil)
 			if err != nil {
@@ -75,6 +77,15 @@ func productionDependencies() dependencies {
 		evidence: fixtures.EvidenceJSON(),
 		version:  buildinfo.Version(),
 	}
+}
+
+func readBoundedFile(path string, maxBytes uint32) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return io.ReadAll(io.LimitReader(file, int64(maxBytes)+1))
 }
 
 type sourceFlags struct {

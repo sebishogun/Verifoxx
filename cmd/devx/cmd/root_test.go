@@ -334,10 +334,10 @@ func TestKnownUnavailableWorkflowIsGatedBeforeExecution(t *testing.T) {
 func TestWorkflowPrerequisitesMatchGeneratedCodePlans(t *testing.T) {
 	t.Parallel()
 
-	if got := workflowExecutables("proto:gen"); !slices.Equal(got, []string{"buf"}) {
+	if got := workflowExecutables("proto:gen"); !slices.Equal(got, []string{"go", "buf"}) {
 		t.Fatalf("proto:gen executables = %v", got)
 	}
-	if got := workflowExecutables("proto:check"); !slices.Equal(got, []string{"buf", "docker"}) {
+	if got := workflowExecutables("proto:check"); !slices.Equal(got, []string{"go", "buf", "docker"}) {
 		t.Fatalf("proto:check executables = %v", got)
 	}
 }
@@ -586,7 +586,7 @@ func TestRepresentativeWorkflowPlansUseExactArguments(t *testing.T) {
 		arguments  []string
 	}{
 		{name: "demo", executable: "go", arguments: []string{"run", "./cmd/verifoxx", "demo"}},
-		{name: "proto:gen", executable: "buf", arguments: []string{"generate"}},
+		{name: "proto:gen", executable: "go", arguments: []string{"build", "-trimpath", "-o", ".verifoxx/tools/protoc-gen-verifoxx", "./cmd/protoc-gen-verifoxx"}},
 		{name: "test", executable: "go", arguments: []string{"test", "-count=1", "-timeout", "60s", "./..."}},
 		{name: "bench", executable: "go", arguments: []string{"test", "-run", "^$", "-bench", "^BenchmarkEvaluate$", "-benchmem", "-benchtime", "200ms", "-count", "6", "-timeout", "120s", "./internal/eval"}},
 		{name: "load", executable: "go", arguments: []string{"run", "./cmd/loadgen", "-protocol", "http", "-target", "127.0.0.1:8080", "-requests", "1000", "-concurrency", "4", "-timeout", "30s"}},
@@ -603,6 +603,28 @@ func TestRepresentativeWorkflowPlansUseExactArguments(t *testing.T) {
 		got := plan[0]
 		if got.executable != test.executable || !slices.Equal(got.arguments, test.arguments) {
 			t.Errorf("workflow %q first step = %+v, want %s %v", test.name, got, test.executable, test.arguments)
+		}
+	}
+}
+
+func TestProtoGenerationBuildsPluginAndRunsBothPinnedTemplates(t *testing.T) {
+	t.Parallel()
+
+	plan, ok := namedCommandPlan("proto:gen")
+	if !ok || len(plan) != 3 {
+		t.Fatalf("proto:gen plan = (%+v, %v), want three steps", plan, ok)
+	}
+	want := []struct {
+		executable string
+		arguments  []string
+	}{
+		{executable: "go", arguments: []string{"build", "-trimpath", "-o", ".verifoxx/tools/protoc-gen-verifoxx", "./cmd/protoc-gen-verifoxx"}},
+		{executable: "buf", arguments: []string{"generate"}},
+		{executable: "buf", arguments: []string{"generate", "--template", "buf.frontend.gen.yaml"}},
+	}
+	for index, step := range plan {
+		if step.executable != want[index].executable || !slices.Equal(step.arguments, want[index].arguments) || step.timeout != 2*time.Minute {
+			t.Errorf("proto:gen step %d = %+v, want %s %v with two-minute timeout", index, step, want[index].executable, want[index].arguments)
 		}
 	}
 }

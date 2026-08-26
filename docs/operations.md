@@ -7,6 +7,11 @@ Verifoxx has two deployment boundaries:
 - Service mode requires PostgreSQL, publishes an immutable policy, and serves
   HTTP and gRPC under bounded admission and audit settings.
 
+CEL, Rego, and Cedar are explicit CLI compilation adapters, and Protobuf is a
+generation-only adapter. Service publication and persisted registry policies
+remain native JSON; runtime services do not load parser engines or reflect over
+descriptors. See the [compatibility frontend guide](frontends.md).
+
 ## Preflight
 
 Report which local workflows can run:

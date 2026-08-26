@@ -1,6 +1,20 @@
 version: v2
 modules:
   - path: api/proto
+  - path: frontend/proto
+    lint:
+      use:
+        - STANDARD
+      except:
+        - PACKAGE_DIRECTORY_MATCH
+        - PACKAGE_VERSION_SUFFIX
+  - path: testdata/frontends/proto
+    lint:
+      use:
+        - STANDARD
+      except:
+        - PACKAGE_DIRECTORY_MATCH
+        - PACKAGE_VERSION_SUFFIX
 lint:
   use:
     - STANDARD

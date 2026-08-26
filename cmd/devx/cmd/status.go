@@ -78,9 +78,9 @@ func workflowExecutables(name string) []string {
 	case "migrate", "migrate:check", "graph:check", "test:integration", "test:e2e":
 		return []string{"go", "docker"}
 	case "proto:gen":
-		return []string{"buf"}
+		return []string{"go", "buf"}
 	case "proto:check":
-		return []string{"buf", "docker"}
+		return []string{"go", "buf", "docker"}
 	case "bench:compare":
 		return []string{"sh", "timeout", "benchstat"}
 	case "perf":
@@ -103,7 +103,11 @@ func workflowRepositoryAssets(name string) []string {
 	case "migrate", "migrate:create", "migrate:check", "graph:check":
 		return []string{"migrations"}
 	case "proto:gen", "proto:check":
-		return []string{"buf.yaml", "buf.gen.yaml", "api/proto/verifoxx/v1/verifoxx.proto"}
+		return []string{
+			"buf.yaml", "buf.gen.yaml", "buf.frontend.gen.yaml",
+			"api/proto/verifoxx/v1/verifoxx.proto", "frontend/proto/options.proto",
+			"testdata/frontends/proto/policy.proto",
+		}
 	case "bench:compare":
 		return []string{"scripts/bench-compare.sh"}
 	case "load":

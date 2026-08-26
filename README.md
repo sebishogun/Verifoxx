@@ -204,6 +204,20 @@ typed kind plus bounded attributes such as status, timing, subject, and scope.
 Unknown fields, malformed IDs, invalid references, excessive depth, and
 oversized inputs are rejected.
 
+### Compatibility Policy Sources
+
+`compile`, `validate`, and `evaluate` also accept explicit bounded CEL, Rego,
+or Cedar sources with a strict binding file:
+
+```bash
+timeout 120s go run ./cmd/verifoxx compile \
+  --format cel --policy policy.cel --bindings bindings.json
+```
+
+Formats are never auto-detected. Protobuf is a generation-only frontend, and
+service registry policies remain native JSON. See the exact supported,
+restricted, and rejected matrices in the [compatibility frontend guide](docs/frontends.md).
+
 ## Output Format
 
 Successful evaluation writes one JSON document to stdout. Diagnostics go to
@@ -247,6 +261,8 @@ See the one-page [design note](docs/design-note.md) for the semantic model and
 ## Technical Guides
 
 - [Architecture](docs/architecture.md): boundaries, ownership, and data layout.
+- [Compatibility frontends](docs/frontends.md): bounded CEL, Rego, Cedar, and
+  Protobuf source contracts.
 - [Policy language](docs/policy-language.md): expressions, four-state truth,
   resolution, and remediation.
 - [Concurrency](docs/concurrency.md): worker ownership, lock table,

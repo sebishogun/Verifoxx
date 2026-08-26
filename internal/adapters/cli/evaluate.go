@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	public "github.com/sebishogun/verifoxx/frontend"
 	"github.com/sebishogun/verifoxx/internal/adapters/jsonbatch"
 	"github.com/sebishogun/verifoxx/internal/adapters/jsonpolicy"
 	"github.com/sebishogun/verifoxx/internal/adapters/jsonresult"
@@ -87,17 +88,27 @@ type engine struct {
 
 func newEvaluateCommand(deps dependencies) *cobra.Command {
 	var flags sourceFlags
+	var formatFlags frontendFlags
 	cmd := &cobra.Command{
 		Use:   "evaluate",
 		Short: "Evaluate a batch of requests",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			inputs, err := loadSources(flags, cmd.InOrStdin(), deps, sourceAll)
+			inputs, selection, err := loadFrontendSources(flags, formatFlags, cmd.InOrStdin(), deps, sourceAll)
 			if err != nil {
 				return classifyCommandError(err)
 			}
 			var engine engine
-			compiled, err := engine.compilePolicy(inputs.policy)
+			var compiled *program.Program
+			if selection.language == public.LanguageNative {
+				compiled, err = engine.compilePolicy(inputs.policy)
+			} else {
+				var diagnostics []public.Diagnostic
+				compiled, diagnostics, err = compileFrontend(selection, inputs.policy)
+				if len(diagnostics) != 0 {
+					return writeFrontendDiagnostics(cmd.OutOrStdout(), diagnostics)
+				}
+			}
 			if err != nil {
 				return operationalError(err)
 			}
@@ -128,6 +139,7 @@ func newEvaluateCommand(deps dependencies) *cobra.Command {
 		},
 	}
 	bindSourceFlags(cmd, &flags, sourceAll)
+	bindFrontendFlags(cmd, &formatFlags)
 	return cmd
 }
 

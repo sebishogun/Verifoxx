@@ -37,6 +37,12 @@ func BenchmarkScheduler(b *testing.B) {
 	}
 }
 
+func BenchmarkScheduled(b *testing.B) {
+	p, base := schedulerFixture(b)
+	batch := repeatSchedulerBatch(b, p, base, 4096)
+	benchmarkScheduledExecution(b, p, batch, 4, 1)
+}
+
 func benchmarkSchedulerDirect(b *testing.B, p *program.Program, batch eval.Batch) {
 	var executor eval.Executor
 	var dst result.Batch

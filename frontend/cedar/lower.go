@@ -32,8 +32,8 @@ func Lower(source []byte, parsed *Parsed, bindings public.BindingSet, limits pub
 		ast := (*cedarast.Policy)(policy.AST())
 		parts := make([]public.NodeID, 0, 3+len(ast.Conditions))
 		scopes := []struct {
-			name  string
 			scope cedarast.IsScopeNode
+			name  string
 			span  public.Span
 		}{
 			{name: "principal", scope: ast.Principal, span: parsed.syntax[row].scopeSpans[0]},

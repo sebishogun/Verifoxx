@@ -20,7 +20,7 @@ func TestCIAndReleaseConfigurationCoversRequiredLanes(t *testing.T) {
 		{
 			path: ".github/workflows/ci.yml",
 			required: []string{
-				"name: CI", "native:", "purego:", "scalar-386:", "unit:", "race:",
+				"name: CI", "native:", "purego:", "scalar-386:", "unit:", "race:", "frontend:",
 				"generated:", "docs:", "release-snapshot:", "-tags=purego", "GOARCH=386",
 				"go run ./cmd/devx test", "go run ./cmd/devx test:unit", "go run ./cmd/devx test:race",
 				"go run ./cmd/devx policy:check", "go run ./cmd/devx results:check",
@@ -92,6 +92,7 @@ func TestFieldAlignmentGateIsPinnedAndSharedWithCI(t *testing.T) {
 		"timeout 240s",
 		"fieldalignment@" + fieldAlignmentVersion,
 		"-test=false",
+		"./frontend/...",
 		"./internal/...",
 		"./cmd/...",
 		"./policies/...",

@@ -60,7 +60,11 @@ func buildCommandPlan(name string) ([]commandSpec, bool) {
 			executable: "docker", arguments: []string{"compose", "--profile", "full", "up", "--build", "--wait"}, timeout: 10 * time.Minute,
 		}}, true
 	case "proto:gen":
-		return []commandSpec{{executable: "buf", arguments: []string{"generate"}, timeout: 2 * time.Minute}}, true
+		return []commandSpec{
+			{executable: "go", arguments: []string{"build", "-trimpath", "-o", ".verifoxx/tools/protoc-gen-verifoxx", "./cmd/protoc-gen-verifoxx"}, timeout: 2 * time.Minute},
+			{executable: "buf", arguments: []string{"generate"}, timeout: 2 * time.Minute},
+			{executable: "buf", arguments: []string{"generate", "--template", "buf.frontend.gen.yaml"}, timeout: 2 * time.Minute},
+		}, true
 	case "proto:check":
 		return []commandSpec{
 			{executable: "buf", arguments: []string{"lint"}, timeout: 2 * time.Minute},

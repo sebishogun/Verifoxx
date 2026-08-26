@@ -109,6 +109,38 @@ Regeneration commands are explicit:
 Review generated diffs before committing. The policy is authored JSON and is
 validated or compiled rather than generated.
 
+## Compatibility Frontend Verification
+
+The compile-time adapters pin `cel.dev/cel-go v0.32.0`,
+`github.com/open-policy-agent/opa v1.19.1`,
+`github.com/cedar-policy/cedar-go v1.8.0`, and
+`google.golang.org/protobuf v1.36.12`. Capability names are stable test and
+documentation identifiers; they are not claims of full language support.
+The complete matrices, binding schema, generator workflow, limits, and decision
+mapping are in the [compatibility frontend guide](frontends.md).
+
+- CEL: `boolean_literals`, `scalar_variables`, `object_selection`,
+  `scalar_comparisons`, `logical_operators`, and `constant_list_membership`
+  are supported. `function_calls`, `macros_and_comprehensions`, and
+  `maps_messages_and_optionals` are rejected.
+- Rego: `rego_v1_modules`, `complete_boolean_decisions`, `boolean_defaults`,
+  `multiple_rules`, `conjunctive_bodies`, `static_input_references`,
+  `scalar_comparisons`, `constant_membership`, and
+  `presence_aware_negation` are supported. `imports_and_data`,
+  `functions_and_recursion`, `variables_and_comprehensions`, and
+  `with_and_unsupported_builtins` are rejected.
+- Cedar: `static_permit_forbid`, `equality_scopes`,
+  `context_scalar_conditions`, `boolean_composition`, and
+  `forbid_precedence` are supported. `entity_hierarchy_and_attributes`,
+  `sets_records_and_extensions`, and `templates_and_annotations` are rejected.
+
+Run the bounded conformance and fuzz-seed corpus with:
+
+```bash
+timeout 240s go test -count=1 -timeout 210s ./frontend/... ./internal/frontend ./internal/doccheck
+timeout 120s go test -count=1 -timeout 90s -run '^Fuzz(Compile|SemanticPolicy)$' ./frontend/cel ./frontend/rego ./frontend/cedar ./internal/frontend
+```
+
 ## Database Work
 
 Use the workflows documented in [database](database.md):
