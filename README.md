@@ -75,6 +75,8 @@ report includes workload shape, serial or parallel execution mode, SIMD tier,
 elapsed nanoseconds, rows per second, allocated bytes, and allocations. Fixture
 setup, direct-result verification, scheduler construction, and enough priming
 runs to warm every fixed context and admission state occur before measurement.
+Allocation counters are process-wide Go runtime samples; use the `-benchmem`
+commands below for the warmed evaluator allocation contract.
 
 ### Semantic Graph Export
 
