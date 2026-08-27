@@ -2,8 +2,8 @@ package doccheck_test
 
 import (
 	"bytes"
-	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,26 +57,19 @@ func TestTrackedTextContainsNoLegacyBrand(t *testing.T) {
 	const maxDiagnostics = 128
 	diagnostics := 0
 
-	err := filepath.WalkDir(repositoryRoot, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
+	command := exec.Command("git", "ls-files", "-z")
+	command.Dir = repositoryRoot
+	tracked, err := command.Output()
+	if err != nil {
+		t.Fatalf("list tracked files: %v", err)
+	}
+	for _, name := range bytes.Split(tracked, []byte{0}) {
+		if len(name) == 0 {
+			continue
 		}
-		relative, err := filepath.Rel(repositoryRoot, path)
-		if err != nil {
-			return err
-		}
-		relative = filepath.ToSlash(relative)
-		if relative == ".git" {
-			if entry.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if entry.IsDir() {
-			return nil
-		}
+		relative := filepath.ToSlash(string(name))
 		if allowed[relative] {
-			return nil
+			continue
 		}
 		for _, value := range legacy {
 			if strings.Contains(relative, value) && diagnostics < maxDiagnostics {
@@ -85,12 +78,12 @@ func TestTrackedTextContainsNoLegacyBrand(t *testing.T) {
 				break
 			}
 		}
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(filepath.Join(repositoryRoot, filepath.FromSlash(relative)))
 		if err != nil {
-			return err
+			t.Fatalf("read tracked file %s: %v", relative, err)
 		}
 		if !utf8.Valid(content) {
-			return nil
+			continue
 		}
 		for _, value := range legacy {
 			if bytes.Contains(content, []byte(value)) && diagnostics < maxDiagnostics {
@@ -98,10 +91,6 @@ func TestTrackedTextContainsNoLegacyBrand(t *testing.T) {
 				diagnostics++
 			}
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 	if diagnostics == maxDiagnostics {
 		t.Errorf("legacy brand diagnostics truncated at %d", maxDiagnostics)
