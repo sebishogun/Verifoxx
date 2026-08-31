@@ -227,6 +227,11 @@ Formats are never auto-detected. Protobuf is a generation-only frontend, and
 service registry policies remain native JSON. See the exact supported,
 restricted, and rejected matrices in the [compatibility frontend guide](docs/frontends.md).
 
+The Go API also exposes bounded PostgreSQL, Snowflake, and Databricks scalar
+expression profiles plus PostgreSQL row-level security policy compilation.
+These profiles do not execute SQL and are not CLI formats. See the exact
+[SQL frontend boundary](docs/sql-frontend.md).
+
 ### Reviewed Natural-Language Proposals
 
 The offline natural-language workflow extracts an untrusted, citation-backed
@@ -282,6 +287,8 @@ See the one-page [design note](docs/design-note.md) for the semantic model and
 - [Architecture](docs/architecture.md): boundaries, ownership, and data layout.
 - [Compatibility frontends](docs/frontends.md): bounded CEL, Rego, Cedar, and
   Protobuf source contracts.
+- [SQL frontend](docs/sql-frontend.md): bounded expression profiles,
+  PostgreSQL RLS composition, and differential-test scope.
 - [Reviewed natural-language frontend](docs/natural-language-frontend.md):
   citation validation, human approval, token binding, and deferred providers.
 - [Policy language](docs/policy-language.md): expressions, four-state truth,

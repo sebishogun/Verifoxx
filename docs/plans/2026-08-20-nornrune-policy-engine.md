@@ -1248,6 +1248,8 @@ human approval. Do not claim legal correctness or autonomous compliance.
 
 ### Task 54: Add SQL And PostgreSQL RLS Frontends
 
+**Status:** Complete (2026-08-31)
+
 **Scope:**
 
 Start with a documented PostgreSQL expression and Row-Level Security subset.
@@ -1610,3 +1612,61 @@ configuration and preserve all unrelated user settings.
 4. Validate the resulting configuration, restart OpenCode because configuration
    is loaded once, and smoke-test one general, one explore, and one reviewer
    invocation to confirm the effective model and reasoning level.
+
+## Phase 23: Product Framing Completion
+
+### Task 61: Remove Exercise And Candidate Framing
+
+**Dependency:** Begin only after Task 54 is complete and merged into `main`.
+
+**Scope:**
+
+Present NornRune solely as a maintained policy-engine product. Remove exercise,
+assignment, candidate-submission, take-home, and evaluator-facing framing from
+active code, commands, fixtures, tests, documentation, CI, deployment assets,
+package names, and release metadata. Preserve the original source materials only
+inside an explicitly historical archive that is excluded from product navigation
+and framing checks.
+
+**Files:**
+- Move: `NornRune_AI_Engineer_Assignment.pdf` to `docs/archive/source-material/`
+- Move: `Requirements.md` to `docs/archive/source-material/`
+- Modify: `README.md`
+- Modify: `AGENTS.md`
+- Modify: active files under `cmd/`, `internal/`, `policies/`, `testdata/`,
+  `docs/`, `deploy/`, `.github/`, and release configuration as required
+- Create: `docs/archive/source-material/README.md`
+- Create or modify: tracked-file product-framing scanner and tests
+
+**Steps:**
+
+1. Inventory tracked references to exercise, assignment, candidate, take-home,
+   submission, evaluator, supplied requests, and the original brief. Classify
+   each reference as active product framing, necessary technical terminology, or
+   archived historical source.
+2. Move the original PDF and transcription into the historical source-material
+   archive. Add a short archive notice stating that the files are retained for
+   provenance and are not current product requirements.
+3. Rewrite active product documentation, CLI help/output, fixture names,
+   comments, package identifiers, tests, CI labels, deployment material, and
+   release metadata to describe supported product behavior directly. Do not
+   weaken policy semantics or remove conformance coverage while renaming inputs.
+4. Replace assignment-specific fixture and result names with stable product
+   conformance names. Preserve R1-R3 requirement IDs and R1-R5 request behavior
+   where they remain useful as a regression corpus, but describe them as the
+   baseline conformance policy and requests.
+5. Update source-of-truth guidance so active architecture, policy-language,
+   conformance, security, and product requirement documents govern development;
+   archived source material is historical only.
+6. Add a tracked-file scanner that rejects product-framing terms outside a
+   narrow reviewed allowlist for `docs/archive/source-material/`. Scan file
+   contents, paths, generated metadata, and user-visible command output without
+   scanning `.git`, build output, or untracked files.
+7. Run native, purego, 386, race/checkptr, integration, documentation, branding,
+   generated-code, Docker, and release gates with explicit timeouts. Verify the
+   installed CLI, README, machine-readable output, image labels, and release
+   archives contain no active exercise or candidate framing.
+8. Review all moves and rewrites for broken links, stale package paths, lost
+   provenance, changed baseline decisions, and accidental archive inclusion in
+   product navigation.
+9. Commit when requested: `refactor: present nornrune as a product`.

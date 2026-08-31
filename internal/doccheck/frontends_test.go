@@ -126,3 +126,34 @@ func TestNaturalLanguageFrontendDocumentsReviewBoundary(t *testing.T) {
 		}
 	}
 }
+
+func TestSQLFrontendDocumentsItsExactCompatibilityBoundary(t *testing.T) {
+	document := readDocument(t, "docs/sql-frontend.md")
+	required := []string{
+		"PostgreSQL 19", "Snowflake", "Databricks", "not drop-in replacements",
+		"scalar_expressions", "three_valued_logic", "compile_time_parameters",
+		"row_level_security", "permissive_and_restrictive_policies",
+		"casts_and_functions", "queries_and_catalog_access",
+		"SQL NULL", "Missing", "DefaultEscalate", "DefaultReject", "compile-time parameters",
+		"SELECT", "INSERT", "UPDATE existing row", "UPDATE proposed row", "DELETE",
+		"PUBLIC", "permissive policies OR", "restrictive policies AND",
+		"does not execute SQL", "database calls", "UTF-8 byte offsets", "source spans",
+		"unsupported syntax", "functions", "casts", "queries", "catalog access",
+		"PostgreSQL 19 differential", "fixture-only", "no official-engine differential run",
+		"BenchmarkSQLParse", "BenchmarkSQLLower", "BenchmarkRLSCompile", "cold path",
+	}
+	for _, value := range required {
+		if !strings.Contains(document, value) {
+			t.Errorf("docs/sql-frontend.md does not contain %q", value)
+		}
+	}
+	if strings.Contains(document, "120+ GB/s") {
+		t.Error("docs/sql-frontend.md contains an unsupported throughput claim")
+	}
+	for _, file := range []string{"README.md", "docs/architecture.md", "docs/frontends.md"} {
+		linked := readDocument(t, file)
+		if !strings.Contains(linked, "sql-frontend.md") {
+			t.Errorf("%s does not link to sql-frontend.md", file)
+		}
+	}
+}

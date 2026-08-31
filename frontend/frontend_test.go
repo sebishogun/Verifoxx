@@ -12,7 +12,7 @@ func TestEnumValuesAreStableAndBounded(t *testing.T) {
 		got  []uint8
 		want []uint8
 	}{
-		{"language", []uint8{uint8(LanguageNative), uint8(LanguageCEL), uint8(LanguageRego), uint8(LanguageCedar), uint8(LanguageProtobuf)}, []uint8{1, 2, 3, 4, 5}},
+		{"language", []uint8{uint8(LanguageNative), uint8(LanguageCEL), uint8(LanguageRego), uint8(LanguageCedar), uint8(LanguageProtobuf), uint8(LanguageSQL)}, []uint8{1, 2, 3, 4, 5, 6}},
 		{"value kind", []uint8{uint8(ValueKindString), uint8(ValueKindInteger), uint8(ValueKindBoolean)}, []uint8{1, 2, 3}},
 		{"field group", []uint8{uint8(FieldGroupSubject), uint8(FieldGroupAction), uint8(FieldGroupResource), uint8(FieldGroupOutput), uint8(FieldGroupContext)}, []uint8{1, 2, 3, 4, 5}},
 		{"node kind", []uint8{uint8(NodeKindBoolean), uint8(NodeKindCompare), uint8(NodeKindAll), uint8(NodeKindAny), uint8(NodeKindNot), uint8(NodeKindDefined)}, []uint8{1, 2, 3, 4, 5, 6}},

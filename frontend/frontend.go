@@ -25,11 +25,12 @@ const (
 	LanguageRego
 	LanguageCedar
 	LanguageProtobuf
+	LanguageSQL
 )
 
-var languageNames = [...]string{"native", "cel", "rego", "cedar", "protobuf"}
+var languageNames = [...]string{"native", "cel", "rego", "cedar", "protobuf", "sql"}
 
-func (value Language) Valid() bool { return value >= LanguageNative && value <= LanguageProtobuf }
+func (value Language) Valid() bool { return value >= LanguageNative && value <= LanguageSQL }
 func (value Language) String() string {
 	return enumString(uint8(value), languageNames[:])
 }

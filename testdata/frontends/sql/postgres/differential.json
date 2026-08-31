@@ -1,0 +1,25 @@
+{
+  "cases": [
+    {"name": "string equal true", "expression": "team = 'blue'", "team": "blue", "count": 0, "enabled": true},
+    {"name": "string equal false", "expression": "team = 'blue'", "team": "red", "count": 0, "enabled": true},
+    {"name": "string equal null", "expression": "team = 'blue'", "count": 0, "enabled": true},
+    {"name": "backslash is ordinary string data", "expression": "team = 'a\\'", "team": "a\\", "count": 0, "enabled": true},
+    {"name": "integer minimum", "expression": "count < 0", "team": "blue", "count": -9223372036854775808, "enabled": true},
+    {"name": "integer minimum literal", "expression": "count = -9223372036854775808", "team": "blue", "count": -9223372036854775808, "enabled": true},
+    {"name": "integer maximum", "expression": "count >= 9223372036854775807", "team": "blue", "count": 9223372036854775807, "enabled": true},
+    {"name": "integer null", "expression": "count >= 0", "team": "blue", "enabled": true},
+    {"name": "boolean true", "expression": "enabled", "team": "blue", "count": 0, "enabled": true},
+    {"name": "boolean false", "expression": "enabled", "team": "blue", "count": 0, "enabled": false},
+    {"name": "boolean null", "expression": "NOT enabled", "team": "blue", "count": 0},
+    {"name": "membership true", "expression": "team IN ('blue', 'green')", "team": "green", "count": 0, "enabled": true},
+    {"name": "membership null", "expression": "team IN ('blue', 'green')", "count": 0, "enabled": true},
+    {"name": "is null", "expression": "team IS NULL", "count": 0, "enabled": true},
+    {"name": "is not null false", "expression": "team IS NOT NULL", "count": 0, "enabled": true},
+    {"name": "reversed comparison", "expression": "5 < count", "team": "blue", "count": 6, "enabled": true},
+    {"name": "not equal", "expression": "count != -2", "team": "blue", "count": -3, "enabled": true},
+    {"name": "less equal", "expression": "count <= -2", "team": "blue", "count": -2, "enabled": true},
+    {"name": "greater than", "expression": "count > -2", "team": "blue", "count": -1, "enabled": true},
+    {"name": "compound true", "expression": "(team = 'blue' OR count > 10) AND enabled", "team": "red", "count": 11, "enabled": true},
+    {"name": "compound null", "expression": "(team = 'blue' OR count > 10) AND enabled", "team": "red", "count": 11}
+  ]
+}

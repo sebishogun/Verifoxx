@@ -603,6 +603,21 @@ timeout 240s go test -timeout 210s -run '^$' -bench '^BenchmarkFrontend' -benchm
 timeout 180s go test -timeout 150s -run '^$' -bench 'BenchmarkExecutor|BenchmarkScheduled' -benchmem -count=6 ./internal/eval ./internal/scheduler
 ```
 
+SQL parsing and native lowering are separate cold stages. `BenchmarkSQLParse`
+measures the bounded expression lexer/parser and semantic builder;
+`BenchmarkSQLLower` starts from an already-built semantic policy; and
+`BenchmarkRLSCompile` includes PostgreSQL policy parsing, command/role
+composition, validation, and native lowering. Parser allocations are expected
+and are not attributed to evaluator throughput.
+
+```bash
+timeout 180s go test -timeout 150s -run '^$' -bench 'BenchmarkSQLParse|BenchmarkSQLLower|BenchmarkRLSCompile' -benchmem -count=6 ./internal/frontend/sql
+```
+
+The [SQL frontend guide](sql-frontend.md) records the exact profile and
+differential-test boundaries. Warm execution still uses the same evaluator
+kernels and allocation requirements described above.
+
 `internal/simdops/ops_test.go` differentially checks the accelerated and pure-Go
 backends against local scalar references at empty, tail, unaligned, alias, and
 kernel-boundary shapes. It also checks warm allocation count and runtime

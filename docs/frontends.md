@@ -1,7 +1,9 @@
 # Compatibility Frontends
 
-NornRune accepts its complete native semantic JSON policy and four bounded
-compatibility frontends: CEL, Rego, Cedar, and generated Protobuf bindings.
+NornRune accepts its complete native semantic JSON policy and bounded
+compatibility frontends for CEL, Rego, Cedar, generated Protobuf bindings, and
+SQL profiles. The SQL Go APIs are documented separately in the
+[SQL frontend guide](sql-frontend.md).
 These adapters are not drop-in replacements for the complete upstream
 languages. They reject syntax outside the matrices below rather than silently
 approximating it.

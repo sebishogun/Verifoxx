@@ -9,6 +9,7 @@ query PostgreSQL while evaluating a policy.
 
 ```text
 native policy JSON OR explicit CEL/Rego/Cedar source + bindings
+OR bounded SQL expression/PostgreSQL RLS source + schema
 OR approved natural-language draft + provenance-bound token
     |
     v
@@ -40,6 +41,12 @@ Protobuf descriptors run through `protoc-gen-nornrune` at generation time and
 produce static bindings; runtime descriptor reflection is not supported.
 Persisted service registry sources remain canonical native JSON. See the
 [compatibility frontend guide](frontends.md) for the exact boundary.
+
+SQL expressions and PostgreSQL RLS policies use an independent bounded lexer
+and direct semantic builder on the Go API cold path. Snowflake and Databricks
+are expression-only profiles. SQL frontends do not execute queries, access a
+catalog, or add database calls to compilation or evaluation. See the
+[SQL frontend guide](sql-frontend.md).
 
 Natural-language extraction is a separate pre-compilation review boundary. A
 provider emits a non-executable SoA/CSR proposal with exact citations. Human
@@ -185,6 +192,7 @@ transactions, migrations, and recovery.
 
 - [Policy language](policy-language.md)
 - [Compatibility frontends](frontends.md)
+- [SQL frontend](sql-frontend.md)
 - [Reviewed natural-language frontend](natural-language-frontend.md)
 - [Concurrency](concurrency.md)
 - [API](api.md)
