@@ -227,6 +227,16 @@ Formats are never auto-detected. Protobuf is a generation-only frontend, and
 service registry policies remain native JSON. See the exact supported,
 restricted, and rejected matrices in the [compatibility frontend guide](docs/frontends.md).
 
+### Reviewed Natural-Language Proposals
+
+The offline natural-language workflow extracts an untrusted, citation-backed
+proposal for human review. Providers cannot compile, publish, or activate
+policy. A reviewer-owned native draft must retain proposal provenance and carry
+a valid digest-bound approval token before the ordinary native decoder and
+compiler accept it. The first release has a deterministic fixture provider, not
+a networked model adapter or CLI publication command. See the
+[reviewed natural-language guide](docs/natural-language-frontend.md).
+
 ## Output Format
 
 Successful evaluation writes one JSON document to stdout. Diagnostics go to
@@ -272,6 +282,8 @@ See the one-page [design note](docs/design-note.md) for the semantic model and
 - [Architecture](docs/architecture.md): boundaries, ownership, and data layout.
 - [Compatibility frontends](docs/frontends.md): bounded CEL, Rego, Cedar, and
   Protobuf source contracts.
+- [Reviewed natural-language frontend](docs/natural-language-frontend.md):
+  citation validation, human approval, token binding, and deferred providers.
 - [Policy language](docs/policy-language.md): expressions, four-state truth,
   resolution, and remediation.
 - [Concurrency](docs/concurrency.md): worker ownership, lock table,

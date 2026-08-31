@@ -146,6 +146,16 @@ timeout 300s env PATH="$PWD/.nornrune/tools:$PATH" go run ./cmd/devx proto:check
 The custom options are declared in `frontend/proto/options.proto`; the pinned
 Buf recipe is `buf.frontend.gen.yaml`.
 
+## Reviewed Natural-Language Input
+
+Natural-language extraction is not a fifth compatibility format and is not
+accepted through `--format`. It produces an untrusted, non-executable proposal
+with exact citations. A human reviewer owns the native JSON draft, provenance
+mapping, and digest-bound approval token required before normal native
+compilation. The offline release includes only a deterministic fixture provider;
+network models, PDF/OCR, CLI publication, and legal-correctness claims are
+deferred. See the [reviewed natural-language frontend guide](natural-language-frontend.md).
+
 ## Shared Limits
 
 Default limits apply independently to every compatibility compilation:

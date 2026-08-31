@@ -9,6 +9,7 @@ query PostgreSQL while evaluating a policy.
 
 ```text
 native policy JSON OR explicit CEL/Rego/Cedar source + bindings
+OR approved natural-language draft + provenance-bound token
     |
     v
 bounded cold frontend -> integer-indexed SoA AST -> validator -> compiler -> immutable Program
@@ -39,6 +40,13 @@ Protobuf descriptors run through `protoc-gen-nornrune` at generation time and
 produce static bindings; runtime descriptor reflection is not supported.
 Persisted service registry sources remain canonical native JSON. See the
 [compatibility frontend guide](frontends.md) for the exact boundary.
+
+Natural-language extraction is a separate pre-compilation review boundary. A
+provider emits a non-executable SoA/CSR proposal with exact citations. Human
+review produces native JSON and provenance mappings; a signed token binds that
+exact proposal/draft pair before the existing native decoder can run. Extraction
+has no persistence or publication capability. See the
+[reviewed natural-language guide](natural-language-frontend.md).
 
 ## Compile And Publish
 
@@ -106,6 +114,7 @@ Ownership follows lifetime, not object type:
 | Lifetime | Owner | Storage | Release point |
 |---|---|---|---|
 | Policy decode | `ast.Builder` | source bytes and typed builder columns | after compilation |
+| Natural review | proposal builder and reviewer | source, proposal columns, citation edges, native draft, token | after approved compilation |
 | Policy version | `program.Program` | immutable instructions, symbols, catalogs, indexes | registry lifetime |
 | Service process | `server.Engine` | fixed `engineWorker` slab, channel, and scheduler | process shutdown |
 | Evaluation | one `engineWorker` | batch columns, merged result, encoder, and audit state | encoding, metrics, and audit submission complete |
@@ -176,6 +185,7 @@ transactions, migrations, and recovery.
 
 - [Policy language](policy-language.md)
 - [Compatibility frontends](frontends.md)
+- [Reviewed natural-language frontend](natural-language-frontend.md)
 - [Concurrency](concurrency.md)
 - [API](api.md)
 - [Performance](performance.md)

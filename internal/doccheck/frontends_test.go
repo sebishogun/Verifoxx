@@ -104,3 +104,25 @@ func TestFrontendGuideIsLinkedAtSystemBoundaries(t *testing.T) {
 		}
 	}
 }
+
+func TestNaturalLanguageFrontendDocumentsReviewBoundary(t *testing.T) {
+	document := readDocument(t, "docs/natural-language-frontend.md")
+	required := []string{
+		"untrusted", "cannot publish", "deterministic offline fixture provider",
+		"no networked LLM provider", "exact citation provenance", "omitted restrictions",
+		"ambiguity", "conflicts", "approval token", "proposal and draft digests", "expires",
+		"PDF/OCR", "legal correctness",
+		"never source text", "citation quotes", "credentials", "signatures", "approval tokens",
+	}
+	for _, value := range required {
+		if !strings.Contains(document, value) {
+			t.Errorf("docs/natural-language-frontend.md does not contain %q", value)
+		}
+	}
+	for _, file := range []string{"README.md", "docs/architecture.md", "docs/frontends.md"} {
+		linked := readDocument(t, file)
+		if !strings.Contains(linked, "natural-language-frontend.md") {
+			t.Errorf("%s does not link to natural-language-frontend.md", file)
+		}
+	}
+}

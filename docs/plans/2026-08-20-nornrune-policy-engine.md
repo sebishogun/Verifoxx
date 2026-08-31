@@ -1186,6 +1186,8 @@ until upstream conformance suites and controlled benchmarks prove both.
 
 ### Task 53: Add A Reviewed Natural-Language Policy Frontend
 
+**Status:** Complete (2026-08-30)
+
 **Scope:**
 
 Treat model output as an untrusted policy proposal, never as an executable or
