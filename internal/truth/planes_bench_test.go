@@ -12,7 +12,7 @@ var sinkWord uint64
 
 // fillPlane returns an exact-sized plane of deterministic nonzero words. For a
 // partial final word (rows not a multiple of 64) the unused tail bits are
-// poisoned to 1 so dirty tails are exercised like the tests' buildPlanes.
+// poisoned to 1 so dirty tails are driven like the tests' buildPlanes.
 func fillPlane(words int, rows uint32) []uint64 {
 	p := make([]uint64, words)
 	for i := range p {

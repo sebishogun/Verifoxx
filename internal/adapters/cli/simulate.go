@@ -26,18 +26,18 @@ type fieldOverride struct {
 	boolean bool
 }
 
-func parseOverrides(dst []fieldOverride, p *program.Program, assignments []string) ([]fieldOverride, error) {
+func parseOverrides(dst []fieldOverride, p *program.Program, bindings []string) ([]fieldOverride, error) {
 	original := dst
-	if p == nil || len(assignments) == 0 {
+	if p == nil || len(bindings) == 0 {
 		return original, errMissingOverride
 	}
-	for _, assignment := range assignments {
-		separator := strings.IndexByte(assignment, '=')
-		if separator <= 0 || separator == len(assignment)-1 {
+	for _, binding := range bindings {
+		separator := strings.IndexByte(binding, '=')
+		if separator <= 0 || separator == len(binding)-1 {
 			return original, errInvalidOverride
 		}
-		name := assignment[:separator]
-		value := assignment[separator+1:]
+		name := binding[:separator]
+		value := binding[separator+1:]
 		field, kind, ok := compiledField(p, name)
 		if !ok {
 			return original, errInvalidOverride
@@ -89,7 +89,7 @@ func compiledField(p *program.Program, name string) (schema.FieldID, schema.Valu
 
 func newSimulateCommand(deps dependencies) *cobra.Command {
 	var flags sourceFlags
-	var assignments []string
+	var bindings []string
 	cmd := &cobra.Command{
 		Use:   "simulate <request-id>",
 		Short: "Evaluate one request with typed field overrides",
@@ -99,7 +99,7 @@ func newSimulateCommand(deps dependencies) *cobra.Command {
 			if err != nil {
 				return usageError(err)
 			}
-			if len(assignments) == 0 {
+			if len(bindings) == 0 {
 				return usageError(errMissingOverride)
 			}
 			inputs, err := loadSources(flags, cmd.InOrStdin(), deps, sourceAll)
@@ -111,7 +111,7 @@ func newSimulateCommand(deps dependencies) *cobra.Command {
 			if err != nil {
 				return operationalError(err)
 			}
-			overrides, err := parseOverrides(nil, compiled, assignments)
+			overrides, err := parseOverrides(nil, compiled, bindings)
 			if err != nil {
 				return usageError(err)
 			}
@@ -149,7 +149,7 @@ func newSimulateCommand(deps dependencies) *cobra.Command {
 			return operationalError(writeComplete(cmd.OutOrStdout(), encoded))
 		},
 	}
-	cmd.Flags().StringArrayVar(&assignments, "set", nil, "override one field=value (repeatable)")
+	cmd.Flags().StringArrayVar(&bindings, "set", nil, "override one field=value (repeatable)")
 	bindSourceFlags(cmd, &flags, sourceAll)
 	return cmd
 }

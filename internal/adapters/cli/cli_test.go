@@ -867,7 +867,7 @@ func TestParseOverridesResolvesAndTypesFields(t *testing.T) {
 	}
 }
 
-func TestParseOverridesRejectsInvalidAssignments(t *testing.T) {
+func TestParseOverridesRejectsInvalidBindings(t *testing.T) {
 	var pipeline engine
 	compiled, err := pipeline.compilePolicy([]byte(nornrune.Source()))
 	if err != nil {
@@ -895,9 +895,9 @@ func TestParseOverridesRejectsInvalidAssignments(t *testing.T) {
 		{"action.output=-9223372036854775809"},
 		{"action.dataset=1"},
 	}
-	for _, assignments := range tests {
-		if got, err := parseOverrides(nil, &typed, assignments); err == nil || len(got) != 0 {
-			t.Errorf("parseOverrides(%q) = (%+v, %v), want nil, error", assignments, got, err)
+	for _, bindings := range tests {
+		if got, err := parseOverrides(nil, &typed, bindings); err == nil || len(got) != 0 {
+			t.Errorf("parseOverrides(%q) = (%+v, %v), want nil, error", bindings, got, err)
 		}
 	}
 }

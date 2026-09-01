@@ -45,6 +45,7 @@ type Config struct {
 	GRPCAddress            string
 	PolicyName             string
 	DatabaseURL            SecretURL
+	OTelEndpoint           string
 	RequestTimeout         time.Duration
 	ShutdownTimeout        time.Duration
 	AuditWriteTimeout      time.Duration
@@ -58,6 +59,11 @@ type Config struct {
 	DatabaseMaxConnections int
 	MaxBatchRows           uint32
 	AuditMode              persistence.AuditMode
+
+	TelemetryEnabled        bool
+	TraceSampleRatio        float64
+	TelemetryExportInterval time.Duration
+	TelemetryQueueSize      int
 }
 
 // SecretURL keeps database credentials available only through an explicit
@@ -100,22 +106,27 @@ func Default() Config {
 		workers = 1
 	}
 	return Config{
-		HTTPAddress:            "127.0.0.1:8080",
-		GRPCAddress:            "127.0.0.1:9090",
-		PolicyName:             "nornrune",
-		RequestTimeout:         30 * time.Second,
-		ShutdownTimeout:        30 * time.Second,
-		AuditWriteTimeout:      5 * time.Second,
-		DatabaseConnectTimeout: 5 * time.Second,
-		MaxBodyBytes:           8 << 20,
-		Workers:                workers,
-		QueueDepth:             min(workers*2, MaxQueueDepth),
-		AuditWriters:           1,
-		AuditQueueDepth:        64,
-		DatabaseMinConnections: 0,
-		DatabaseMaxConnections: 16,
-		MaxBatchRows:           64 << 10,
-		AuditMode:              persistence.AuditOff,
+		HTTPAddress:             "127.0.0.1:8080",
+		GRPCAddress:             "127.0.0.1:9090",
+		PolicyName:              "nornrune",
+		RequestTimeout:          30 * time.Second,
+		ShutdownTimeout:         30 * time.Second,
+		AuditWriteTimeout:       5 * time.Second,
+		DatabaseConnectTimeout:  5 * time.Second,
+		MaxBodyBytes:            8 << 20,
+		Workers:                 workers,
+		QueueDepth:              min(workers*2, MaxQueueDepth),
+		AuditWriters:            1,
+		AuditQueueDepth:         64,
+		DatabaseMinConnections:  0,
+		DatabaseMaxConnections:  16,
+		MaxBatchRows:            64 << 10,
+		AuditMode:               persistence.AuditOff,
+		TelemetryEnabled:        false,
+		OTelEndpoint:            "",
+		TraceSampleRatio:        0.1,
+		TelemetryExportInterval: 10 * time.Second,
+		TelemetryQueueSize:      2048,
 	}
 }
 
@@ -160,7 +171,31 @@ func (config Config) Validate() error {
 		config.DatabaseMinConnections > config.DatabaseMaxConnections {
 		return fmt.Errorf("%w: database connections", ErrInvalidConfig)
 	}
+	if !validTelemetry(config) {
+		return fmt.Errorf("%w: telemetry settings", ErrInvalidConfig)
+	}
 	return nil
+}
+
+func validTelemetry(config Config) bool {
+	if config.OTelEndpoint != "" && !validOTelEndpoint(config.OTelEndpoint) {
+		return false
+	}
+	if !config.TelemetryEnabled {
+		return true
+	}
+	return config.TraceSampleRatio >= 0 && config.TraceSampleRatio <= 1 &&
+		config.TelemetryExportInterval >= 100*time.Millisecond && config.TelemetryExportInterval <= time.Hour &&
+		config.TelemetryQueueSize >= 1 && config.TelemetryQueueSize <= 1<<16
+}
+
+func validOTelEndpoint(endpoint string) bool {
+	if len(endpoint) > 2048 {
+		return false
+	}
+	parsed, err := url.Parse(endpoint)
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != "" &&
+		parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
 // Load applies defaults, an optional strict JSON file, environment values, and
@@ -189,23 +224,28 @@ func Load(arguments []string, lookup LookupEnv) (Config, error) {
 }
 
 type fileConfig struct {
-	HTTPAddress            *string `json:"http_address"`
-	GRPCAddress            *string `json:"grpc_address"`
-	PolicyName             *string `json:"policy_name"`
-	DatabaseURL            *string `json:"database_url"`
-	RequestTimeout         *string `json:"request_timeout"`
-	ShutdownTimeout        *string `json:"shutdown_timeout"`
-	AuditMode              *string `json:"audit_mode"`
-	AuditWriteTimeout      *string `json:"audit_write_timeout"`
-	DatabaseConnectTimeout *string `json:"database_connect_timeout"`
-	MaxBodyBytes           *int64  `json:"max_body_bytes"`
-	Workers                *int    `json:"workers"`
-	QueueDepth             *int    `json:"queue_depth"`
-	AuditWriters           *int    `json:"audit_writers"`
-	AuditQueueDepth        *int    `json:"audit_queue_depth"`
-	DatabaseMinConnections *int    `json:"database_min_connections"`
-	DatabaseMaxConnections *int    `json:"database_max_connections"`
-	MaxBatchRows           *uint32 `json:"max_batch_rows"`
+	HTTPAddress             *string  `json:"http_address"`
+	GRPCAddress             *string  `json:"grpc_address"`
+	PolicyName              *string  `json:"policy_name"`
+	DatabaseURL             *string  `json:"database_url"`
+	RequestTimeout          *string  `json:"request_timeout"`
+	ShutdownTimeout         *string  `json:"shutdown_timeout"`
+	AuditMode               *string  `json:"audit_mode"`
+	AuditWriteTimeout       *string  `json:"audit_write_timeout"`
+	DatabaseConnectTimeout  *string  `json:"database_connect_timeout"`
+	MaxBodyBytes            *int64   `json:"max_body_bytes"`
+	Workers                 *int     `json:"workers"`
+	QueueDepth              *int     `json:"queue_depth"`
+	AuditWriters            *int     `json:"audit_writers"`
+	AuditQueueDepth         *int     `json:"audit_queue_depth"`
+	DatabaseMinConnections  *int     `json:"database_min_connections"`
+	DatabaseMaxConnections  *int     `json:"database_max_connections"`
+	MaxBatchRows            *uint32  `json:"max_batch_rows"`
+	TelemetryEnabled        *bool    `json:"telemetry_enabled"`
+	OTelEndpoint            *string  `json:"otel_endpoint"`
+	TraceSampleRatio        *float64 `json:"trace_sample_ratio"`
+	TelemetryExportInterval *string  `json:"telemetry_export_interval"`
+	TelemetryQueueSize      *int     `json:"telemetry_queue_size"`
 }
 
 func applyFile(config *Config, path string) error {
@@ -280,6 +320,21 @@ func (values fileConfig) apply(config *Config) error {
 			return fmt.Errorf("%w: file audit mode", ErrInvalidConfig)
 		}
 	}
+	if values.TelemetryEnabled != nil {
+		config.TelemetryEnabled = *values.TelemetryEnabled
+	}
+	assignString(&config.OTelEndpoint, values.OTelEndpoint)
+	if values.TraceSampleRatio != nil {
+		config.TraceSampleRatio = *values.TraceSampleRatio
+	}
+	if values.TelemetryQueueSize != nil {
+		config.TelemetryQueueSize = *values.TelemetryQueueSize
+	}
+	if config.TelemetryExportInterval, err = fileDuration(
+		config.TelemetryExportInterval, values.TelemetryExportInterval, "telemetry export interval",
+	); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -337,6 +392,11 @@ func applyFlags(config *Config, arguments []string) error {
 	flags.IntVar(&config.DatabaseMinConnections, "database-min-connections", config.DatabaseMinConnections, "minimum database connections")
 	flags.IntVar(&config.DatabaseMaxConnections, "database-max-connections", config.DatabaseMaxConnections, "maximum database connections")
 	flags.DurationVar(&config.DatabaseConnectTimeout, "database-connect-timeout", config.DatabaseConnectTimeout, "database connect timeout")
+	flags.BoolVar(&config.TelemetryEnabled, "telemetry-enabled", config.TelemetryEnabled, "enable OTLP telemetry export")
+	flags.StringVar(&config.OTelEndpoint, "otel-endpoint", config.OTelEndpoint, "OTLP HTTP endpoint base URL")
+	flags.Float64Var(&config.TraceSampleRatio, "trace-sample-ratio", config.TraceSampleRatio, "trace sampling ratio")
+	flags.DurationVar(&config.TelemetryExportInterval, "telemetry-export-interval", config.TelemetryExportInterval, "telemetry export interval")
+	flags.IntVar(&config.TelemetryQueueSize, "telemetry-queue-size", config.TelemetryQueueSize, "telemetry export queue size")
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 0 || maxBatchRows > math.MaxUint32 {
 		return fmt.Errorf("%w: command-line flags", ErrInvalidConfig)
 	}

@@ -136,7 +136,7 @@ func maskedIntPair(t *testing.T, mask uint64) (int64, int64) {
 // and a colliding canonical-value pair. The frozen table holds 6 distinct
 // symbols (slotSize(6) = 16 slots) and the value table is sized for the 17
 // AST values (slotSize(17) = 64 slots); the collision searches use those
-// masks, so both probe chains are exercised deterministically.
+// masks, so both probe chains are driven deterministically.
 func buildValueFixture(t *testing.T) (*ast.Document, *schema.Schema, *schema.Interner) {
 	t.Helper()
 	pairA, pairB := maskedSymbolPair(t, uint64(slotSize(6)-1))
@@ -945,7 +945,7 @@ func TestLowerConstantsZeroPayloadKindsDistinct(t *testing.T) {
 	}
 }
 
-// buildInstructionFixture builds a validator-clean document exercising every
+// buildInstructionFixture builds a validator-clean document driving every
 // compare op, Evidence, All, Any, Not, a shared NodeID reached through several
 // parents, and an 8,192-deep Not chain. Every node is reachable from semantic
 // roots: requirement applicability roots, clause assertion roots, and clause

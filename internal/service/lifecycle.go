@@ -14,13 +14,15 @@ var (
 	ErrLifecycleStarted = errors.New("service: lifecycle already started")
 )
 
-// ShutdownHooks adapt the journal, session group, database pool, and evaluator
-// workers without importing transport or PostgreSQL types into this package.
+// ShutdownHooks adapt the journal, session group, database pool, evaluator
+// workers, and optional telemetry runtime without importing transport or
+// PostgreSQL types into this package.
 type ShutdownHooks struct {
-	FlushJournal  func(context.Context) error
-	StopSessions  func(context.Context) error
-	CloseDatabase func(context.Context) error
-	JoinWorkers   func(context.Context) error
+	FlushJournal   func(context.Context) error
+	StopSessions   func(context.Context) error
+	CloseDatabase  func(context.Context) error
+	FlushTelemetry func(context.Context) error
+	JoinWorkers    func(context.Context) error
 }
 
 // LifecycleConfig divides the total shutdown deadline so evaluation drain
@@ -163,6 +165,11 @@ func (lifecycle *Lifecycle) shutdown(ctx context.Context, cancel context.CancelF
 	if lifecycle.hooks.CloseDatabase != nil {
 		if err := lifecycle.hooks.CloseDatabase(ctx); err != nil {
 			joined = errors.Join(joined, fmt.Errorf("service: close database: %w", err))
+		}
+	}
+	if lifecycle.hooks.FlushTelemetry != nil {
+		if err := lifecycle.hooks.FlushTelemetry(ctx); err != nil {
+			joined = errors.Join(joined, fmt.Errorf("service: flush telemetry: %w", err))
 		}
 	}
 	if lifecycle.hooks.JoinWorkers != nil {

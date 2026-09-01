@@ -9,16 +9,17 @@ import (
 
 const repositoryRoot = "../.."
 
-func TestSubmissionDocumentsExist(t *testing.T) {
+func TestProductDocumentsExist(t *testing.T) {
 	t.Parallel()
 
 	for _, path := range []string{
 		"README.md",
-		"docs/design-note.md",
+		"docs/semantic-model.md",
 		"docs/ai-usage.md",
+		"docs/archive/source-material/README.md",
 	} {
 		if _, err := os.Stat(filepath.Join(repositoryRoot, path)); err != nil {
-			t.Errorf("required submission document %q: %v", path, err)
+			t.Errorf("required product document %q: %v", path, err)
 		}
 	}
 }
@@ -51,14 +52,14 @@ func TestReadmeDocumentsRunnableModesAndDataContract(t *testing.T) {
 	}
 }
 
-func TestDesignNoteFitsOnePageAndCoversRequiredTopics(t *testing.T) {
+func TestSemanticModelSummaryFitsOnePageAndCoversCoreTopics(t *testing.T) {
 	t.Parallel()
 
-	note := readDocument(t, "docs/design-note.md")
-	if words := len(strings.Fields(note)); words > 700 {
-		t.Errorf("docs/design-note.md has %d words; maximum is 700", words)
+	summary := readDocument(t, "docs/semantic-model.md")
+	if words := len(strings.Fields(summary)); words > 700 {
+		t.Errorf("docs/semantic-model.md has %d words; maximum is 700", words)
 	}
-	lower := strings.ToLower(note)
+	lower := strings.ToLower(summary)
 	for _, required := range []string{
 		"semantic representation",
 		"flat extraction",
@@ -72,12 +73,12 @@ func TestDesignNoteFitsOnePageAndCoversRequiredTopics(t *testing.T) {
 		"next improvements",
 	} {
 		if !strings.Contains(lower, required) {
-			t.Errorf("docs/design-note.md does not cover %q", required)
+			t.Errorf("docs/semantic-model.md does not cover %q", required)
 		}
 	}
 }
 
-func TestAIUsageDisclosureStatesWhereToolsAssisted(t *testing.T) {
+func TestDevelopmentDisclosureStatesWhereToolsAssisted(t *testing.T) {
 	t.Parallel()
 
 	disclosure := strings.ToLower(readDocument(t, "docs/ai-usage.md"))

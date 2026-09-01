@@ -1308,6 +1308,8 @@ project claim.
 
 ### Task 55: Add Semantic Policy Diff And Regression Analysis
 
+**Status:** Complete (2026-08-31)
+
 **Scope:**
 
 Report proven equivalence or change only within explicit bounded domains and
@@ -1364,6 +1366,8 @@ when one is available.
 
 ### Task 56: Add A Conformant WebAssembly Target
 
+**Status:** Complete (2026-08-31)
+
 **Scope:**
 
 Export the same validated immutable Program and evaluator semantics through a
@@ -1413,6 +1417,8 @@ their own conformance and deployment tests.
 9. Commit when requested: `feat: add conformant wasm target`.
 
 ### Task 57: Add Low-Overhead OpenTelemetry And Production Telemetry
+
+**Status:** Complete (2026-08-31)
 
 **Scope:**
 
@@ -1594,6 +1600,8 @@ automated repository and CI gate.
 
 ### Task 60: Configure OpenCode Subagent And Reviewer Models
 
+**Status:** Complete (2026-08-31)
+
 **Scope:**
 
 Configure OpenCode so spawned general-purpose and exploration subagents use
@@ -1616,6 +1624,8 @@ configuration and preserve all unrelated user settings.
 ## Phase 23: Product Framing Completion
 
 ### Task 61: Remove Exercise And Candidate Framing
+
+**Status:** Complete (2026-08-31)
 
 **Dependency:** Begin only after Task 54 is complete and merged into `main`.
 

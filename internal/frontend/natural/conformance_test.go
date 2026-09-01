@@ -22,7 +22,7 @@ import (
 )
 
 func TestApprovedDraftMatchesNativePolicyBehavior(t *testing.T) {
-	document, proposal, draft := assignmentReview(t)
+	document, proposal, draft := baselineReview(t)
 	signer, verifier := approvalKeys(t)
 	var reviewer Reviewer
 	token, diagnostics, err := reviewer.IssueApproval(
@@ -66,7 +66,7 @@ func TestApprovedDraftMatchesNativePolicyBehavior(t *testing.T) {
 }
 
 func TestCompileRequiresValidApprovalAndIsAtomic(t *testing.T) {
-	document, proposal, draft := assignmentReview(t)
+	document, proposal, draft := baselineReview(t)
 	_, verifier := approvalKeys(t)
 	native := compileNativePolicy(t, []byte(nornrunepolicy.Source()))
 	dst := *native
@@ -87,7 +87,7 @@ func TestCompileRequiresValidApprovalAndIsAtomic(t *testing.T) {
 }
 
 func TestCompileRejectsSignedMalformedNativePolicyAtomically(t *testing.T) {
-	document, proposal, draft := assignmentReview(t)
+	document, proposal, draft := baselineReview(t)
 	draft.PolicySource = []byte("{")
 	signer, verifier := approvalKeys(t)
 	var reviewer Reviewer
@@ -131,7 +131,7 @@ func TestNaturalFrontendHasNoPublicationImports(t *testing.T) {
 	}
 }
 
-func assignmentReview(tb testing.TB) (*public.Document, *public.Proposal, *public.ReviewedDraft) {
+func baselineReview(tb testing.TB) (*public.Document, *public.Proposal, *public.ReviewedDraft) {
 	tb.Helper()
 	source := []byte(fixtures.PolicyJSON())
 	document, err := public.NewDocument(source, []uint32{0}, public.DefaultLimits())

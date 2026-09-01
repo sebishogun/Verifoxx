@@ -108,7 +108,7 @@ precedence. The NornRune pack defines exactly:
 
 Every clause resolves `satisfied`, `false`, `missing`, `stale`, `unclear`,
 `unverifiable`, and `conflict`. Outcome reduction uses catalog precedence, not
-source order. In the supplied pack `Reject` outranks `Escalate`, which outranks
+source order. In the baseline conformance pack `Reject` outranks `Escalate`, which outranks
 `Revise`, which outranks `Approve`.
 
 Explanations are precompiled templates. Placeholders are restricted to known

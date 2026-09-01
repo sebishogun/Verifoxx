@@ -1,12 +1,15 @@
 package observability
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	publictelemetry "github.com/sebishogun/nornrune/telemetry"
 )
 
 func TestMetricsExposeBatchAggregates(t *testing.T) {
@@ -39,6 +42,13 @@ func TestMetricsExposeBatchAggregates(t *testing.T) {
 	if err := metrics.ObserveBatch(failed); err != nil {
 		t.Fatalf("ObserveBatch(failed) error = %v", err)
 	}
+	events := publictelemetry.BatchDelta{}
+	events.Reasons[publictelemetry.ReasonMissing] = 2
+	events.Audits[publictelemetry.AuditPersisted] = 1
+	events.Reloads[publictelemetry.ReloadSuccess] = 1
+	if err := metrics.Record(events); err != nil {
+		t.Fatalf("Record(events) error = %v", err)
+	}
 
 	response := httptest.NewRecorder()
 	metrics.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
@@ -56,6 +66,11 @@ func TestMetricsExposeBatchAggregates(t *testing.T) {
 		"nornrune_evaluation_outcomes_total{outcome=\"reject\"} 4",
 		"nornrune_evaluation_outcomes_total{outcome=\"revise\"} 2",
 		"nornrune_evaluation_outcomes_total{outcome=\"escalate\"} 1",
+		"nornrune_evaluation_escalations_total{reason=\"missing\"} 2",
+		"nornrune_audit_outcomes_total{outcome=\"persisted\"} 1",
+		"nornrune_policy_reloads_total{outcome=\"success\"} 1",
+		"nornrune_telemetry_export_drops_total 0",
+		"nornrune_shutdown_failures_total 0",
 		"nornrune_evaluation_duration_seconds_count 2",
 		"nornrune_evaluation_duration_seconds_sum 0.002",
 		"nornrune_service_queue_depth 3",
@@ -63,6 +78,58 @@ func TestMetricsExposeBatchAggregates(t *testing.T) {
 		"nornrune_evaluation_workers 4",
 		"nornrune_simd_tier_info{tier=\"avx2\"} 1",
 	)
+}
+
+func TestMetricsExposeOnlyFixedCardinalityLabels(t *testing.T) {
+	metrics, err := NewMetrics(MetricsConfig{
+		QueueDepth: func() uint64 { return 0 }, JournalFailures: func() uint64 { return 0 },
+		SIMDTier: "scalar", Workers: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	metrics.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	exposition := response.Body.String()
+	for prefix, count := range map[string]int{
+		"nornrune_evaluation_outcomes_total{":    int(publictelemetry.DecisionCount),
+		"nornrune_evaluation_escalations_total{": int(publictelemetry.ReasonCount),
+		"nornrune_audit_outcomes_total{":         int(publictelemetry.AuditOutcomeCount),
+		"nornrune_policy_reloads_total{":         int(publictelemetry.ReloadOutcomeCount),
+	} {
+		if got := strings.Count(exposition, prefix); got != count {
+			t.Fatalf("%s series = %d, want %d\n%s", prefix, got, count, exposition)
+		}
+	}
+	for _, forbidden := range []string{"request_id", "evidence", "policy_name", "policy_hash", "user", "url", "error"} {
+		if strings.Contains(exposition, forbidden+"=") {
+			t.Fatalf("metrics contain forbidden label %q\n%s", forbidden, exposition)
+		}
+	}
+}
+
+func TestMetricsCanCollectSharedTelemetryRuntime(t *testing.T) {
+	runtime, err := publictelemetry.New(context.Background(), publictelemetry.Config{
+		Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics, err := NewMetrics(MetricsConfig{
+		Runtime: runtime, QueueDepth: func() uint64 { return 0 }, JournalFailures: func() uint64 { return 0 },
+		SIMDTier: "scalar", Workers: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta := publictelemetry.BatchDelta{Batches: 1, Rows: 1}
+	delta.Decisions[publictelemetry.DecisionApprove] = 1
+	if err := runtime.Record(delta); err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	metrics.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	assertMetricContains(t, response.Body.String(), "nornrune_evaluation_rows_total 1")
 }
 
 func TestMetricsRejectInvalidConfigurationAndBatches(t *testing.T) {
@@ -151,3 +218,28 @@ func assertMetricContains(t *testing.T, exposition string, expected ...string) {
 		}
 	}
 }
+
+func BenchmarkMetricsScrape(b *testing.B) {
+	metrics, err := NewMetrics(MetricsConfig{
+		QueueDepth: func() uint64 { return 0 }, JournalFailures: func() uint64 { return 0 },
+		SIMDTier: "scalar", Workers: 1,
+	})
+	if err != nil {
+		b.Fatalf("NewMetrics() error = %v", err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	response := discardResponse{header: make(http.Header)}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		metrics.ServeHTTP(response, request)
+	}
+}
+
+type discardResponse struct {
+	header http.Header
+}
+
+func (response discardResponse) Header() http.Header   { return response.header }
+func (discardResponse) Write(body []byte) (int, error) { return len(body), nil }
+func (discardResponse) WriteHeader(int)                {}

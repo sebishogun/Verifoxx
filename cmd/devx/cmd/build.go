@@ -85,6 +85,10 @@ func buildCommandPlan(name string) ([]commandSpec, bool) {
 		return []commandSpec{{
 			executable: "go", arguments: []string{"test", "-count=1", "-timeout", "60s", "./internal/conformance"}, timeout: 90 * time.Second,
 		}}, true
+	case "wasm:check":
+		return []commandSpec{{
+			executable: "sh", arguments: []string{"scripts/check-wasm.sh"}, timeout: 5 * time.Minute,
+		}}, true
 	default:
 		return nil, false
 	}

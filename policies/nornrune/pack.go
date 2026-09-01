@@ -1,5 +1,5 @@
 // Package nornrune provides the embedded semantic policy and typed field
-// schema for the NornRune assignment policy pack.
+// schema for the NornRune baseline policy pack.
 package nornrune
 
 import (

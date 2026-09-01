@@ -171,7 +171,7 @@ func (journal *Journal) Submit(ctx context.Context, batch *persistence.AuditBatc
 	return err
 }
 
-// Stats returns counters without blocking submissions or writers.
+// Stats returns counters without blocking Submit calls or writers.
 func (journal *Journal) Stats() JournalStats {
 	if journal == nil {
 		return JournalStats{}

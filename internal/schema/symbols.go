@@ -39,7 +39,7 @@ func nextPow2(n int) int {
 // conversion) and stored once in an internal byte arena; duplicate intern
 // returns the existing SymbolID without appending bytes. SymbolID zero is
 // invalid; IDs are assigned sequentially starting at 1 and reset restores
-// deterministic assignment while retaining capacity. An Interner is not safe
+// deterministic allocation while retaining capacity. An Interner is not safe
 // for concurrent use by multiple goroutines.
 type Interner struct {
 	arena   *arena.ByteArena
@@ -164,7 +164,7 @@ func (in *Interner) Bytes(id SymbolID) ([]byte, bool) {
 	return b, true
 }
 
-// Reset clears all interned symbols and restores sequential ID assignment
+// Reset clears all interned symbols and restores sequential ID allocation
 // starting at 1, while retaining table and arena capacity.
 func (in *Interner) Reset() {
 	for i := range in.ids {

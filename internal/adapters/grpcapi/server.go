@@ -13,6 +13,8 @@ import (
 	"github.com/sebishogun/nornrune/internal/compile"
 	"github.com/sebishogun/nornrune/internal/security"
 	coreservice "github.com/sebishogun/nornrune/internal/service"
+	publictelemetry "github.com/sebishogun/nornrune/telemetry"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -28,6 +30,7 @@ var ErrInvalidServer = errors.New("grpcapi: invalid server configuration")
 
 // Config fixes transport storage and service-call deadlines.
 type Config struct {
+	Telemetry       *publictelemetry.Runtime
 	MaxMessageBytes int
 	RequestTimeout  time.Duration
 }
@@ -55,10 +58,17 @@ func New(api coreservice.PolicyAPI, admission *coreservice.Service, config Confi
 	if api == nil || admission == nil || admission.Stats().Limit == 0 || !config.valid() {
 		return nil, ErrInvalidServer
 	}
-	server := grpc.NewServer(
+	serverOptions := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(config.MaxMessageBytes),
 		grpc.MaxSendMsgSize(config.MaxMessageBytes),
-	)
+	}
+	if config.Telemetry != nil {
+		serverOptions = append(serverOptions, grpc.StatsHandler(otelgrpc.NewServerHandler(
+			otelgrpc.WithTracerProvider(config.Telemetry.TracerProvider()),
+			otelgrpc.WithPropagators(config.Telemetry.Propagator()),
+		)))
+	}
+	server := grpc.NewServer(serverOptions...)
 	nornrunev1.RegisterPolicyServiceServer(server, &policyServer{
 		api: api, admission: admission, config: config,
 	})
@@ -132,6 +142,8 @@ func (server *policyServer) EvaluateBatch(
 	if err != nil {
 		return nil, err
 	}
+	_, encodeSpan := server.config.Telemetry.Start(ctx, publictelemetry.OperationResponseEncode)
+	defer encodeSpan.End()
 	return &nornrunev1.EvaluateBatchResponse{ResultJson: encoded}, nil
 }
 
@@ -152,13 +164,18 @@ func (server *policyServer) EvaluateStream(
 		if err != nil {
 			return err
 		}
-		if err := stream.Send(&nornrunev1.EvaluateStreamResponse{ResultJson: encoded}); err != nil {
+		_, encodeSpan := server.config.Telemetry.Start(stream.Context(), publictelemetry.OperationResponseEncode)
+		err = stream.Send(&nornrunev1.EvaluateStreamResponse{ResultJson: encoded})
+		encodeSpan.End()
+		if err != nil {
 			return serviceStatus(err)
 		}
 	}
 }
 
 func (server *policyServer) evaluate(ctx context.Context, requests, evidence, encodedHash []byte) ([]byte, error) {
+	decodeContext, decodeSpan := server.config.Telemetry.Start(ctx, publictelemetry.OperationDecode)
+	defer decodeSpan.End()
 	if len(requests) == 0 || len(evidence) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "request and evidence JSON objects are required")
 	}
@@ -169,7 +186,8 @@ func (server *policyServer) evaluate(ctx context.Context, requests, evidence, en
 	if total > uint64(server.config.MaxMessageBytes) {
 		return nil, status.Error(codes.ResourceExhausted, "evaluation input exceeds limit")
 	}
-	callCtx, cancel, admission, err := server.admit(ctx)
+	decodeSpan.End()
+	callCtx, cancel, admission, err := server.admit(decodeContext)
 	if err != nil {
 		return nil, serviceStatus(err)
 	}
@@ -185,7 +203,9 @@ func (server *policyServer) evaluate(ctx context.Context, requests, evidence, en
 		evaluation.ExplicitPolicy = true
 	}
 	// The output must not alias still-live protobuf request storage.
-	encoded, err := server.api.EvaluateBatch(callCtx, evaluation, nil)
+	evaluationContext, evaluationSpan := server.config.Telemetry.Start(callCtx, publictelemetry.OperationEvaluation)
+	encoded, err := server.api.EvaluateBatch(evaluationContext, evaluation, nil)
+	evaluationSpan.End()
 	if err != nil {
 		return nil, serviceStatus(err)
 	}
@@ -207,17 +227,22 @@ func (server *policyServer) admit(ctx context.Context) (
 	coreservice.Admission,
 	error,
 ) {
-	callCtx, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
+	spanContext, span := server.config.Telemetry.Start(ctx, publictelemetry.OperationAdmission)
+	defer span.End()
+	callCtx, cancel := context.WithTimeout(spanContext, server.config.RequestTimeout)
+	started := time.Now()
 	admission, err := server.admission.Admit(callCtx)
 	if err != nil {
 		cancel()
 		return nil, nil, coreservice.Admission{}, err
 	}
+	_ = server.config.Telemetry.AdmissionStarted(time.Since(started))
 	return callCtx, cancel, admission, nil
 }
 
 func (server *policyServer) release(admission *coreservice.Admission, cancel context.CancelFunc) {
 	_ = server.admission.Release(admission)
+	server.config.Telemetry.AdmissionFinished()
 	cancel()
 }
 

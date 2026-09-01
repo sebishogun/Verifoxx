@@ -95,7 +95,7 @@ security-definer behavior, table inheritance, catalog state, or session state.
 
 The PostgreSQL 19 differential integration test starts the pinned
 `postgres:19beta3` container. It compares fixed, repository-owned expression
-fixtures using parameterized row values and exercises isolated temporary RLS
+fixtures using parameterized row values and runs isolated temporary RLS
 roles, rows, and write operations. Database calls exist only in the
 integration-tagged test package.
 

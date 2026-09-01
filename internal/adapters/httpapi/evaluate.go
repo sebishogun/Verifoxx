@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	coreservice "github.com/sebishogun/nornrune/internal/service"
+	publictelemetry "github.com/sebishogun/nornrune/telemetry"
 )
 
 var (
@@ -24,12 +25,15 @@ func (server *Server) handleEvaluate(response http.ResponseWriter, request *http
 	}
 	defer server.release(&admission, cancel)
 
-	body, err := readRequestBody(ctx, response, request, server.config.MaxBodyBytes)
+	decodeContext, decodeSpan := server.config.Telemetry.Start(ctx, publictelemetry.OperationDecode)
+	body, err := readRequestBody(decodeContext, response, request, server.config.MaxBodyBytes)
 	if err != nil {
+		decodeSpan.End()
 		writeBodyError(response, err)
 		return
 	}
 	evaluation, err := decodeEvaluationRequest(body)
+	decodeSpan.End()
 	if err != nil {
 		if errors.Is(err, errInvalidJSON) {
 			writeError(response, http.StatusBadRequest, "invalid_json", "request body is malformed JSON")
@@ -38,7 +42,9 @@ func (server *Server) handleEvaluate(response http.ResponseWriter, request *http
 		}
 		return
 	}
-	encoded, err := server.api.EvaluateBatch(ctx, evaluation, body[:0])
+	evaluationContext, evaluationSpan := server.config.Telemetry.Start(ctx, publictelemetry.OperationEvaluation)
+	encoded, err := server.api.EvaluateBatch(evaluationContext, evaluation, body[:0])
+	evaluationSpan.End()
 	if err != nil {
 		writeServiceError(response, err)
 		return
@@ -51,7 +57,9 @@ func (server *Server) handleEvaluate(response http.ResponseWriter, request *http
 		writeServiceError(response, coreservice.ErrUnavailable)
 		return
 	}
+	_, encodeSpan := server.config.Telemetry.Start(ctx, publictelemetry.OperationResponseEncode)
 	writeBytes(response, http.StatusOK, encoded)
+	encodeSpan.End()
 }
 
 func decodeEvaluationRequest(body []byte) (coreservice.EvaluationRequest, error) {

@@ -1,13 +1,13 @@
 # NornRune
 
-NornRune is a deterministic evidence-aware policy engine for the NornRune AI
-Engineer semantic decision representation exercise. It compiles the three
-natural-language requirements into a reusable semantic policy, evaluates the
-five supplied requests, and returns exactly one of `Approve`, `Reject`,
-`Revise`, or `Escalate` with bounded provenance and uncertainty.
+NornRune is a deterministic evidence-aware policy engine. It compiles policy
+requirements into a reusable semantic representation, evaluates request
+batches against them, and returns exactly one of `Approve`, `Reject`,
+`Revise`, or `Escalate` with bounded provenance and uncertainty. The embedded
+baseline conformance policy and its request corpus guard every change.
 
-The default command embeds the policy, requests, and evidence, so the required
-submission runs without a database or network service.
+The default command embeds the policy, requests, and evidence, so the demo
+runs without a database or network service.
 
 ## Why NornRune
 
@@ -58,6 +58,8 @@ explain R1               explain one request
 simulate R1 --set K=V    evaluate one bounded field override
 demo                     run evaluation and revision scenarios
 graph --output PATH      export the AST or Program semantic graph
+diff --old-policy OLD --new-policy NEW --domain DOMAIN
+                         compare native policies over a finite domain
 ```
 
 ### Offline Benchmark
@@ -258,7 +260,7 @@ The top level contains `schema_version`, policy identity and SHA-256,
 - `assumptions` and `unresolved_uncertainty`.
 - `remediation`, which is empty unless a bounded correction is allowed.
 
-The supplied pack evaluates to R1 `Approve`, R2 `Reject`, R3 `Revise`, and R4
+The baseline conformance pack evaluates to R1 `Approve`, R2 `Reject`, R3 `Revise`, and R4
 and R5 `Escalate`. These are computed from the policy graph; the evaluator does
 not branch on request IDs.
 
@@ -279,8 +281,8 @@ The field-alignment script is the local and CI production-layout gate. It pins
 the reviewed analyzer version and checks `internal`, `cmd`, and `policies`
 packages without automatically rewriting structs.
 
-See the one-page [design note](docs/design-note.md) for the semantic model and
-[AI usage disclosure](docs/ai-usage.md) for tool assistance.
+See the one-page [semantic model summary](docs/semantic-model.md) and the
+[development tooling disclosure](docs/ai-usage.md).
 
 ## Technical Guides
 
@@ -291,6 +293,11 @@ See the one-page [design note](docs/design-note.md) for the semantic model and
   PostgreSQL RLS composition, and differential-test scope.
 - [Reviewed natural-language frontend](docs/natural-language-frontend.md):
   citation validation, human approval, token binding, and deferred providers.
+- [Semantic policy diff](docs/policy-diff.md): finite-domain comparison,
+  replayable counterexamples, CI matrices, and expiring exceptions.
+- [WebAssembly target](docs/wasm.md): versioned ABI, deterministic artifacts,
+- [Production telemetry](docs/telemetry.md): fixed-cardinality counters, snapshot Prometheus/OTLP export, sampled tracing,
+  memory ownership, and native/runtime conformance.
 - [Policy language](docs/policy-language.md): expressions, four-state truth,
   resolution, and remediation.
 - [Concurrency](docs/concurrency.md): worker ownership, lock table,

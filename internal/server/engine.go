@@ -17,8 +17,11 @@ import (
 	"github.com/sebishogun/nornrune/internal/program"
 	"github.com/sebishogun/nornrune/internal/result"
 	"github.com/sebishogun/nornrune/internal/scheduler"
+	"github.com/sebishogun/nornrune/internal/schema"
 	"github.com/sebishogun/nornrune/internal/security"
 	"github.com/sebishogun/nornrune/internal/service"
+	internaltelemetry "github.com/sebishogun/nornrune/internal/telemetry"
+	publictelemetry "github.com/sebishogun/nornrune/telemetry"
 )
 
 const maxEngineWorkers = 256
@@ -54,6 +57,7 @@ type EngineConfig struct {
 	Publisher     *persistence.Publisher
 	Journal       auditJournal
 	Metrics       *observability.Metrics
+	Telemetry     *publictelemetry.Runtime
 	Health        func(context.Context) error
 	EngineVersion string
 	AuditCapacity persistence.AuditCapacity
@@ -74,6 +78,7 @@ type engineWorker struct {
 // Engine implements the transport-independent PolicyAPI with a fixed worker
 // set and immutable published Programs.
 type Engine struct {
+	telemetry      *publictelemetry.Runtime
 	publisher      *persistence.Publisher
 	registry       *program.Registry
 	journal        auditJournal
@@ -100,8 +105,9 @@ func NewEngine(config EngineConfig) (*Engine, error) {
 		return nil, ErrInvalidRuntime
 	}
 	engine := &Engine{
-		publisher: config.Publisher, registry: config.Registry, journal: config.Journal,
-		metrics: config.Metrics, health: config.Health, workers: make(chan *engineWorker, config.Workers),
+		telemetry: config.Telemetry, publisher: config.Publisher, registry: config.Registry,
+		journal: config.Journal, metrics: config.Metrics, health: config.Health,
+		workers:  make(chan *engineWorker, config.Workers),
 		versions: make(map[[32]byte]persistence.PolicyVersionID), engineVersion: config.EngineVersion,
 		batchLimits: batchDecoderLimits(config.Limits), limits: config.Limits, maxPolicyBytes: config.Limits.MaxPolicyBytes,
 		maxOutputBytes: config.Limits.MaxOutputBytes, auditMode: config.AuditMode,
@@ -153,14 +159,26 @@ func (engine *Engine) CompilePolicy(ctx context.Context, source []byte) (service
 	compiled, version, err := engine.publisher.Publish(ctx, source)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidPolicy) {
+			engine.recordReload(publictelemetry.ReloadInvalid)
 			return service.PolicyMetadata{}, service.ErrInvalidPolicy
 		}
+		engine.recordReload(publictelemetry.ReloadPersistenceFailure)
 		return service.PolicyMetadata{}, fmt.Errorf("%w: publish policy: %v", service.ErrUnavailable, err)
 	}
 	engine.versionMu.Lock()
 	engine.versions[version.ContentHash] = version.ID
 	engine.versionMu.Unlock()
+	engine.recordReload(publictelemetry.ReloadSuccess)
 	return policyMetadata(compiled)
+}
+
+func (engine *Engine) recordReload(outcome publictelemetry.ReloadOutcome) {
+	if engine == nil || engine.telemetry == nil {
+		return
+	}
+	delta := publictelemetry.BatchDelta{}
+	delta.Reloads[outcome] = 1
+	_ = engine.telemetry.Record(delta)
 }
 
 // LookupPolicy returns one already-published immutable policy.
@@ -190,23 +208,28 @@ func (engine *Engine) EvaluateBatch(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	_, lookupSpan := engine.telemetry.Start(ctx, publictelemetry.OperationPolicyLookup)
 	compiled := engine.registry.Active()
 	if request.ExplicitPolicy {
 		var ok bool
 		compiled, ok = engine.registry.Lookup(request.PolicyHash)
 		if !ok {
+			lookupSpan.End()
 			return nil, service.ErrPolicyNotFound
 		}
 	}
 	if compiled == nil {
+		lookupSpan.End()
 		return nil, service.ErrUnavailable
 	}
 	engine.versionMu.RLock()
 	versionID := engine.versions[compiled.ContentHash]
 	engine.versionMu.RUnlock()
 	if versionID <= 0 {
+		lookupSpan.End()
 		return nil, service.ErrUnavailable
 	}
+	lookupSpan.End()
 
 	worker, err := engine.acquire(ctx)
 	if err != nil {
@@ -240,19 +263,85 @@ func (engine *Engine) EvaluateBatch(
 	}
 	completed := time.Now().UTC()
 	if engine.auditMode != persistence.AuditOff {
+		_, auditSpan := engine.telemetry.Start(ctx, publictelemetry.OperationAuditAcknowledgment)
 		if err := buildAuditBatch(&worker.audit, auditInput{
 			policyVersionID: versionID, policyHash: compiled.ContentHash, engineVersion: engine.engineVersion,
 			requests: request.Requests, evidence: request.Evidence, results: output,
 			started: started, completed: completed, sequence: engine.sequence.Add(1),
 		}); err != nil {
+			auditSpan.End()
 			return nil, fmt.Errorf("%w: materialize audit: %v", service.ErrAuditUnavailable, err)
 		}
-		if err := engine.journal.Submit(ctx, &worker.audit); err != nil && engine.auditMode == persistence.AuditRequired {
-			return nil, fmt.Errorf("%w: persist audit: %v", service.ErrAuditUnavailable, err)
+		if err := engine.journal.Submit(ctx, &worker.audit); err != nil {
+			if engine.auditMode == persistence.AuditRequired {
+				auditSpan.End()
+				engine.recordAudit(publictelemetry.AuditRequiredFailure)
+				return nil, fmt.Errorf("%w: persist audit: %v", service.ErrAuditUnavailable, err)
+			}
+			engine.recordAudit(publictelemetry.AuditOptionalDrop)
+		} else {
+			engine.recordAudit(publictelemetry.AuditPersisted)
+		}
+		auditSpan.End()
+	}
+	engine.recordEvaluation(compiled, &worker.results, completed.Sub(started))
+	return output, nil
+}
+
+func (engine *Engine) recordAudit(outcome publictelemetry.AuditOutcome) {
+	if engine == nil || engine.telemetry == nil {
+		return
+	}
+	delta := publictelemetry.BatchDelta{}
+	delta.Audits[outcome] = 1
+	_ = engine.telemetry.Record(delta)
+}
+
+func (engine *Engine) recordEvaluation(compiled *program.Program, batch *result.Batch, elapsed time.Duration) {
+	if ids, err := engineOutcomeIDs(compiled); err == nil && engine.telemetry != nil {
+		if err := engine.telemetry.ObserveEvaluation(batch, ids, elapsed); err == nil {
+			return
 		}
 	}
-	_ = engine.metrics.ObserveBatch(batchObservation(compiled, &worker.results, completed.Sub(started)))
-	return output, nil
+	_ = engine.metrics.ObserveBatch(batchObservation(compiled, batch, elapsed))
+}
+
+var errUnknownOutcomeIDs = errors.New("server: policy does not define the four fixed decisions")
+
+func engineOutcomeIDs(compiled *program.Program) (internaltelemetry.OutcomeIDs, error) {
+	var ids internaltelemetry.OutcomeIDs
+	var found uint8
+	for row := 1; row <= len(compiled.Outcomes.Names); row++ {
+		outcome, ok := compiled.Outcomes.Lookup(schema.OutcomeID(row))
+		if !ok {
+			continue
+		}
+		name, ok := compiled.Symbol(outcome.Name)
+		if !ok {
+			continue
+		}
+		var id *schema.OutcomeID
+		switch {
+		case bytes.Equal(name, approveOutcomeName):
+			id, found = &ids.Approve, found|1
+		case bytes.Equal(name, rejectOutcomeName):
+			id, found = &ids.Reject, found|2
+		case bytes.Equal(name, reviseOutcomeName):
+			id, found = &ids.Revise, found|4
+		case bytes.Equal(name, escalateOutcomeName):
+			id, found = &ids.Escalate, found|8
+		default:
+			continue
+		}
+		if *id != 0 {
+			return internaltelemetry.OutcomeIDs{}, errUnknownOutcomeIDs
+		}
+		*id = schema.OutcomeID(row)
+	}
+	if found != 15 {
+		return internaltelemetry.OutcomeIDs{}, errUnknownOutcomeIDs
+	}
+	return ids, nil
 }
 
 // Health checks the active policy and runtime dependency set.

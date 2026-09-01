@@ -7,9 +7,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/sebishogun/nornrune/internal/observability"
 	coreservice "github.com/sebishogun/nornrune/internal/service"
+	publictelemetry "github.com/sebishogun/nornrune/telemetry"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const policyPathPrefix = "/v1/policies/"
@@ -52,6 +55,11 @@ func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	if request.URL == nil || request.URL.RawQuery != "" {
 		writeError(response, http.StatusBadRequest, "invalid_request", "request URL is invalid")
 		return
+	}
+	if server.config.Telemetry != nil {
+		request = request.WithContext(
+			server.config.Telemetry.Extract(request.Context(), propagation.HeaderCarrier(request.Header)),
+		)
 	}
 
 	switch request.URL.Path {
@@ -121,17 +129,22 @@ func requireJSON(response http.ResponseWriter, request *http.Request) bool {
 }
 
 func (server *Server) admit(request *http.Request) (context.Context, context.CancelFunc, coreservice.Admission, error) {
-	ctx, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
+	spanContext, span := server.config.Telemetry.Start(request.Context(), publictelemetry.OperationAdmission)
+	defer span.End()
+	ctx, cancel := context.WithTimeout(spanContext, server.config.RequestTimeout)
+	started := time.Now()
 	admission, err := server.admission.Admit(ctx)
 	if err != nil {
 		cancel()
 		return nil, nil, coreservice.Admission{}, err
 	}
+	_ = server.config.Telemetry.AdmissionStarted(time.Since(started))
 	return ctx, cancel, admission, nil
 }
 
 func (server *Server) release(admission *coreservice.Admission, cancel context.CancelFunc) {
 	_ = server.admission.Release(admission)
+	server.config.Telemetry.AdmissionFinished()
 	cancel()
 }
 

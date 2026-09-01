@@ -163,15 +163,15 @@ func validateTarget(target string) error {
 func runLoad(ctx context.Context, config options, client requester) runStats {
 	runContext, cancelRun := context.WithTimeout(ctx, config.timeout)
 	startedAt := time.Now()
-	assignments := make([]uint64, config.concurrency)
-	partitionRequests(assignments, config.requests)
+	partitions := make([]uint64, config.concurrency)
+	partitionRequests(partitions, config.requests)
 	var completed atomic.Uint64
 	var firstError error
 	var firstErrorOnce sync.Once
 	var workers sync.WaitGroup
 	workers.Add(config.concurrency)
-	for worker := range assignments {
-		assigned := assignments[worker]
+	for worker := range partitions {
+		assigned := partitions[worker]
 		go func() {
 			defer workers.Done()
 			for range assigned {
@@ -200,14 +200,14 @@ func runLoad(ctx context.Context, config options, client requester) runStats {
 	return runStats{firstError: firstError, elapsed: time.Since(startedAt), completed: completed.Load()}
 }
 
-func partitionRequests(assignments []uint64, requests uint64) {
-	workers := uint64(len(assignments))
+func partitionRequests(partitions []uint64, requests uint64) {
+	workers := uint64(len(partitions))
 	base := requests / workers
 	remainder := requests % workers
-	for worker := range assignments {
-		assignments[worker] = base
+	for worker := range partitions {
+		partitions[worker] = base
 		if uint64(worker) < remainder {
-			assignments[worker]++
+			partitions[worker]++
 		}
 	}
 }

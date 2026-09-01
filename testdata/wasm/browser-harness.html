@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>NornRune WebAssembly conformance</title>
+<pre id="result">running</pre>
+<script type="module">
+  import { runNornRune } from "./harness.mjs";
+  import { createBrowserWASI } from "./browser-wasi.mjs";
+
+  let instance;
+  const wasi = createBrowserWASI(() => instance.exports.memory);
+
+  try {
+    const load = async (path) => new Uint8Array(await (await fetch(path)).arrayBuffer());
+    const module = await WebAssembly.compile(await load("./nornrune.wasm"));
+    instance = await WebAssembly.instantiate(module, { wasi_snapshot_preview1: wasi });
+    instance.exports._initialize();
+    const expected = await load("./result.bin");
+    const actual = runNornRune(instance, await load("./program.bin"), await load("./input.bin"));
+    if (actual.length !== expected.length || actual.some((value, row) => value !== expected[row])) {
+      throw new Error("result mismatch");
+    }
+    document.querySelector("#result").textContent = "pass";
+  } catch (error) {
+    document.querySelector("#result").textContent = `fail: ${error.message}`;
+  }
+</script>

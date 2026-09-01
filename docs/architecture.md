@@ -2,7 +2,7 @@
 
 NornRune is a deterministic, evidence-aware policy compiler and evaluator. The
 JSON, CLI, TUI, HTTP, gRPC, and PostgreSQL packages are adapters around a typed
-core. The core does not branch on the five supplied request IDs and does not
+core. The core does not branch on the baseline request IDs and does not
 query PostgreSQL while evaluating a policy.
 
 ## System Boundary
@@ -194,6 +194,9 @@ transactions, migrations, and recovery.
 - [Compatibility frontends](frontends.md)
 - [SQL frontend](sql-frontend.md)
 - [Reviewed natural-language frontend](natural-language-frontend.md)
+- [Semantic policy diff](policy-diff.md)
+- [WebAssembly target](wasm.md)
+- [Production telemetry](telemetry.md)
 - [Concurrency](concurrency.md)
 - [API](api.md)
 - [Performance](performance.md)

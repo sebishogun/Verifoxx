@@ -100,7 +100,7 @@ for an engine worker, evaluating, encoding, or writing an audit record.
 Admission accounting is independent of engine-worker and journal channels. A
 request may wait for an engine workspace, scheduler admission and tokens, then
 the journal, but no return path acquires them in reverse: the journal copies a
-complete audit batch before submission returns, the engine worker is returned,
+complete audit batch before Submit returns, the engine worker is returned,
 and the adapter finally releases admission.
 
 ## Backpressure

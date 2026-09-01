@@ -129,8 +129,12 @@ probes the configured HTTP `/readyz` endpoint with a five-second client timeout.
 
 ## Metrics
 
-Prometheus text exposition is available at `/metrics`. Collectors use fixed
-names and labels and update once per batch, not once per node:
+Prometheus text exposition is available at `/metrics`. One immutable snapshot
+per scrape feeds fixed-name, fixed-cardinality series that update once per
+batch or bounded service event, never once per node. The complete table,
+including escalation reasons, audit and reload outcomes, queue wait, active
+admissions, and telemetry drop counters, is defined in the
+[production telemetry guide](telemetry.md).
 
 | Metric | Meaning |
 |---|---|
@@ -139,14 +143,14 @@ names and labels and update once per batch, not once per node:
 | `nornrune_evaluation_rows_total` | request rows presented |
 | `nornrune_evaluation_duration_seconds` | end-to-end batch histogram |
 | `nornrune_evaluation_outcomes_total{outcome}` | four bounded decision labels |
+| `nornrune_evaluation_escalations_total{reason}` | nine bounded escalation reasons |
 | `nornrune_service_queue_depth` | callers waiting for admission |
 | `nornrune_audit_journal_failures_total` | failed audit batches |
 | `nornrune_evaluation_workers` | configured scheduler and request-workspace count |
 | `nornrune_simd_tier_info{tier}` | selected runtime SIMD tier |
 
-Best-effort queue drops are retained in `Journal.Stats` but are not currently a
-separate Prometheus collector. Listener reconnect metrics and pprof helpers also
-exist as package APIs but are not wired into `server.Serve`.
+Optional OTLP export and sampled tracing share the same snapshot; bounded
+alerting rules ship in `deploy/telemetry/prometheus-rules.yaml`.
 
 ## Capacity And Alerts
 

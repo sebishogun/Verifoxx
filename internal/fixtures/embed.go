@@ -1,14 +1,15 @@
-// Package fixtures embeds the candidate-exercise input pack exactly as
-// transcribed from NornRune_AI_Engineer_Assignment.pdf, which is the source
-// of truth for these inputs.
+// Package fixtures embeds the baseline conformance input pack. The pack is
+// preserved verbatim from the archived source material in
+// docs/archive/source-material/ and is the fixed regression corpus for the
+// engine.
 //
 // The three files are read-only inputs to the engine:
 //   - nornrune-policy.json holds the three source requirement statements
 //     (requirement IDs R1-R3 and exact natural-language text, not the later
 //     compiled semantic AST);
-//   - nornrune-requests.json holds the five candidate request records
+//   - nornrune-requests.json holds the five baseline request records
 //     (request IDs R1-R5);
-//   - nornrune-evidence.json holds the four candidate evidence records
+//   - nornrune-evidence.json holds the four baseline evidence records
 //     (evidence IDs E1-E4).
 //
 // Ownership contract: accessors return Go strings, which are immutable by

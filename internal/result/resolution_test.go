@@ -741,7 +741,7 @@ func TestResolveEqualPrecedenceLowerID(t *testing.T) {
 	outcomes, remediations, _ := newResolverFixture()
 	outcomes.Precedence = []uint8{1, 4, 3, 3}
 	mask := truth.ReasonBit(truth.ReasonMissing) | truth.ReasonBit(truth.ReasonStale)
-	assignments := []struct {
+	mappings := []struct {
 		name   string
 		first  schema.OutcomeID // row 1 (Missing)
 		second schema.OutcomeID // row 2 (Stale)
@@ -750,7 +750,7 @@ func TestResolveEqualPrecedenceLowerID(t *testing.T) {
 		{"lower id first", 3, 4, truth.ReasonMissing},
 		{"lower id second", 4, 3, truth.ReasonStale},
 	}
-	for _, a := range assignments {
+	for _, a := range mappings {
 		t.Run(a.name, func(t *testing.T) {
 			rules := ResolutionTable{
 				OutcomeIDs:        []schema.OutcomeID{a.first, a.second, 4, 4, 4, 4, 4, 4, 4},

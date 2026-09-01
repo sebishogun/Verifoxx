@@ -102,8 +102,8 @@ func TestFabricatedCitationFixtureIsRejected(t *testing.T) {
 	}
 }
 
-func TestAssignmentCorpusMeasurements(t *testing.T) {
-	_, proposal, _ := assignmentReview(t)
+func TestBaselineCorpusMeasurements(t *testing.T) {
+	_, proposal, _ := baselineReview(t)
 	var requirements, restrictions, ambiguities int
 	for _, kind := range proposal.ItemKinds {
 		switch kind {
@@ -121,7 +121,7 @@ func TestAssignmentCorpusMeasurements(t *testing.T) {
 }
 
 func TestMalformedDraftErrorDoesNotContainSource(t *testing.T) {
-	document, proposal, draft := assignmentReview(t)
+	document, proposal, draft := baselineReview(t)
 	draft.PolicySource = []byte(`{"secret":"protected payload"`)
 	signer, verifier := approvalKeys(t)
 	var reviewer Reviewer

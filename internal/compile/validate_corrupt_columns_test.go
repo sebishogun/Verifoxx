@@ -180,7 +180,7 @@ func TestValidateCorruptColumnsNoPanic(t *testing.T) {
 // TestValidateCorruptNotChildrenNoPanic supplies the one real NotChildren
 // truncation absent from the canonical fixture, whose NotChildren column is
 // empty. buildMinimal contains one Not node, so cutting its child column from
-// one row to zero exercises the shortened-payload path.
+// one row to zero drives the shortened-payload path.
 func TestValidateCorruptNotChildrenNoPanic(t *testing.T) {
 	baseline, fields := buildMinimal(t)
 	if len(baseline.NotChildren) != 1 {

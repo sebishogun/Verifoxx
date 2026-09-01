@@ -25,6 +25,7 @@ import (
 	"github.com/sebishogun/nornrune/internal/service"
 	"github.com/sebishogun/nornrune/internal/simdops"
 	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
+	publictelemetry "github.com/sebishogun/nornrune/telemetry"
 )
 
 type serveFailure struct {
@@ -102,51 +103,79 @@ func Serve(ctx context.Context, cfg config.Config) error {
 		pool.Close()
 		return err
 	}
-	metrics, err := observability.NewMetrics(observability.MetricsConfig{
-		QueueDepth:      func() uint64 { return uint64(admission.Stats().Queued) },
-		JournalFailures: func() uint64 { return journal.Stats().Failed },
-		SIMDTier:        simdops.Runtime().Tier, Workers: uint32(cfg.Workers),
+	// The server always maintains the allocation-free counters behind
+	// /metrics; the telemetry flag gates only the OTLP pipeline and tracing.
+	otelEndpoint := ""
+	if cfg.TelemetryEnabled {
+		otelEndpoint = cfg.OTelEndpoint
+	}
+	runtime, err := publictelemetry.New(ctx, publictelemetry.Config{
+		Enabled:          true,
+		Endpoint:         otelEndpoint,
+		ServiceVersion:   buildinfo.Version(),
+		BuildVersion:     buildinfo.Version(),
+		ExportInterval:   cfg.TelemetryExportInterval,
+		TraceSampleRatio: cfg.TraceSampleRatio,
+		ExportQueueSize:  uint32(cfg.TelemetryQueueSize),
+		QueueDepth:       func() uint64 { return uint64(admission.Stats().Queued) },
 	})
 	if err != nil {
 		_ = journal.Close(context.Background())
 		pool.Close()
 		return err
 	}
+	metrics, err := observability.NewMetrics(observability.MetricsConfig{
+		Runtime:         runtime,
+		QueueDepth:      func() uint64 { return uint64(admission.Stats().Queued) },
+		JournalFailures: func() uint64 { return journal.Stats().Failed },
+		SIMDTier:        simdops.Runtime().Tier, Workers: uint32(cfg.Workers),
+	})
+	if err != nil {
+		shutdownTelemetry(runtime)
+		_ = journal.Close(context.Background())
+		pool.Close()
+		return err
+	}
 	engine, err := NewEngine(EngineConfig{
-		Registry: registry, Publisher: publisher, Journal: journal, Metrics: metrics, Health: pool.Ping,
+		Registry: registry, Publisher: publisher, Journal: journal, Metrics: metrics, Telemetry: runtime, Health: pool.Ping,
 		EngineVersion: buildinfo.Version(), AuditCapacity: auditCapacity, AuditMode: cfg.AuditMode, Workers: cfg.Workers,
 		QueueDepth: cfg.QueueDepth, Limits: limits,
 	})
 	if err != nil {
+		shutdownTelemetry(runtime)
 		_ = journal.Close(context.Background())
 		pool.Close()
 		return err
 	}
 	defer func() { _ = engine.Close(context.Background()) }()
 	if _, err := engine.CompilePolicy(ctx, []byte(nornrune.Source())); err != nil {
+		shutdownTelemetry(runtime)
 		_ = journal.Close(context.Background())
 		pool.Close()
 		return fmt.Errorf("server: publish embedded policy: %w", err)
 	}
 
 	httpHandler, err := httpapi.New(engine, admission, metrics, httpapi.Config{
-		MaxBodyBytes: cfg.MaxBodyBytes, RequestTimeout: cfg.RequestTimeout,
+		MaxBodyBytes: cfg.MaxBodyBytes, RequestTimeout: cfg.RequestTimeout, Telemetry: runtime,
 	})
 	if err != nil {
+		shutdownTelemetry(runtime)
 		_ = journal.Close(context.Background())
 		pool.Close()
 		return err
 	}
 	grpcServer, err := grpcapi.New(engine, admission, grpcapi.Config{
-		MaxMessageBytes: int(cfg.MaxBodyBytes), RequestTimeout: cfg.RequestTimeout,
+		MaxMessageBytes: int(cfg.MaxBodyBytes), RequestTimeout: cfg.RequestTimeout, Telemetry: runtime,
 	})
 	if err != nil {
+		shutdownTelemetry(runtime)
 		_ = journal.Close(context.Background())
 		pool.Close()
 		return err
 	}
 	httpListener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddress)
 	if err != nil {
+		shutdownTelemetry(runtime)
 		_ = journal.Close(context.Background())
 		pool.Close()
 		return fmt.Errorf("server: listen HTTP: %w", err)
@@ -154,6 +183,7 @@ func Serve(ctx context.Context, cfg config.Config) error {
 	grpcListener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.GRPCAddress)
 	if err != nil {
 		_ = httpListener.Close()
+		shutdownTelemetry(runtime)
 		_ = journal.Close(context.Background())
 		pool.Close()
 		return fmt.Errorf("server: listen gRPC: %w", err)
@@ -175,6 +205,7 @@ func Serve(ctx context.Context, cfg config.Config) error {
 			pool.Close()
 			return closeErr
 		},
+		FlushTelemetry: runtime.Shutdown,
 	}
 	lifecycleConfig := service.LifecycleConfig{ShutdownTimeout: cfg.ShutdownTimeout}
 	if cfg.AuditMode != persistence.AuditOff {
@@ -185,6 +216,7 @@ func Serve(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		_ = grpcListener.Close()
 		_ = httpListener.Close()
+		shutdownTelemetry(runtime)
 		_ = journal.Close(context.Background())
 		pool.Close()
 		return err
@@ -225,6 +257,14 @@ func Serve(ctx context.Context, cfg config.Config) error {
 		<-lifecycleDone
 		return errors.Join(runErr, shutdownErr)
 	}
+}
+
+// shutdownTelemetry bounds early-error-path telemetry flushes so a hung
+// exporter cannot stall startup failure handling.
+func shutdownTelemetry(runtime *publictelemetry.Runtime) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = runtime.Shutdown(ctx)
 }
 
 func runtimeSecurityLimits(cfg config.Config) (security.Limits, error) {
