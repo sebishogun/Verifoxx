@@ -8,7 +8,9 @@ outside the declared domain.
 ## Proof Boundary
 
 Each referenced field needs a typed dimension containing a Missing option.
-String dimensions must be marked closed. Evidence-dependent policies need at
+Values within one dimension must be distinct; duplicate values are rejected
+as malformed input. String dimensions must be marked closed. Evidence-dependent
+policies need at
 least one explicit evidence-set scenario, including an empty set when absence
 is relevant. The strict domain JSON must also set `evidence_closed: true` to
 declare that those scenarios exhaust the relevant evidence universe. Without
