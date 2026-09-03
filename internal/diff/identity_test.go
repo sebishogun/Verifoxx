@@ -2,6 +2,7 @@ package diff
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -91,6 +92,30 @@ func TestSemanticIdentityIgnoresPresentationAndPolicyIdentity(t *testing.T) {
 	changedSpans.OutcomeSourceStarts[0]++
 	if !semanticIdentity(oldProgram, &changedSpans) {
 		t.Fatal("source-span-only changes changed semantic identity")
+	}
+}
+
+func TestSemanticIdentityResolvesProgramLocalSymbolIDs(t *testing.T) {
+	oldSource := tinyPolicySource(tinyPolicySpec{assertOp: "equal", assertValue: true, falseOutcome: "Reject"})
+	newSource := bytes.Replace(oldSource, []byte(`"name":"tiny-oracle"`), []byte(`"name":"request.allowed"`), 1)
+	fields := FieldSchema{Fields: []FieldSpec{{Name: "request.allowed", Kind: FieldKindBoolean, Group: FieldGroupContext}}}
+	var analyzer Analyzer
+	oldProgram, newProgram, err := analyzer.compilePair(oldSource, newSource, fields)
+	if err != nil {
+		t.Fatalf("compile pair: %v", err)
+	}
+	if slices.Equal(oldProgram.Outcomes.Names, newProgram.Outcomes.Names) {
+		t.Fatal("fixture did not change program-local symbol IDs")
+	}
+
+	domain := tinyOracleDomain(false, 3)
+	domain.Fields[0].Closed = false
+	var result Result
+	if err := analyzer.Compare(context.Background(), &result, oldSource, newSource, fields, domain, uniformRiskMatrix(Changed, true), nil); err != nil {
+		t.Fatalf("compare: %v", err)
+	}
+	if result.Outcome != Equivalent || !result.Complete || result.Candidates != 0 {
+		t.Fatalf("result: %+v", result)
 	}
 }
 

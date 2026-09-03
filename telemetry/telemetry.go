@@ -137,6 +137,7 @@ func (runtime *Runtime) Record(delta BatchDelta) error {
 }
 
 func (runtime *Runtime) ObserveEvaluation(
+	ctx context.Context,
 	batch *result.Batch,
 	outcomes internaltelemetry.OutcomeIDs,
 	duration time.Duration,
@@ -147,7 +148,12 @@ func (runtime *Runtime) ObserveEvaluation(
 	if runtime.counters == nil {
 		return nil
 	}
-	return internaltelemetry.ObserveBatch(runtime.counters, batch, outcomes, duration)
+	summary, err := internaltelemetry.ObserveBatch(runtime.counters, batch, outcomes, duration)
+	if err != nil {
+		return err
+	}
+	runtime.annotateEvaluation(ctx, summary)
+	return nil
 }
 
 func (runtime *Runtime) AdmissionStarted(queueWait time.Duration) error {

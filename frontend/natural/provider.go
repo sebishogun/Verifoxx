@@ -24,7 +24,13 @@ type Provider interface {
 // returns dst unchanged.
 func AppendSegments(dst []Segment, document *Document, maxBytes uint32, limits Limits) ([]Segment, error) {
 	base := len(dst)
-	if document == nil || len(document.Source) == 0 || maxBytes < utf8.UTFMax {
+	if document == nil || maxBytes < utf8.UTFMax {
+		return dst, ErrInvalidDocument
+	}
+	if overLimit(len(document.Source), limits.MaxSourceBytes) || overLimit(len(document.PageStarts), limits.MaxPages) {
+		return dst, ErrLimit
+	}
+	if !validPageLayout(document.Source, document.PageStarts) {
 		return dst, ErrInvalidDocument
 	}
 
@@ -40,6 +46,14 @@ func AppendSegments(dst []Segment, document *Document, maxBytes uint32, limits L
 		paragraphStart := cursor
 		paragraphEnd := len(source)
 		for cursor < len(source) {
+			if source[cursor] >= utf8.RuneSelf {
+				_, size := utf8.DecodeRune(source[cursor:])
+				if size == 1 {
+					return dst[:base], ErrInvalidDocument
+				}
+				cursor += size
+				continue
+			}
 			if source[cursor] != '\n' {
 				cursor++
 				continue

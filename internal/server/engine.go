@@ -209,28 +209,28 @@ func (engine *Engine) EvaluateBatch(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	_, lookupSpan := engine.telemetry.Start(ctx, publictelemetry.OperationPolicyLookup)
+	_, lookupSpan := engine.telemetry.Start(ctx, publictelemetry.OperationPolicyLookup, publictelemetry.TransportService)
 	compiled := engine.registry.Active()
 	if request.ExplicitPolicy {
 		var ok bool
 		compiled, ok = engine.registry.Lookup(request.PolicyHash)
 		if !ok {
-			lookupSpan.End()
+			engine.telemetry.Finish(lookupSpan, publictelemetry.SpanStatusNotFound)
 			return nil, service.ErrPolicyNotFound
 		}
 	}
 	if compiled == nil {
-		lookupSpan.End()
+		engine.telemetry.Finish(lookupSpan, publictelemetry.SpanStatusUnavailable)
 		return nil, service.ErrUnavailable
 	}
 	engine.versionMu.RLock()
 	versionID := engine.versions[compiled.ContentHash]
 	engine.versionMu.RUnlock()
 	if versionID <= 0 {
-		lookupSpan.End()
+		engine.telemetry.Finish(lookupSpan, publictelemetry.SpanStatusUnavailable)
 		return nil, service.ErrUnavailable
 	}
-	lookupSpan.End()
+	engine.telemetry.Finish(lookupSpan, publictelemetry.SpanStatusOK)
 
 	worker, err := engine.acquire(ctx)
 	if err != nil {
@@ -270,29 +270,32 @@ func (engine *Engine) EvaluateBatch(
 	}
 	completed := engine.now()
 	if engine.auditMode != persistence.AuditOff {
-		_, auditSpan := engine.telemetry.Start(ctx, publictelemetry.OperationAuditAcknowledgment)
+		_, auditSpan := engine.telemetry.Start(ctx, publictelemetry.OperationAuditAcknowledgment, publictelemetry.TransportService)
 		auditStarted := started.UTC()
 		if err := buildAuditBatch(&worker.audit, auditInput{
 			policyVersionID: versionID, policyHash: compiled.ContentHash, engineVersion: engine.engineVersion,
 			requests: request.Requests, evidence: request.Evidence, results: output,
 			started: auditStarted, completed: auditStarted.Add(nonNegativeElapsed(started, completed)), sequence: engine.sequence.Add(1),
 		}); err != nil {
-			auditSpan.End()
+			engine.telemetry.Finish(auditSpan, publictelemetry.SpanStatusInternal)
 			return nil, fmt.Errorf("%w: materialize audit: %v", service.ErrAuditUnavailable, err)
 		}
 		if err := engine.journal.Submit(ctx, &worker.audit); err != nil {
 			if engine.auditMode == persistence.AuditRequired {
-				auditSpan.End()
+				engine.telemetry.Finish(auditSpan, serviceSpanStatus(err))
 				engine.recordAudit(publictelemetry.AuditRequiredFailure)
 				return nil, fmt.Errorf("%w: persist audit: %v", service.ErrAuditUnavailable, err)
 			}
+			engine.telemetry.Finish(auditSpan, serviceSpanStatus(err))
 			engine.recordAudit(publictelemetry.AuditOptionalDrop)
 		} else if engine.auditMode == persistence.AuditRequired {
 			engine.recordAudit(publictelemetry.AuditPersisted)
+			engine.telemetry.Finish(auditSpan, publictelemetry.SpanStatusOK)
+		} else {
+			engine.telemetry.Finish(auditSpan, publictelemetry.SpanStatusOK)
 		}
-		auditSpan.End()
 	}
-	engine.recordEvaluation(compiled, &worker.results, nonNegativeElapsed(started, engine.now()))
+	engine.recordEvaluation(ctx, compiled, &worker.results, nonNegativeElapsed(started, engine.now()))
 	recorded = true
 	return output, nil
 }
@@ -314,13 +317,33 @@ func (engine *Engine) recordAudit(outcome publictelemetry.AuditOutcome) {
 	_ = engine.telemetry.Record(delta)
 }
 
-func (engine *Engine) recordEvaluation(compiled *program.Program, batch *result.Batch, elapsed time.Duration) {
+func (engine *Engine) recordEvaluation(ctx context.Context, compiled *program.Program, batch *result.Batch, elapsed time.Duration) {
 	if ids, err := engineOutcomeIDs(compiled); err == nil && engine.telemetry != nil {
-		if err := engine.telemetry.ObserveEvaluation(batch, ids, elapsed); err == nil {
+		if err := engine.telemetry.ObserveEvaluation(ctx, batch, ids, elapsed); err == nil {
 			return
 		}
 	}
 	_ = engine.metrics.ObserveBatch(batchObservation(compiled, batch, elapsed))
+}
+
+func serviceSpanStatus(err error) publictelemetry.SpanStatus {
+	switch {
+	case err == nil:
+		return publictelemetry.SpanStatusOK
+	case errors.Is(err, context.Canceled):
+		return publictelemetry.SpanStatusCanceled
+	case errors.Is(err, context.DeadlineExceeded):
+		return publictelemetry.SpanStatusDeadlineExceeded
+	case errors.Is(err, service.ErrInvalidRequest), errors.Is(err, service.ErrInvalidPolicy):
+		return publictelemetry.SpanStatusInvalidArgument
+	case errors.Is(err, service.ErrPolicyNotFound):
+		return publictelemetry.SpanStatusNotFound
+	case errors.Is(err, service.ErrAuditUnavailable), errors.Is(err, service.ErrServiceBusy),
+		errors.Is(err, service.ErrServiceStopping), errors.Is(err, service.ErrUnavailable):
+		return publictelemetry.SpanStatusUnavailable
+	default:
+		return publictelemetry.SpanStatusInternal
+	}
 }
 
 func (engine *Engine) recordEvaluationFailure(rows uint64, elapsed time.Duration) {

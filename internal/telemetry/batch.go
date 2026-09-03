@@ -15,6 +15,13 @@ type OutcomeIDs struct {
 	Escalate schema.OutcomeID
 }
 
+// BatchSummary records the bounded decision and reason classes present in one
+// batch. Bit positions correspond to Decision and Reason values.
+type BatchSummary struct {
+	ReasonMask   uint16
+	DecisionMask uint8
+}
+
 // ObserveBatch validates and folds one completed result batch in a single
 // pass. Validation and counting are fused: the reason-offset walk happens
 // once, and no counter mutates unless the whole batch validates, because the
@@ -24,43 +31,50 @@ func ObserveBatch(
 	batch *result.Batch,
 	outcomes OutcomeIDs,
 	duration time.Duration,
-) error {
+) (BatchSummary, error) {
 	if counters == nil || duration < 0 || !validOutcomeIDs(outcomes) || batch == nil || batch.Rows == 0 ||
 		uint64(batch.Rows) > uint64(^uint(0)>>1) {
-		return ErrInvalidDelta
+		return BatchSummary{}, ErrInvalidDelta
 	}
 	rows := int(batch.Rows)
 	offsets := batch.ReasonOffsets
 	reasons := batch.ReasonIDs
 	if len(batch.OutcomeIDs) != rows || len(offsets) != rows+1 || offsets[0] != 0 ||
 		uint64(offsets[rows]) != uint64(len(reasons)) {
-		return ErrInvalidDelta
+		return BatchSummary{}, ErrInvalidDelta
 	}
 	delta := BatchDelta{Batches: 1, Rows: uint64(batch.Rows), Duration: duration}
+	var summary BatchSummary
 	previous := uint32(0)
 	for row, outcomeID := range batch.OutcomeIDs {
 		end := offsets[row+1]
 		if end < previous || uint64(end) > uint64(len(reasons)) {
-			return ErrInvalidDelta
+			return BatchSummary{}, ErrInvalidDelta
 		}
 		decision, ok := decisionForOutcome(outcomes, outcomeID)
 		if !ok {
-			return ErrInvalidDelta
+			return BatchSummary{}, ErrInvalidDelta
 		}
 		delta.Decisions[decision]++
+		summary.DecisionMask |= 1 << decision
 		if end > previous {
 			for _, reasonID := range reasons[previous:end] {
 				if reasonID < truth.ReasonMissing || reasonID > truth.ReasonConflict {
-					return ErrInvalidDelta
+					return BatchSummary{}, ErrInvalidDelta
 				}
 				if decision == DecisionEscalate {
-					delta.Reasons[Reason(reasonID-truth.ReasonMissing)]++
+					reason := Reason(reasonID - truth.ReasonMissing)
+					delta.Reasons[reason]++
+					summary.ReasonMask |= 1 << reason
 				}
 			}
 		}
 		previous = end
 	}
-	return counters.Add(delta)
+	if err := counters.Add(delta); err != nil {
+		return BatchSummary{}, err
+	}
+	return summary, nil
 }
 
 // validOutcomeIDs accepts absent outcomes as the zero ID but rejects

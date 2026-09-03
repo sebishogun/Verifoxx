@@ -6,6 +6,7 @@ import (
 	"hash"
 	"math"
 	"reflect"
+	"slices"
 
 	"github.com/sebishogun/nornrune/internal/eval"
 	"github.com/sebishogun/nornrune/internal/program"
@@ -104,7 +105,12 @@ func DecodeProgram(src []byte, manifest Manifest) (*program.Program, Metadata, e
 	if err := decodeProgramSections(reflect.ValueOf(decoded).Elem(), src, descriptors, &row); err != nil || row != len(descriptors) {
 		return nil, Metadata{}, errInvalidArtifact
 	}
-	if sha256.Sum256(decoded.InputBytes) != decoded.ContentHash || decoded.ValidateResultTables() != nil ||
+	if sha256.Sum256(decoded.InputBytes) != decoded.ContentHash ||
+		!slices.Equal(decoded.ClauseRemediationIDs, decoded.Resolutions.RemediationIDs) {
+		return nil, Metadata{}, errInvalidArtifact
+	}
+	decoded.Resolutions.RemediationIDs = decoded.ClauseRemediationIDs
+	if decoded.ValidateResultTables() != nil ||
 		!validDecodedSymbols(decoded) || !validDecodedProgram(decoded) {
 		return nil, Metadata{}, errInvalidArtifact
 	}

@@ -102,6 +102,55 @@ func TestAppendSegmentsLimitFailureIsAtomic(t *testing.T) {
 	}
 }
 
+func TestAppendSegmentsRejectsMalformedDocumentsAtomically(t *testing.T) {
+	invalidUTF8AfterParagraph := append([]byte("ok\n\nbad"), 0xff)
+	tests := []struct {
+		name     string
+		document Document
+	}{
+		{name: "missing pages", document: Document{Source: []byte("alpha")}},
+		{name: "nonzero first page", document: Document{Source: []byte("alpha"), PageStarts: []uint32{1}}},
+		{name: "duplicate pages", document: Document{Source: []byte("alpha"), PageStarts: []uint32{0, 0}}},
+		{name: "page at end", document: Document{Source: []byte("alpha"), PageStarts: []uint32{0, 5}}},
+		{name: "page inside rune", document: Document{Source: []byte("éx"), PageStarts: []uint32{0, 1}}},
+		{name: "invalid utf8", document: Document{Source: []byte{'a', 0xff}, PageStarts: []uint32{0}}},
+		{name: "invalid utf8 after paragraph", document: Document{Source: invalidUTF8AfterParagraph, PageStarts: []uint32{0}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dst := []Segment{{Span: Span{Start: 9, End: 10}}}
+			want := append([]Segment(nil), dst...)
+			got, err := AppendSegments(dst, &test.document, 16, DefaultLimits())
+			if !errors.Is(err, ErrInvalidDocument) {
+				t.Fatalf("AppendSegments() error = %v, want ErrInvalidDocument", err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("destination changed on error: got %#v, want %#v", got, want)
+			}
+		})
+	}
+}
+
+func TestAppendSegmentsEnforcesDocumentLimits(t *testing.T) {
+	document := &Document{Source: []byte("alpha"), PageStarts: []uint32{0, 2}}
+	limits := DefaultLimits()
+	limits.MaxSourceBytes = uint32(len(document.Source))
+	limits.MaxPages = uint32(len(document.PageStarts))
+	if _, err := AppendSegments(nil, document, 16, limits); err != nil {
+		t.Fatalf("AppendSegments() at exact limits: %v", err)
+	}
+	for _, mutate := range []func(*Limits){
+		func(value *Limits) { value.MaxSourceBytes-- },
+		func(value *Limits) { value.MaxPages-- },
+	} {
+		bounded := limits
+		mutate(&bounded)
+		if _, err := AppendSegments(nil, document, 16, bounded); !errors.Is(err, ErrLimit) {
+			t.Fatalf("AppendSegments() error = %v, want ErrLimit", err)
+		}
+	}
+}
+
 func TestFixtureProviderIsDeterministic(t *testing.T) {
 	document, err := NewDocument([]byte("R1 must remain local."), []uint32{0}, DefaultLimits())
 	if err != nil {

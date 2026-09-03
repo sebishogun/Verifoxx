@@ -18,7 +18,7 @@ func BenchmarkObserveBatch(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		if err := ObserveBatch(&counters, &batch, ids, time.Millisecond); err != nil {
+		if _, err := ObserveBatch(&counters, &batch, ids, time.Millisecond); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -33,6 +33,24 @@ func TestCompilerCompilesRLSAtomically(t *testing.T) {
 	}
 }
 
+func TestCompilerCompilesPublicRoleRegardlessOfPosition(t *testing.T) {
+	schema := testRLSSchema(t)
+	for _, source := range []string{
+		`CREATE POLICY p ON records FOR SELECT TO PUBLIC, analyst USING (enabled);`,
+		`CREATE POLICY p ON records FOR SELECT TO analyst, PUBLIC USING (enabled);`,
+		`CREATE POLICY p ON records FOR SELECT TO analyst, PUBLIC, auditor USING (enabled);`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			var compiler Compiler
+			var destination program.Program
+			diagnostics, err := compiler.CompileRLS(&destination, []byte(source), schema, public.DefaultLimits())
+			if err != nil || len(diagnostics) != 0 || len(destination.Opcodes) == 0 {
+				t.Fatalf("CompileRLS() = destination %#v diagnostics %#v error %v", destination, diagnostics, err)
+			}
+		})
+	}
+}
+
 func TestCompilerRejectsInvalidReceiverOrDestination(t *testing.T) {
 	schema := testRLSSchema(t)
 	source := []byte(`CREATE POLICY p ON records;`)

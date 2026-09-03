@@ -74,9 +74,12 @@ Labels have fixed cardinality: `outcome` is one of the four fixed decisions,
 fixed enums, and `tier` is the runtime SIMD tier. No other label exists.
 Telemetry APIs accept no request ID, evidence value, policy name or hash,
 policy source, user, URL, database credentials, or error string; those values
-are not representable in the telemetry types. Span attributes carry only the
-fixed operation name. If a value of that shape ever needs to be recorded, it
-must become a new fixed enum first.
+are not representable in the telemetry types. Span attributes carry only fixed
+operation, transport (`http`, `grpc`, or `service`), terminal status, decision,
+and reason enums. Evaluation batches use `mixed` when they contain more than
+one decision and `multiple` when they contain more than one escalation reason.
+If another value ever needs to be recorded, it must become a new fixed enum
+first.
 
 ## Modes
 
@@ -107,10 +110,12 @@ acknowledgment, and response encoding. HTTP adapters extract and inject W3C
 trace context (`traceparent`/`tracestate`) headers; the gRPC adapter uses an
 OpenTelemetry stats handler with the same propagator. Sampling is
 `ParentBased(TraceIDRatioBased)` with the configured ratio. No row-level or
-node-level spans exist. Span status descriptions carry only the fixed gRPC or
-HTTP status message constants this codebase emits; tests scan exported span
-attributes and status descriptions for protected values and fail on any
-match.
+node-level spans exist. Span durations come from the native start and end
+timestamps rather than a duplicate attribute. Terminal status descriptions use
+only `invalid_argument`, `not_found`, `resource_exhausted`, `canceled`,
+`deadline_exceeded`, `unavailable`, or `internal`; successful spans have the
+fixed `ok` attribute and an empty description. Tests assert exact custom-span
+attributes and scan attributes and status descriptions for protected values.
 
 ## Backpressure and shutdown
 

@@ -145,19 +145,12 @@ type Document struct {
 
 // NewDocument validates and owns one page-addressable UTF-8 document.
 func NewDocument(source []byte, pageStarts []uint32, limits Limits) (*Document, error) {
-	if len(source) == 0 || !utf8.Valid(source) || len(pageStarts) == 0 || pageStarts[0] != 0 {
+	if !utf8.Valid(source) || !validPageLayout(source, pageStarts) {
 		return nil, ErrInvalidDocument
 	}
 	if overLimit(len(source), limits.MaxSourceBytes) || overLimit(len(pageStarts), limits.MaxPages) {
 		return nil, ErrLimit
 	}
-	for row := 1; row < len(pageStarts); row++ {
-		if pageStarts[row] <= pageStarts[row-1] || uint64(pageStarts[row]) >= uint64(len(source)) ||
-			!utf8Boundary(source, pageStarts[row]) {
-			return nil, ErrInvalidDocument
-		}
-	}
-
 	document := &Document{
 		Source:     append([]byte(nil), source...),
 		PageStarts: append([]uint32(nil), pageStarts...),
@@ -172,4 +165,17 @@ func overLimit(length int, limit uint32) bool {
 
 func utf8Boundary(source []byte, offset uint32) bool {
 	return int(offset) == len(source) || utf8.RuneStart(source[offset])
+}
+
+func validPageLayout(source []byte, pageStarts []uint32) bool {
+	if len(source) == 0 || len(pageStarts) == 0 || pageStarts[0] != 0 {
+		return false
+	}
+	for row := 1; row < len(pageStarts); row++ {
+		if pageStarts[row] <= pageStarts[row-1] || uint64(pageStarts[row]) >= uint64(len(source)) ||
+			!utf8Boundary(source, pageStarts[row]) {
+			return false
+		}
+	}
+	return true
 }

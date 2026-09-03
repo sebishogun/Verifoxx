@@ -366,21 +366,27 @@ func composeRLS(parser *expressionParser, result *RLS) public.NodeID {
 }
 
 func composeRLSRole(parser *expressionParser, result *RLS, row int, roleField public.FieldID, sourceSpan public.Span) public.NodeID {
-	start := result.RoleStarts[row]
-	count := uint32(result.RoleCounts[row])
-	roots := make([]public.NodeID, 0, count)
-	for offset := uint32(0); offset < count; offset++ {
-		roleRow := start + offset
-		if uint64(roleRow) >= uint64(len(result.RolePublic)) {
-			parser.fail(public.CodeInvalidPolicy, sourceSpan)
-			return 0
-		}
-		nameStart := result.RoleNameStarts[roleRow]
-		nameEnd := nameStart + result.RoleNameLengths[roleRow]
-		name := result.RoleBytes[nameStart:nameEnd]
+	start := uint64(result.RoleStarts[row])
+	count := uint64(result.RoleCounts[row])
+	end := start + count
+	if end > uint64(len(result.RolePublic)) || end > uint64(len(result.RoleNameStarts)) || end > uint64(len(result.RoleNameLengths)) {
+		parser.fail(public.CodeInvalidPolicy, sourceSpan)
+		return 0
+	}
+	for roleRow := start; roleRow < end; roleRow++ {
 		if result.RolePublic[roleRow] != 0 {
 			return addRLSBoolean(parser, true, sourceSpan)
 		}
+	}
+	roots := make([]public.NodeID, 0, count)
+	for roleRow := start; roleRow < end; roleRow++ {
+		nameStart := uint64(result.RoleNameStarts[roleRow])
+		nameEnd := nameStart + uint64(result.RoleNameLengths[roleRow])
+		if nameEnd > uint64(len(result.RoleBytes)) {
+			parser.fail(public.CodeInvalidPolicy, sourceSpan)
+			return 0
+		}
+		name := result.RoleBytes[nameStart:nameEnd]
 		node, err := parser.builder.AddCompare(roleField, public.CompareOpEqual, public.StringLiteral(name), sourceSpan)
 		roots = append(roots, parser.completedNode(node, err, sourceSpan))
 	}

@@ -9,6 +9,7 @@ import (
 	nornrunev1 "github.com/sebishogun/nornrune/api/gen/nornrune/v1"
 	coreservice "github.com/sebishogun/nornrune/internal/service"
 	publictelemetry "github.com/sebishogun/nornrune/telemetry"
+	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -48,8 +49,21 @@ func TestGRPCPropagatesFixedRedactedTraceSpans(t *testing.T) {
 		"nornrune.evaluation": false, "nornrune.response_encode": false,
 	}
 	for _, span := range exporter.GetSpans() {
-		if _, ok := want[span.Name]; ok {
+		_, custom := want[span.Name]
+		if custom {
 			want[span.Name] = true
+			operation, _ := strings.CutPrefix(span.Name, "nornrune.")
+			attributes := make(map[string]string, len(span.Attributes))
+			for _, value := range span.Attributes {
+				attributes[string(value.Key)] = value.Value.AsString()
+			}
+			if len(attributes) != 3 || attributes["nornrune.operation"] != operation ||
+				attributes["nornrune.transport"] != "grpc" || attributes["nornrune.status"] != "ok" {
+				t.Fatalf("span %q attributes = %v", span.Name, attributes)
+			}
+			if span.Status.Code != otelcodes.Ok || span.Status.Description != "" {
+				t.Fatalf("span %q status = %+v", span.Name, span.Status)
+			}
 		}
 		for _, attribute := range span.Attributes {
 			value := attribute.Value.Emit()
@@ -97,13 +111,29 @@ func TestGRPCRedactsBackendStatusFromClientAndTrace(t *testing.T) {
 		t.Fatal(err)
 	}
 	foundFixedStatus := false
+	foundEvaluationStatus := false
 	for _, span := range exporter.GetSpans() {
 		if strings.Contains(span.Status.Description, protected) {
 			t.Fatalf("span %q status contains backend detail %q", span.Name, protected)
 		}
 		foundFixedStatus = foundFixedStatus || span.Status.Description == "request failed"
+		if span.Name == "nornrune.evaluation" {
+			attributes := make(map[string]string, len(span.Attributes))
+			for _, value := range span.Attributes {
+				attributes[string(value.Key)] = value.Value.AsString()
+			}
+			if len(attributes) != 3 || attributes["nornrune.operation"] != "evaluation" ||
+				attributes["nornrune.transport"] != "grpc" || attributes["nornrune.status"] != "internal" ||
+				span.Status.Code != otelcodes.Error || span.Status.Description != "internal" {
+				t.Fatalf("evaluation failure span = attributes:%v status:%+v", attributes, span.Status)
+			}
+			foundEvaluationStatus = true
+		}
 	}
 	if !foundFixedStatus {
 		t.Fatal("no exported span carried the fixed error status")
+	}
+	if !foundEvaluationStatus {
+		t.Fatal("no evaluation span carried the bounded internal status")
 	}
 }

@@ -20,8 +20,12 @@ func TestObserveBatchAggregatesDecisionsAndEscalationReasons(t *testing.T) {
 		ReasonEvidenceStates: make([]schema.EvidenceStateID, 3),
 	}
 	var counters Counters
-	if err := ObserveBatch(&counters, &batch, ids, 2*time.Millisecond); err != nil {
+	summary, err := ObserveBatch(&counters, &batch, ids, 2*time.Millisecond)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if summary.DecisionMask != 0b1111 || summary.ReasonMask != 1<<ReasonMissing|1<<ReasonStale|1<<ReasonConflict {
+		t.Fatalf("batch summary = %+v", summary)
 	}
 	got := counters.Snapshot()
 	if got.Batches != 1 || got.Rows != 5 || got.Decisions != [DecisionCount]uint64{1, 1, 1, 2} {
@@ -48,7 +52,7 @@ func TestObserveBatchRejectsMalformedInputWithoutMutation(t *testing.T) {
 	}
 	for _, batch := range tests {
 		var counters Counters
-		if err := ObserveBatch(&counters, &batch, ids, time.Millisecond); err == nil {
+		if summary, err := ObserveBatch(&counters, &batch, ids, time.Millisecond); err == nil || summary != (BatchSummary{}) {
 			t.Fatalf("ObserveBatch(%+v) error = nil", batch)
 		}
 		if got := counters.Snapshot(); got != (Snapshot{}) {
@@ -58,7 +62,7 @@ func TestObserveBatchRejectsMalformedInputWithoutMutation(t *testing.T) {
 	var counters Counters
 	invalidIDs := ids
 	invalidIDs.Escalate = invalidIDs.Approve
-	if err := ObserveBatch(&counters, &valid, invalidIDs, time.Millisecond); err == nil {
+	if _, err := ObserveBatch(&counters, &valid, invalidIDs, time.Millisecond); err == nil {
 		t.Fatal("ObserveBatch duplicate outcome IDs error = nil")
 	}
 }
@@ -71,7 +75,7 @@ func TestObserveBatchHandlesMaximumConfiguredRows(t *testing.T) {
 		batch.OutcomeIDs[row] = ids.Approve
 	}
 	var counters Counters
-	if err := ObserveBatch(&counters, &batch, ids, time.Second); err != nil {
+	if _, err := ObserveBatch(&counters, &batch, ids, time.Second); err != nil {
 		t.Fatal(err)
 	}
 	got := counters.Snapshot()
@@ -85,7 +89,7 @@ func TestObserveBatchAcceptsPoliciesWithAbsentOutcomes(t *testing.T) {
 	ids.Escalate = 0
 	batch := result.Batch{Rows: 2, OutcomeIDs: []schema.OutcomeID{ids.Approve, ids.Reject}, ReasonOffsets: []uint32{0, 0, 0}}
 	var counters Counters
-	if err := ObserveBatch(&counters, &batch, ids, time.Millisecond); err != nil {
+	if _, err := ObserveBatch(&counters, &batch, ids, time.Millisecond); err != nil {
 		t.Fatalf("ObserveBatch() with absent escalate outcome error = %v", err)
 	}
 	got := counters.Snapshot()

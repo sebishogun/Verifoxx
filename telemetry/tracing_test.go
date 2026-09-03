@@ -8,7 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/schema"
 	internaltelemetry "github.com/sebishogun/nornrune/internal/telemetry"
+	"github.com/sebishogun/nornrune/internal/truth"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -43,11 +47,18 @@ func TestRuntimeStartsFixedRedactedChildSpan(t *testing.T) {
 		"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
 	}
 	parent := runtime.Extract(context.Background(), carrier)
-	ctx, span := runtime.Start(parent, OperationEvaluation)
+	ctx, span := runtime.Start(parent, OperationEvaluation, TransportHTTP)
 	if !span.SpanContext().IsValid() {
 		t.Fatal("Start returned invalid span context")
 	}
-	span.End()
+	batch := result.Batch{
+		Rows: 2, OutcomeIDs: []schema.OutcomeID{1, 4}, ReasonOffsets: []uint32{0, 0, 2},
+		ReasonIDs: []schema.ReasonID{truth.ReasonMissing, truth.ReasonConflict},
+	}
+	if err := runtime.ObserveEvaluation(ctx, &batch, internaltelemetry.OutcomeIDs{Approve: 1, Reject: 2, Revise: 3, Escalate: 4}, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	runtime.Finish(span, SpanStatusUnavailable)
 	if err := runtime.ForceFlush(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -59,8 +70,20 @@ func TestRuntimeStartsFixedRedactedChildSpan(t *testing.T) {
 	if got.Name != "nornrune.evaluation" || got.Parent.SpanID().String() != "00f067aa0ba902b7" {
 		t.Fatalf("span = name:%q parent:%s", got.Name, got.Parent.SpanID())
 	}
-	if len(got.Attributes) != 1 || string(got.Attributes[0].Key) != "nornrune.operation" || got.Attributes[0].Value.AsString() != "evaluation" {
+	wantAttributes := map[string]string{
+		"nornrune.operation": "evaluation", "nornrune.transport": "http", "nornrune.status": "unavailable",
+		"nornrune.decision": "mixed", "nornrune.reason": "multiple",
+	}
+	if len(got.Attributes) != len(wantAttributes) {
 		t.Fatalf("attributes = %v", got.Attributes)
+	}
+	for _, value := range got.Attributes {
+		if wantAttributes[string(value.Key)] != value.Value.AsString() {
+			t.Fatalf("attribute %s = %q, want %q", value.Key, value.Value.AsString(), wantAttributes[string(value.Key)])
+		}
+	}
+	if got.Status.Code != codes.Error || got.Status.Description != "unavailable" || got.EndTime.Before(got.StartTime) {
+		t.Fatalf("span status/duration = %+v %s", got.Status, got.EndTime.Sub(got.StartTime))
 	}
 	if traceID := span.SpanContext().TraceID(); traceID != got.SpanContext.TraceID() || ctx == nil {
 		t.Fatalf("span context mismatch: %s vs %s", traceID, got.SpanContext.TraceID())
@@ -77,6 +100,16 @@ func TestOperationNamesAreFixed(t *testing.T) {
 			t.Fatalf("OperationName(%d) = (%q, %t), want %q", row, got, ok, expected)
 		}
 	}
+	for row, expected := range []string{"http", "grpc", "service"} {
+		if got, ok := TransportName(Transport(row)); !ok || got != expected {
+			t.Fatalf("TransportName(%d) = (%q, %t), want %q", row, got, ok, expected)
+		}
+	}
+	for row, expected := range []string{"ok", "invalid_argument", "not_found", "resource_exhausted", "canceled", "deadline_exceeded", "unavailable", "internal"} {
+		if got, ok := SpanStatusName(SpanStatus(row)); !ok || got != expected {
+			t.Fatalf("SpanStatusName(%d) = (%q, %t), want %q", row, got, ok, expected)
+		}
+	}
 }
 
 func TestTraceQueueOverflowIncrementsExportDrops(t *testing.T) {
@@ -90,8 +123,8 @@ func TestTraceQueueOverflowIncrementsExportDrops(t *testing.T) {
 		t.Fatal(err)
 	}
 	endSpan := func() {
-		_, span := runtime.Start(context.Background(), OperationEvaluation)
-		span.End()
+		_, span := runtime.Start(context.Background(), OperationEvaluation, TransportService)
+		runtime.Finish(span, SpanStatusOK)
 	}
 	endSpan()
 	select {
@@ -194,8 +227,8 @@ func TestRuntimeShutdownContinuesAfterCallerCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, span := runtime.Start(context.Background(), OperationEvaluation)
-	span.End()
+	_, span := runtime.Start(context.Background(), OperationEvaluation, TransportService)
+	runtime.Finish(span, SpanStatusOK)
 	requireSignal(t, exporter.exportStarted, "span export did not start")
 
 	canceled, cancel := context.WithCancel(context.Background())

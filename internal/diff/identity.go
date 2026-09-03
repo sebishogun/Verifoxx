@@ -25,9 +25,6 @@ func semanticIdentity(oldProgram, newProgram *program.Program) bool {
 		slices.Equal(oldProgram.OperandCounts, newProgram.OperandCounts) &&
 		slices.Equal(oldProgram.EvidenceKinds, newProgram.EvidenceKinds) &&
 		slices.Equal(oldProgram.EvidenceStates, newProgram.EvidenceStates) &&
-		slices.Equal(oldProgram.EvidenceSubjects, newProgram.EvidenceSubjects) &&
-		slices.Equal(oldProgram.EvidenceScopes, newProgram.EvidenceScopes) &&
-		slices.Equal(oldProgram.EvidenceTimings, newProgram.EvidenceTimings) &&
 		slices.Equal(oldProgram.RootFlags, newProgram.RootFlags) &&
 		slices.Equal(oldProgram.TruthSlots, newProgram.TruthSlots) &&
 		slices.Equal(oldProgram.ReasonSlots, newProgram.ReasonSlots) &&
@@ -50,11 +47,8 @@ func semanticIdentity(oldProgram, newProgram *program.Program) bool {
 		slices.Equal(oldProgram.AssumptionTemplateIDs, newProgram.AssumptionTemplateIDs) &&
 		slices.Equal(oldProgram.EvidenceIssueNodeIDs, newProgram.EvidenceIssueNodeIDs) &&
 		slices.Equal(oldProgram.EvidenceIssueTemplateIDs, newProgram.EvidenceIssueTemplateIDs) &&
-		slices.Equal(oldProgram.FieldNames, newProgram.FieldNames) &&
 		slices.Equal(oldProgram.FieldKinds, newProgram.FieldKinds) &&
 		slices.Equal(oldProgram.FieldGroups, newProgram.FieldGroups) &&
-		slices.Equal(oldProgram.EvidenceKindNames, newProgram.EvidenceKindNames) &&
-		slices.Equal(oldProgram.EvidenceStateNames, newProgram.EvidenceStateNames) &&
 		slices.Equal(oldProgram.RequirementIDs, newProgram.RequirementIDs) &&
 		slices.Equal(oldProgram.RequirementRoots, newProgram.RequirementRoots) &&
 		slices.Equal(oldProgram.RequirementSourceNodeIDs, newProgram.RequirementSourceNodeIDs) &&
@@ -73,7 +67,6 @@ func semanticIdentity(oldProgram, newProgram *program.Program) bool {
 		slices.Equal(oldProgram.ClauseRemediationStarts, newProgram.ClauseRemediationStarts) &&
 		slices.Equal(oldProgram.ClauseRemediationCounts, newProgram.ClauseRemediationCounts) &&
 		slices.Equal(oldProgram.ClauseRemediationIDs, newProgram.ClauseRemediationIDs) &&
-		slices.Equal(oldOutcomes.Names, newOutcomes.Names) &&
 		slices.Equal(oldOutcomes.Precedence, newOutcomes.Precedence) &&
 		slices.Equal(oldOutcomes.Terminal, newOutcomes.Terminal) &&
 		slices.Equal(oldRemediations.Kinds, newRemediations.Kinds) &&

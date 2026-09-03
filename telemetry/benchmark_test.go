@@ -73,8 +73,8 @@ func benchmarkSpan(b *testing.B, ratio float64) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		_, span := runtime.Start(ctx, OperationEvaluation)
-		span.End()
+		_, span := runtime.Start(ctx, OperationEvaluation, TransportService)
+		runtime.Finish(span, SpanStatusOK)
 	}
 }
 
@@ -97,7 +97,7 @@ func BenchmarkTelemetryNoopSpan(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		_, span := runtime.Start(ctx, OperationEvaluation)
-		span.End()
+		_, span := runtime.Start(ctx, OperationEvaluation, TransportService)
+		runtime.Finish(span, SpanStatusOK)
 	}
 }

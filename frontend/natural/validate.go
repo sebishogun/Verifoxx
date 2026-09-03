@@ -263,16 +263,7 @@ func exceedsProposalLimits(document *Document, proposal *Proposal, limits Limits
 }
 
 func validDocument(document *Document) bool {
-	if len(document.Source) == 0 || !utf8.Valid(document.Source) || len(document.PageStarts) == 0 || document.PageStarts[0] != 0 {
-		return false
-	}
-	for row := 1; row < len(document.PageStarts); row++ {
-		if document.PageStarts[row] <= document.PageStarts[row-1] || uint64(document.PageStarts[row]) >= uint64(len(document.Source)) ||
-			!utf8Boundary(document.Source, document.PageStarts[row]) {
-			return false
-		}
-	}
-	return true
+	return document != nil && utf8.Valid(document.Source) && validPageLayout(document.Source, document.PageStarts)
 }
 
 func validRange(start, count uint32, length int) bool {

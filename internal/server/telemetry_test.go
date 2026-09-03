@@ -18,6 +18,7 @@ import (
 	"github.com/sebishogun/nornrune/internal/service"
 	nornrune "github.com/sebishogun/nornrune/policies/nornrune"
 	publictelemetry "github.com/sebishogun/nornrune/telemetry"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
@@ -190,6 +191,21 @@ func TestEngineRecordsTelemetryForReloadsEvaluationAndAudit(t *testing.T) {
 	spans := map[string]bool{}
 	for _, span := range exporter.GetSpans() {
 		spans[span.Name] = true
+		operation, ok := map[string]string{
+			"nornrune.policy_lookup": "policy_lookup", "nornrune.audit_acknowledgment": "audit_acknowledgment",
+		}[span.Name]
+		if !ok {
+			continue
+		}
+		attributes := make(map[string]string, len(span.Attributes))
+		for _, value := range span.Attributes {
+			attributes[string(value.Key)] = value.Value.AsString()
+		}
+		if len(attributes) != 3 || attributes["nornrune.operation"] != operation ||
+			attributes["nornrune.transport"] != "service" || attributes["nornrune.status"] != "ok" ||
+			span.Status.Code != codes.Ok || span.Status.Description != "" {
+			t.Fatalf("engine span %q = attributes:%v status:%+v", span.Name, attributes, span.Status)
+		}
 	}
 	for _, name := range []string{"nornrune.policy_lookup", "nornrune.audit_acknowledgment"} {
 		if !spans[name] {

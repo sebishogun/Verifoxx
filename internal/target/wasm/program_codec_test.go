@@ -2,6 +2,7 @@ package wasm
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"reflect"
 	"testing"
@@ -45,12 +46,59 @@ func TestProgramArtifactRoundTripOwnsEveryCanonicalColumn(t *testing.T) {
 	if !reflect.DeepEqual(&want, decoded) {
 		t.Fatal("decoded Program differs from frozen source")
 	}
+	if len(decoded.ClauseRemediationIDs) != 0 && &decoded.ClauseRemediationIDs[0] != &decoded.Resolutions.RemediationIDs[0] {
+		t.Fatal("decoded resolution table does not borrow canonical remediation edges")
+	}
 
 	decoded.InputBytes[0] ^= 0xff
 	decoded.SymbolBytes[0] ^= 0xff
 	decoded.Opcodes[0]++
 	if compiled.InputBytes[0] == decoded.InputBytes[0] || compiled.SymbolBytes[0] == decoded.SymbolBytes[0] || compiled.Opcodes[0] == decoded.Opcodes[0] {
 		t.Fatal("decoded Program borrowed source Program storage")
+	}
+}
+
+func TestProgramArtifactRejectsDivergentRemediationEdges(t *testing.T) {
+	compiled := compileWASMTestProgram(t)
+	if len(compiled.Remediations.Kinds) != 1 || len(compiled.ClauseRemediationIDs) == 0 {
+		t.Fatal("test policy does not contain one referenced remediation")
+	}
+	compiled.Remediations.Kinds = append(compiled.Remediations.Kinds, compiled.Remediations.Kinds[0])
+	compiled.Remediations.Fields = append(compiled.Remediations.Fields, compiled.Remediations.Fields[0])
+	compiled.Remediations.Values = append(compiled.Remediations.Values, compiled.Remediations.Values[0])
+	compiled.Remediations.EvidenceKinds = append(compiled.Remediations.EvidenceKinds, compiled.Remediations.EvidenceKinds[0])
+	compiled.RemediationSourceStarts = append(compiled.RemediationSourceStarts, compiled.RemediationSourceStarts[0])
+	compiled.RemediationSourceEnds = append(compiled.RemediationSourceEnds, compiled.RemediationSourceEnds[0])
+
+	manifest := testManifest()
+	artifact, err := EncodeProgram(nil, compiled, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, descriptors, err := preflightEnvelope(artifact, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const clauseRemediationIDsSection = 83
+	found := false
+	for _, descriptor := range descriptors {
+		if descriptor.id != clauseRemediationIDsSection {
+			continue
+		}
+		if descriptor.width != 4 || descriptor.count == 0 {
+			t.Fatalf("remediation descriptor = %+v", descriptor)
+		}
+		binary.LittleEndian.PutUint32(artifact[descriptor.offset:descriptor.offset+4], 2)
+		found = true
+		break
+	}
+	if !found {
+		t.Fatal("canonical remediation edge section not found")
+	}
+	rehashArtifact(artifact)
+	decoded, metadata, err := DecodeProgram(artifact, manifest)
+	if decoded != nil || metadata != (Metadata{}) || !errors.Is(err, errInvalidArtifact) {
+		t.Fatalf("DecodeProgram() = (%p,%+v,%v), want invalid artifact", decoded, metadata, err)
 	}
 }
 
