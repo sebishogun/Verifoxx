@@ -2,6 +2,7 @@ package diff
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -94,6 +95,10 @@ func (domain Domain) validate(computeCardinality bool) (uint64, bool, error) {
 	}
 	cardinality := uint64(1)
 	complete := true
+	// orderScratch keeps small domains allocation-free; larger value lists
+	// spill to one bounded heap slice reused across the remaining fields.
+	var orderScratch [16]uint32
+	order := orderScratch[:0]
 	for row := range domain.Fields {
 		field := &domain.Fields[row]
 		if !validDomainName(field.Name) || !field.Kind.Valid() || len(field.Values) == 0 {
@@ -105,15 +110,25 @@ func (domain Domain) validate(computeCardinality bool) (uint64, bool, error) {
 			}
 		}
 		missing := false
+		order = order[:0]
 		for valueRow := range field.Values {
 			value := field.Values[valueRow]
 			if value.Kind != field.Kind || !validDomainValue(value) {
 				return 0, false, ErrInvalidDomain
 			}
+			order = append(order, uint32(valueRow))
 			missing = missing || value.State == ValueMissing
 		}
 		if !missing {
 			return 0, false, ErrInvalidDomain
+		}
+		slices.SortFunc(order, func(left, right uint32) int {
+			return compareDomainValue(field.Values[left], field.Values[right])
+		})
+		for index := 1; index < len(order); index++ {
+			if compareDomainValue(field.Values[order[index]], field.Values[order[index-1]]) == 0 {
+				return 0, false, ErrInvalidDomain
+			}
 		}
 		if computeCardinality {
 			var ok bool
@@ -179,6 +194,33 @@ func validEvidence(record Evidence) bool {
 	return record.Kind != "" && record.State != "" &&
 		utf8.ValidString(record.Kind) && utf8.ValidString(record.State) &&
 		utf8.ValidString(record.Subject) && utf8.ValidString(record.Scope) && utf8.ValidString(record.Timing)
+}
+
+// compareDomainValue totally orders values on the equality key used for
+// duplicate rejection; Kind equality is already enforced per field.
+func compareDomainValue(left, right Value) int {
+	if left.State != right.State {
+		if left.State < right.State {
+			return -1
+		}
+		return 1
+	}
+	if comparison := strings.Compare(left.String, right.String); comparison != 0 {
+		return comparison
+	}
+	if left.Integer != right.Integer {
+		if left.Integer < right.Integer {
+			return -1
+		}
+		return 1
+	}
+	if left.Boolean != right.Boolean {
+		if !left.Boolean {
+			return -1
+		}
+		return 1
+	}
+	return 0
 }
 
 // CloneDomain returns a deep owned domain copy.

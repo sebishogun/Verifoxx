@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -212,14 +213,14 @@ func TestSearchPlanRejectsCardinalityBeyondRequestIDSpace(t *testing.T) {
 		if domain.Fields[row].Name == "action.output" {
 			domain.Fields[row].Values = make([]Value, 65536)
 			for option := range domain.Fields[row].Values {
-				domain.Fields[row].Values[option] = Value{Kind: FieldKindString, State: ValuePresent, String: "value"}
+				domain.Fields[row].Values[option] = Value{Kind: FieldKindString, State: ValuePresent, String: "value" + strconv.Itoa(option)}
 			}
 			domain.Fields[row].Values[0] = Value{Kind: FieldKindString, State: ValueMissing}
 		}
 		if domain.Fields[row].Name == "action.type" {
 			domain.Fields[row].Values = make([]Value, 4097)
 			for option := range domain.Fields[row].Values {
-				domain.Fields[row].Values[option] = Value{Kind: FieldKindString, State: ValuePresent, String: "value"}
+				domain.Fields[row].Values[option] = Value{Kind: FieldKindString, State: ValuePresent, String: "value" + strconv.Itoa(option)}
 			}
 			domain.Fields[row].Values[0] = Value{Kind: FieldKindString, State: ValueMissing}
 		}

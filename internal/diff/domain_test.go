@@ -123,6 +123,13 @@ func TestDomainRejectsMalformedShapes(t *testing.T) {
 		{name: "missing absent", mutate: func(domain *Domain) { domain.Fields[0].Values = domain.Fields[0].Values[1:] }},
 		{name: "value kind mismatch", mutate: func(domain *Domain) { domain.Fields[0].Values[1].Kind = FieldKindInteger }},
 		{name: "duplicate", mutate: func(domain *Domain) { domain.Fields = append(domain.Fields, domain.Fields[0]) }},
+		{name: "duplicate present value", mutate: func(domain *Domain) {
+			domain.Fields[0].Values = append(domain.Fields[0].Values, domain.Fields[0].Values[1])
+		}},
+		{name: "duplicate missing value", mutate: func(domain *Domain) {
+			missing := domain.Fields[0].Values[0]
+			domain.Fields[0].Values = append([]Value{missing, missing}, domain.Fields[0].Values[1])
+		}},
 		{name: "invalid evidence", mutate: func(domain *Domain) { domain.EvidenceSets = []EvidenceSet{{Records: []Evidence{{Kind: "approval"}}}} }},
 		{name: "budget below product", mutate: func(domain *Domain) { domain.MaxCandidates = 1 }},
 	}
