@@ -60,31 +60,34 @@ reactor startup, Program load, host copies, warm evaluation, and result-frame
 encoding. Its reusable native runtime control must remain `0 B/op` and
 `0 allocs/op` before cross-runtime overhead is compared.
 
-The [production telemetry](telemetry.md) budget is set from interleaved
+The [production telemetry](telemetry.md) budget is set from six-sample
 same-binary measurements on the documented development machine
 (`internal/telemetry/benchmark_test.go`, `telemetry/benchmark_test.go`,
-`internal/observability/metrics_test.go`, six samples each, 2026-08-31):
+`internal/observability/metrics_test.go`, 2026-09-03):
 
 | Mode | ns/op | B/op | allocs/op |
 | --- | --- | --- | --- |
-| Disabled `Record` (no-op) | ~1.4 | 0 | 0 |
-| Counters `Record` (pre-aggregated 256-row delta) | ~60 | 0 | 0 |
-| Result-batch fold, 256 rows (fused single pass) | ~235–243 (0.93 ns/row) | 0 | 0 |
-| `Snapshot` | ~41 | 0 | 0 |
-| No-op span, counters-only runtime | ~2.1 | 0 | 0 |
-| Sampled span, 10% ratio | ~650–780 | ~670 | 7 |
-| Forced span, 100% ratio | ~1,200–1,400 | ~2,800 | 9 |
-| Prometheus scrape (per scrape, not per request) | ~110,000–130,000 | ~59,000 | 538 |
+| Disabled `Record` (no-op) | ~0.65 | 0 | 0 |
+| Counters `Record` (pre-aggregated 256-row delta) | ~39–40 | 0 | 0 |
+| Result-batch fold, 256 rows (fused single pass) | ~247–257 (~1 ns/row) | 0 | 0 |
+| `Snapshot` | ~25 | 0 | 0 |
+| No-op span, counters-only runtime | ~2.2 | 0 | 0 |
+| Sampled span, 10% ratio | ~380–425 | ~920–965 | 8 |
+| Forced span, 100% ratio | ~890–1,080 | ~4,000–4,250 | 11 |
+| Prometheus scrape (per scrape, not per request) | ~31,500–33,400 | ~59,300 | 538 |
 
 Against the evaluator kernel measured on the same host (scalar 1024-row batch
-~284 ns/row, SIMD ~198 ns/row), the enabled batch fold is below 1% of
-evaluation cost. Spans and scrapes are per-request and per-scrape boundary
+~155–163 ns/row, SIMD ~110–112 ns/row), the enabled batch fold stays below 1%
+of evaluation cost. Spans and scrapes are per-request and per-scrape boundary
 costs and are reported separately from batch paths; in the default
-counters-only mode span requests are no-ops at `0 B/op`. The fused fold
-replaced a two-pass validate-then-count shape measured at ~345 ns in the same
-binary; the batch-path budget remains `0 B/op` and `0 allocs/op`. These are
-same-machine comparisons, not cross-runtime throughput claims. Zero-cost
-*enabled* telemetry is not claimed.
+counters-only mode span requests are no-ops at `0 B/op`. Spans now carry the
+fixed operation, transport, and terminal-status attributes plus decision and
+reason enums on evaluation spans, so sampled and forced spans report more
+bytes and allocations per span than the earlier single-attribute schema. The
+fused fold replaced a two-pass validate-then-count shape measured at ~345 ns
+in the same binary; the batch-path budget remains `0 B/op` and
+`0 allocs/op`. These are same-machine comparisons, not cross-runtime
+throughput claims. Zero-cost *enabled* telemetry is not claimed.
 
 ```bash
 timeout 300s go test -run '^$' -bench 'Benchmark(ObserveBatch|Telemetry|Metrics)' -benchmem -count=6 -timeout 270s ./internal/telemetry ./telemetry ./internal/observability
