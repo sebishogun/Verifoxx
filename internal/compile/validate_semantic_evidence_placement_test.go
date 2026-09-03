@@ -61,6 +61,6 @@ func TestValidateSemanticClauseEvidenceRootRemainsValid(t *testing.T) {
 		t.Fatalf("valid clause evidence diagnostics: %+v", diagnostics)
 	}
 	if fixture.doc.ClauseEvidenceNodeIDs[0] != schema.NodeID(fixture.evidenceA) {
-		t.Fatal("fixture does not exercise a direct clause evidence root")
+		t.Fatal("fixture does not cover a direct clause evidence root")
 	}
 }

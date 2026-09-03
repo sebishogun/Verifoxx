@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "name": "diff-frontend-emission",
+  "version": "1.0.0",
+  "assumptions": [],
+  "evidence_kinds": [],
+  "evidence_states": [],
+  "outcomes": [
+    {"name": "Approve", "precedence": 1, "terminal": true},
+    {"name": "Reject", "precedence": 4, "terminal": true},
+    {"name": "Revise", "precedence": 2, "terminal": false},
+    {"name": "Escalate", "precedence": 3, "terminal": true}
+  ],
+  "requirements": [{
+    "id": "R1",
+    "source": "A present request flag must be enabled.",
+    "applies": {"op": "exists", "field": "request.allowed"},
+    "clauses": [{
+      "assert": {"op": "equal", "field": "request.allowed", "value": true},
+      "evidence": [],
+      "resolution": {
+        "satisfied": {"outcome": "Approve", "explanation": {"rationale": "The request flag is enabled.", "uncertainty": []}},
+        "false": {"outcome": "Reject", "explanation": {"rationale": "The request flag is disabled.", "uncertainty": []}},
+        "missing": {"outcome": "Escalate", "explanation": {"rationale": "The request flag is missing.", "uncertainty": []}},
+        "stale": {"outcome": "Escalate", "explanation": {"rationale": "Required evidence is stale.", "uncertainty": []}},
+        "unclear": {"outcome": "Escalate", "explanation": {"rationale": "Required evidence is unclear.", "uncertainty": []}},
+        "unverifiable": {"outcome": "Escalate", "explanation": {"rationale": "Required evidence is unverifiable.", "uncertainty": []}},
+        "conflict": {"outcome": "Escalate", "explanation": {"rationale": "Required evidence conflicts.", "uncertainty": []}}
+      },
+      "remediations": []
+    }]
+  }]
+}

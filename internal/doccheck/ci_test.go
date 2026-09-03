@@ -92,10 +92,14 @@ func TestFieldAlignmentGateIsPinnedAndSharedWithCI(t *testing.T) {
 		"timeout 240s",
 		"fieldalignment@" + fieldAlignmentVersion,
 		"-test=false",
+		"./cmd/...",
 		"./frontend/...",
 		"./internal/...",
-		"./cmd/...",
+		"./migrations/...",
 		"./policies/...",
+		"./policy/...",
+		"./target/...",
+		"./telemetry/...",
 	} {
 		if !strings.Contains(script, required) {
 			t.Errorf("%s does not contain %q", scriptPath, required)

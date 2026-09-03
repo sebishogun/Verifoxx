@@ -226,7 +226,7 @@ func (compiler *Compiler) validateNodes(policy *public.Policy, fieldRows, litera
 				compiler.addDiagnostic(public.CodeType, uint32(row+1), field, diagnosticSpan)
 			}
 
-		case public.NodeKindDefined:
+		case public.NodeKindDefined, public.NodeKindExists:
 			if op != public.CompareOpInvalid || literal != 0 || childCount != 0 || listCount != 0 || !childrenOK || !listOK {
 				compiler.addDiagnostic(public.CodeInvalidPolicy, uint32(row+1), field, diagnosticSpan)
 			}

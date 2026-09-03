@@ -2,13 +2,15 @@
 
 NornRune is a deterministic, evidence-aware policy compiler and evaluator. The
 JSON, CLI, TUI, HTTP, gRPC, and PostgreSQL packages are adapters around a typed
-core. The core does not branch on the five supplied request IDs and does not
+core. The core does not branch on the baseline request IDs and does not
 query PostgreSQL while evaluating a policy.
 
 ## System Boundary
 
 ```text
 native policy JSON OR explicit CEL/Rego/Cedar source + bindings
+OR bounded SQL expression/PostgreSQL RLS source + schema
+OR approved natural-language draft + provenance-bound token
     |
     v
 bounded cold frontend -> integer-indexed SoA AST -> validator -> compiler -> immutable Program
@@ -39,6 +41,19 @@ Protobuf descriptors run through `protoc-gen-nornrune` at generation time and
 produce static bindings; runtime descriptor reflection is not supported.
 Persisted service registry sources remain canonical native JSON. See the
 [compatibility frontend guide](frontends.md) for the exact boundary.
+
+SQL expressions and PostgreSQL RLS policies use an independent bounded lexer
+and direct semantic builder on the Go API cold path. Snowflake and Databricks
+are expression-only profiles. SQL frontends do not execute queries, access a
+catalog, or add database calls to compilation or evaluation. See the
+[SQL frontend guide](sql-frontend.md).
+
+Natural-language extraction is a separate pre-compilation review boundary. A
+provider emits a non-executable SoA/CSR proposal with exact citations. Human
+review produces native JSON and provenance mappings; a signed token binds that
+exact proposal/draft pair before the existing native decoder can run. Extraction
+has no persistence or publication capability. See the
+[reviewed natural-language guide](natural-language-frontend.md).
 
 ## Compile And Publish
 
@@ -106,6 +121,7 @@ Ownership follows lifetime, not object type:
 | Lifetime | Owner | Storage | Release point |
 |---|---|---|---|
 | Policy decode | `ast.Builder` | source bytes and typed builder columns | after compilation |
+| Natural review | proposal builder and reviewer | source, proposal columns, citation edges, native draft, token | after approved compilation |
 | Policy version | `program.Program` | immutable instructions, symbols, catalogs, indexes | registry lifetime |
 | Service process | `server.Engine` | fixed `engineWorker` slab, channel, and scheduler | process shutdown |
 | Evaluation | one `engineWorker` | batch columns, merged result, encoder, and audit state | encoding, metrics, and audit submission complete |
@@ -176,6 +192,11 @@ transactions, migrations, and recovery.
 
 - [Policy language](policy-language.md)
 - [Compatibility frontends](frontends.md)
+- [SQL frontend](sql-frontend.md)
+- [Reviewed natural-language frontend](natural-language-frontend.md)
+- [Semantic policy diff](policy-diff.md)
+- [WebAssembly target](wasm.md)
+- [Production telemetry](telemetry.md)
 - [Concurrency](concurrency.md)
 - [API](api.md)
 - [Performance](performance.md)

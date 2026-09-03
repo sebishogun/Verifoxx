@@ -195,7 +195,7 @@ ownership, exact Unicode byte spans, all limits, deterministic diagnostics, and
 stable capabilities.
 
 Reject imports, `data`, functions, `else`, recursion, comprehensions, variables,
-assignment, unification, partial documents, non-Boolean heads, with-modifiers,
+binding, unification, partial documents, non-Boolean heads, with-modifiers,
 unsupported built-ins, field-to-field comparisons, unrelated rules, duplicate
 defaults, and undeclared input paths.
 

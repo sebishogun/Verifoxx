@@ -13,6 +13,8 @@ import (
 	"github.com/sebishogun/nornrune/internal/compile"
 	"github.com/sebishogun/nornrune/internal/security"
 	coreservice "github.com/sebishogun/nornrune/internal/service"
+	publictelemetry "github.com/sebishogun/nornrune/telemetry"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -28,6 +30,7 @@ var ErrInvalidServer = errors.New("grpcapi: invalid server configuration")
 
 // Config fixes transport storage and service-call deadlines.
 type Config struct {
+	Telemetry       *publictelemetry.Runtime
 	MaxMessageBytes int
 	RequestTimeout  time.Duration
 }
@@ -55,10 +58,17 @@ func New(api coreservice.PolicyAPI, admission *coreservice.Service, config Confi
 	if api == nil || admission == nil || admission.Stats().Limit == 0 || !config.valid() {
 		return nil, ErrInvalidServer
 	}
-	server := grpc.NewServer(
+	serverOptions := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(config.MaxMessageBytes),
 		grpc.MaxSendMsgSize(config.MaxMessageBytes),
-	)
+	}
+	if config.Telemetry != nil {
+		serverOptions = append(serverOptions, grpc.StatsHandler(otelgrpc.NewServerHandler(
+			otelgrpc.WithTracerProvider(config.Telemetry.TracerProvider()),
+			otelgrpc.WithPropagators(config.Telemetry.Propagator()),
+		)))
+	}
+	server := grpc.NewServer(serverOptions...)
 	nornrunev1.RegisterPolicyServiceServer(server, &policyServer{
 		api: api, admission: admission, config: config,
 	})
@@ -132,6 +142,8 @@ func (server *policyServer) EvaluateBatch(
 	if err != nil {
 		return nil, err
 	}
+	_, encodeSpan := server.config.Telemetry.Start(ctx, publictelemetry.OperationResponseEncode, publictelemetry.TransportGRPC)
+	server.config.Telemetry.Finish(encodeSpan, publictelemetry.SpanStatusOK)
 	return &nornrunev1.EvaluateBatchResponse{ResultJson: encoded}, nil
 }
 
@@ -152,31 +164,41 @@ func (server *policyServer) EvaluateStream(
 		if err != nil {
 			return err
 		}
-		if err := stream.Send(&nornrunev1.EvaluateStreamResponse{ResultJson: encoded}); err != nil {
+		_, encodeSpan := server.config.Telemetry.Start(stream.Context(), publictelemetry.OperationResponseEncode, publictelemetry.TransportGRPC)
+		err = stream.Send(&nornrunev1.EvaluateStreamResponse{ResultJson: encoded})
+		server.config.Telemetry.Finish(encodeSpan, grpcSpanStatus(err))
+		if err != nil {
 			return serviceStatus(err)
 		}
 	}
 }
 
 func (server *policyServer) evaluate(ctx context.Context, requests, evidence, encodedHash []byte) ([]byte, error) {
+	decodeContext, decodeSpan := server.config.Telemetry.Start(ctx, publictelemetry.OperationDecode, publictelemetry.TransportGRPC)
 	if len(requests) == 0 || len(evidence) == 0 {
+		server.config.Telemetry.Finish(decodeSpan, publictelemetry.SpanStatusInvalidArgument)
 		return nil, status.Error(codes.InvalidArgument, "request and evidence JSON objects are required")
 	}
 	if len(encodedHash) != 0 && len(encodedHash) != policyHashBytes {
+		server.config.Telemetry.Finish(decodeSpan, publictelemetry.SpanStatusInvalidArgument)
 		return nil, status.Error(codes.InvalidArgument, "policy hash must contain 32 bytes")
 	}
 	total := uint64(len(requests)) + uint64(len(evidence)) + uint64(len(encodedHash))
 	if total > uint64(server.config.MaxMessageBytes) {
+		server.config.Telemetry.Finish(decodeSpan, publictelemetry.SpanStatusResourceExhausted)
 		return nil, status.Error(codes.ResourceExhausted, "evaluation input exceeds limit")
 	}
-	callCtx, cancel, admission, err := server.admit(ctx)
+	callCtx, cancel, admission, err := server.admit(decodeContext)
 	if err != nil {
+		server.config.Telemetry.Finish(decodeSpan, grpcSpanStatus(err))
 		return nil, serviceStatus(err)
 	}
 	defer server.release(&admission, cancel)
 	if !jsonObject(requests) || !jsonObject(evidence) {
+		server.config.Telemetry.Finish(decodeSpan, publictelemetry.SpanStatusInvalidArgument)
 		return nil, status.Error(codes.InvalidArgument, "request and evidence JSON objects are required")
 	}
+	server.config.Telemetry.Finish(decodeSpan, publictelemetry.SpanStatusOK)
 	var evaluation coreservice.EvaluationRequest
 	evaluation.Requests = requests
 	evaluation.Evidence = evidence
@@ -185,19 +207,25 @@ func (server *policyServer) evaluate(ctx context.Context, requests, evidence, en
 		evaluation.ExplicitPolicy = true
 	}
 	// The output must not alias still-live protobuf request storage.
-	encoded, err := server.api.EvaluateBatch(callCtx, evaluation, nil)
+	evaluationContext, evaluationSpan := server.config.Telemetry.Start(callCtx, publictelemetry.OperationEvaluation, publictelemetry.TransportGRPC)
+	encoded, err := server.api.EvaluateBatch(evaluationContext, evaluation, nil)
 	if err != nil {
+		server.config.Telemetry.Finish(evaluationSpan, grpcSpanStatus(err))
 		return nil, serviceStatus(err)
 	}
 	if len(encoded) == 0 {
+		server.config.Telemetry.Finish(evaluationSpan, publictelemetry.SpanStatusInternal)
 		return nil, status.Error(codes.Internal, "evaluation output is empty")
 	}
 	if len(encoded) > server.config.MaxMessageBytes {
+		server.config.Telemetry.Finish(evaluationSpan, publictelemetry.SpanStatusResourceExhausted)
 		return nil, status.Error(codes.ResourceExhausted, "evaluation output exceeds limit")
 	}
 	if !json.Valid(encoded) {
+		server.config.Telemetry.Finish(evaluationSpan, publictelemetry.SpanStatusInternal)
 		return nil, status.Error(codes.Internal, "evaluation output is invalid")
 	}
+	server.config.Telemetry.Finish(evaluationSpan, publictelemetry.SpanStatusOK)
 	return encoded, nil
 }
 
@@ -207,17 +235,23 @@ func (server *policyServer) admit(ctx context.Context) (
 	coreservice.Admission,
 	error,
 ) {
-	callCtx, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
+	spanContext, span := server.config.Telemetry.Start(ctx, publictelemetry.OperationAdmission, publictelemetry.TransportGRPC)
+	callCtx, cancel := context.WithTimeout(spanContext, server.config.RequestTimeout)
+	started := time.Now()
 	admission, err := server.admission.Admit(callCtx)
 	if err != nil {
+		server.config.Telemetry.Finish(span, grpcSpanStatus(err))
 		cancel()
 		return nil, nil, coreservice.Admission{}, err
 	}
+	_ = server.config.Telemetry.AdmissionStarted(time.Since(started))
+	server.config.Telemetry.Finish(span, publictelemetry.SpanStatusOK)
 	return callCtx, cancel, admission, nil
 }
 
 func (server *policyServer) release(admission *coreservice.Admission, cancel context.CancelFunc) {
 	_ = server.admission.Release(admission)
+	server.config.Telemetry.AdmissionFinished()
 	cancel()
 }
 
@@ -275,8 +309,42 @@ func serviceStatus(err error) error {
 		return status.Error(codes.Unavailable, "service is unavailable")
 	default:
 		if code := status.Code(err); code != codes.Unknown {
-			return err
+			return status.Error(code, "request failed")
 		}
 		return status.Error(codes.Internal, "internal service error")
+	}
+}
+
+func grpcSpanStatus(err error) publictelemetry.SpanStatus {
+	switch {
+	case err == nil:
+		return publictelemetry.SpanStatusOK
+	case errors.Is(err, context.Canceled):
+		return publictelemetry.SpanStatusCanceled
+	case errors.Is(err, context.DeadlineExceeded):
+		return publictelemetry.SpanStatusDeadlineExceeded
+	case errors.Is(err, coreservice.ErrInvalidRequest), errors.Is(err, coreservice.ErrInvalidPolicy):
+		return publictelemetry.SpanStatusInvalidArgument
+	case errors.Is(err, coreservice.ErrPolicyNotFound):
+		return publictelemetry.SpanStatusNotFound
+	case errors.Is(err, coreservice.ErrAuditUnavailable), errors.Is(err, coreservice.ErrServiceBusy),
+		errors.Is(err, coreservice.ErrServiceStopping), errors.Is(err, coreservice.ErrUnavailable):
+		return publictelemetry.SpanStatusUnavailable
+	}
+	switch status.Code(err) {
+	case codes.InvalidArgument:
+		return publictelemetry.SpanStatusInvalidArgument
+	case codes.NotFound:
+		return publictelemetry.SpanStatusNotFound
+	case codes.ResourceExhausted:
+		return publictelemetry.SpanStatusResourceExhausted
+	case codes.Canceled:
+		return publictelemetry.SpanStatusCanceled
+	case codes.DeadlineExceeded:
+		return publictelemetry.SpanStatusDeadlineExceeded
+	case codes.Unavailable:
+		return publictelemetry.SpanStatusUnavailable
+	default:
+		return publictelemetry.SpanStatusInternal
 	}
 }

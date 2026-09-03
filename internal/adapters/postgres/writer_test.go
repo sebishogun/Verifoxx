@@ -258,7 +258,7 @@ func TestJournalRequiredWaitsForAcknowledgmentAfterCancellation(t *testing.T) {
 	}
 }
 
-func TestJournalCloseDrainsAndRejectsNewSubmissions(t *testing.T) {
+func TestJournalCloseDrainsAndRejectsNewSubmits(t *testing.T) {
 	entered := make(chan struct{}, 1)
 	release := make(chan struct{})
 	store := &fakeAuditStore{append: func(context.Context, *persistence.AuditBatch) error {
@@ -306,7 +306,7 @@ func TestJournalBestEffortFailureReturnsSlotAndUpdatesStats(t *testing.T) {
 		t.Fatalf("NewJournal() error = %v", err)
 	}
 	batch := testWriterBatch()
-	for submission := range 2 {
+	for attempt := range 2 {
 		deadline := time.Now().Add(2 * time.Second)
 		for {
 			err = journal.Submit(context.Background(), &batch)
@@ -314,7 +314,7 @@ func TestJournalBestEffortFailureReturnsSlotAndUpdatesStats(t *testing.T) {
 				break
 			}
 			if !errors.Is(err, persistence.ErrJournalQueueFull) || time.Now().After(deadline) {
-				t.Fatalf("Submit(%d) error = %v", submission, err)
+				t.Fatalf("Submit(%d) error = %v", attempt, err)
 			}
 			time.Sleep(time.Millisecond)
 		}
@@ -326,6 +326,43 @@ func TestJournalBestEffortFailureReturnsSlotAndUpdatesStats(t *testing.T) {
 	stats := journal.Stats()
 	if stats.Accepted != 2 || stats.Failed != 2 || stats.Succeeded != 0 || stats.InFlight != 0 {
 		t.Fatalf("Stats() = %+v, want two failed terminal batches", stats)
+	}
+}
+
+func TestJournalReportsBestEffortTerminalOutcome(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		storeErr  error
+		persisted bool
+	}{
+		{name: "persisted", persisted: true},
+		{name: "failed", storeErr: errors.New("write failed")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			outcomes := make(chan bool, 1)
+			store := &fakeAuditStore{append: func(context.Context, *persistence.AuditBatch) error {
+				return test.storeErr
+			}}
+			config := testJournalConfig(persistence.AuditBestEffort)
+			config.BestEffortComplete = func(persisted bool) { outcomes <- persisted }
+			journal, err := NewJournal(store, config)
+			if err != nil {
+				t.Fatalf("NewJournal() error = %v", err)
+			}
+			t.Cleanup(func() { _ = journal.Close(context.Background()) })
+			batch := testWriterBatch()
+			if err := journal.Submit(context.Background(), &batch); err != nil {
+				t.Fatalf("Submit() error = %v", err)
+			}
+			select {
+			case persisted := <-outcomes:
+				if persisted != test.persisted {
+					t.Fatalf("terminal outcome persisted = %t, want %t", persisted, test.persisted)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("best-effort terminal outcome was not reported")
+			}
+		})
 	}
 }
 
@@ -353,7 +390,7 @@ func TestJournalRequiredSubmitAndCloseCompleteTogether(t *testing.T) {
 	case <-time.After(25 * time.Millisecond):
 	}
 	close(release)
-	if err := receiveWriterError(t, submitted, "required submission"); err != nil {
+	if err := receiveWriterError(t, submitted, "required audit attempt"); err != nil {
 		t.Fatalf("Submit() error = %v", err)
 	}
 	if err := receiveWriterError(t, closed, "required close"); err != nil {
@@ -424,8 +461,8 @@ func TestJournalConstructorRejectsInvalidPersistentConfiguration(t *testing.T) {
 	}
 }
 
-func TestJournalConcurrentRequiredSubmissions(t *testing.T) {
-	const submissions = 32
+func TestJournalConcurrentRequiredSubmits(t *testing.T) {
+	const submits = 32
 	store := &fakeAuditStore{append: func(context.Context, *persistence.AuditBatch) error { return nil }}
 	config := testJournalConfig(persistence.AuditRequired)
 	config.Writers = 2
@@ -437,9 +474,9 @@ func TestJournalConcurrentRequiredSubmissions(t *testing.T) {
 	defer func() { _ = journal.Close(context.Background()) }()
 
 	var wait sync.WaitGroup
-	errorsOut := make(chan error, submissions)
-	wait.Add(submissions)
-	for range submissions {
+	errorsOut := make(chan error, submits)
+	wait.Add(submits)
+	for range submits {
 		go func() {
 			defer wait.Done()
 			batch := testWriterBatch()
@@ -454,8 +491,8 @@ func TestJournalConcurrentRequiredSubmissions(t *testing.T) {
 		}
 	}
 	stats := journal.Stats()
-	if stats.Accepted != submissions || stats.Succeeded != submissions || stats.InFlight != 0 {
-		t.Fatalf("Stats() = %+v, want %d successful submissions", stats, submissions)
+	if stats.Accepted != submits || stats.Succeeded != submits || stats.InFlight != 0 {
+		t.Fatalf("Stats() = %+v, want %d successful submits", stats, submits)
 	}
 }
 

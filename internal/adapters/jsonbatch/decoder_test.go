@@ -559,7 +559,7 @@ func TestDecodeRequestsRejectsInvalidRows(t *testing.T) {
 	}
 }
 
-func TestDecodeSuppliedNornRunePacks(t *testing.T) {
+func TestDecodeBaselineNornRunePacks(t *testing.T) {
 	p := fixtureDecoderProgram(t)
 	requests := []byte(fixtures.RequestsJSON())
 	evidence := []byte(fixtures.EvidenceJSON())

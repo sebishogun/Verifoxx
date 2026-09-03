@@ -29,7 +29,7 @@ The working rules are:
 
 ## Abstract
 
-NornRune will be a general, evidence-aware policy compiler and decision engine written in Go 1.27. The three requirements and five requests in the candidate exercise will form its first policy pack and conformance data set. They will not be encoded as request-specific branches.
+NornRune will be a general, evidence-aware policy compiler and decision engine written in Go 1.27. The three baseline requirements and five baseline requests form its first policy pack and conformance data set. They are not encoded as request-specific branches.
 
 The system will translate a bounded policy document into a pointerless semantic abstract syntax tree, validate and normalize that tree, and compile it into an immutable struct-of-arrays execution program. Requests and evidence will be evaluated in batches. The hot path will use contiguous columns, bitmaps, indexes, and `github.com/sebishogun/simd` v1.21.0. Large batches will be divided among workers at existing bitset boundaries. Each worker will own its scratch memory and output range.
 
@@ -37,11 +37,11 @@ The execution model will preserve four semantic states: true, false, unknown, an
 
 PostgreSQL 19 will store canonical policy versions, evidence snapshots, and immutable decision records. Its SQL/PGQ support will expose a derived property-graph view of normalized policy nodes and edges. PostgreSQL will not participate in expression evaluation. The compiled program will remain in process memory.
 
-The product will include a scriptable CLI, a Bubble Tea semantic debugger, HTTP and gRPC adapters, Delve DAP integration, Docker and Compose configurations, a Makefile, and a `devx` command for setup and development workflows. The default exercise demonstration will run without external services. Full service mode will start PostgreSQL 19 and the network adapters.
+The product will include a scriptable CLI, a Bubble Tea semantic debugger, HTTP and gRPC adapters, Delve DAP integration, Docker and Compose configurations, a Makefile, and a `devx` command for setup and development workflows. The default embedded demonstration will run without external services. Full service mode will start PostgreSQL 19 and the network adapters.
 
 ## 1. Problem Statement
 
-The candidate exercise asks for a program that converts natural-language requirements into an intermediate semantic representation and evaluates requests against that representation and an evidence pack. A result must be one of four decisions and must explain the requirement, evidence condition, or uncertainty responsible for that decision.
+NornRune converts natural-language policy requirements into an intermediate semantic representation and evaluates requests against that representation and an evidence pack. A result is one of four decisions and explains the requirement, evidence condition, or uncertainty responsible for that decision.
 
 The difficult part is not parsing five rows. It is preserving enough meaning to distinguish these cases:
 
@@ -55,16 +55,16 @@ A flat record of extracted fields cannot express applicability, obligations, evi
 
 ## 2. Scope
 
-The implementation will include the complete production-oriented system described here. The assignment artifacts remain a first-class release boundary:
+The implementation includes the complete production-oriented system described here. The baseline product contract remains a first-class release boundary:
 
 - Runnable source
 - A README with setup, commands, dependencies, and formats
-- A design note no longer than one page
+- A semantic model summary no longer than one page
 - Machine-readable results for requests R1 through R5
 - A brief statement of AI tool use
 - Tests centered on decision boundaries and uncertainty
 
-This architecture document is not the one-page submission note. The submission note will summarize the semantic model, decision logic, escalation boundaries, and next improvements without reproducing this document.
+This architecture document is not the one-page semantic model summary. That summary covers the semantic model, decision logic, escalation boundaries, and next improvements without reproducing this document.
 
 ## 3. Design Criteria
 
@@ -73,7 +73,7 @@ The following criteria determine whether the design is acceptable.
 ### 3.1 Semantic criteria
 
 - Requirement IDs and request IDs occupy distinct types and namespaces.
-- Policies are data, not branches on supplied request IDs.
+- Policies are data, not branches on baseline request IDs.
 - Applicability is separate from satisfaction.
 - Known falsehood is separate from missing knowledge.
 - Conflicting evidence is representable without discarding either side.
@@ -109,7 +109,7 @@ The following criteria determine whether the design is acceptable.
 |---|---|---|
 | Language | Go 1.27 | It matches the developer's strongest language and provides the required systems tooling. |
 | SIMD | `github.com/sebishogun/simd` v1.21.0 whole-slice API | The library provides measured kernels, runtime dispatch, portable fallbacks, masks, and columnar primitives without an experiment flag. |
-| Policy representation | Bounded semantic AST | A custom AST can preserve evidence state, remediation, and uncertainty without outsourcing the main assignment. |
+| Policy representation | Bounded semantic AST | A custom AST preserves evidence state, remediation, and uncertainty inside the engine's semantics. |
 | AST layout | Pointerless typed slabs with SoA payloads and integer references | This follows the useful part of WunderGraph's AST architecture while keeping hot columns contiguous. |
 | Execution representation | Immutable, indexed SoA program | Compilation can remove names and pointers from the hot path and arrange operations for bulk execution. |
 | Truth model | Positive and negative bitplanes plus reason masks | Two bitplanes represent true, false, unknown, and conflict and compose through bit operations. |
@@ -249,11 +249,11 @@ type ResolutionTable struct {
 }
 ```
 
-The NornRune pack defines `Approve`, `Reject`, `Revise`, and `Escalate` exactly as required by the assignment.
+The NornRune pack defines `Approve`, `Reject`, `Revise`, and `Escalate` as its complete decision set.
 
 ## 7. NornRune Policy Pack
 
-The first policy pack models the supplied requirements without checking request IDs.
+The first policy pack models the baseline requirements without checking request IDs.
 
 | Request | Expected result | Main driver |
 |---|---|---|
@@ -427,7 +427,7 @@ The program contains:
 - Applicability indexes
 - Outcome resolution tables
 - Source maps
-- Scratch-slot assignments
+- Scratch-slot mappings
 - Requirement and policy roots
 
 The program is immutable after publication. Evaluations load one program pointer at their start. A later policy publication cannot change the program observed by an active evaluation.
@@ -1387,8 +1387,8 @@ The repository will contain:
 
 | Document | Purpose |
 |---|---|
-| `README.md` | Product overview, quick start, dependencies, CLI, formats, and assignment results |
-| `docs/design-note.md` | The required one-page design note |
+| `README.md` | Product overview, quick start, dependencies, CLI, formats, and baseline results |
+| `docs/semantic-model.md` | The one-page semantic model summary |
 | `docs/architecture.md` | Components, data flow, ownership, and package boundaries |
 | `docs/policy-language.md` | Schema, expressions, evidence semantics, and examples |
 | `docs/performance.md` | Data layout, SIMD dispatch, benchmarks, and allocation contracts |
@@ -1398,7 +1398,7 @@ The repository will contain:
 | `docs/debugging.md` | Semantic TUI, Delve DAP, Neovim, and debug builds |
 | `docs/development.md` | Make, `devx`, setup, tests, generation, and containers |
 | `docs/operations.md` | Configuration, health, metrics, limits, backup, and recovery |
-| `docs/ai-usage.md` | Where AI tools assisted, as required by the exercise |
+| `docs/ai-usage.md` | Where AI tools assisted during development |
 | `results/requests.json` | Required machine-readable output for R1 through R5 |
 
 Documentation claims about speed will cite committed benchmark output. PostgreSQL 19 will be described as beta until the project pins its GA release.
@@ -1471,7 +1471,7 @@ Each accelerated stage remains differentially testable against the scalar refere
 The implementation is complete when all of the following statements are supported by tests or measured output:
 
 - R1 through R5 produce the intended machine-readable decisions.
-- No evaluator path checks a supplied request ID.
+- No evaluator path checks a baseline request ID.
 - The policy representation preserves applicability, obligations, evidence quality, uncertainty, and remediation.
 - AST and program nodes use integer references rather than object pointers.
 - Hot request, evidence, mask, scratch, and result data use SoA or CSR.
@@ -1493,16 +1493,16 @@ The implementation is complete when all of the following statements are supporte
 - The default demonstration works without PostgreSQL.
 - Full service mode starts PostgreSQL 19 and the network adapters.
 - Unit, differential, integration, database, end-to-end, race, fuzz, benchmark, and debugger tests exist.
-- The required README, one-page design note, AI-use statement, and R1-R5 results are present.
+- The README, one-page semantic model summary, AI-use statement, and R1-R5 results are present.
 
 ## 36. Known Risks
 
 | Risk | Mitigation |
 |---|---|
-| The complete system exceeds the original 4-5 hour scope | Preserve the required evaluator and output as an early complete release boundary. |
+| The complete system exceeds the initial evaluator scope | Preserve the evaluator and output as an early complete release boundary. |
 | PostgreSQL 19 is still beta | Pin Beta 3 for development, test migrations, and move to the GA image when released. |
-| SIMD work may not pay at assignment scale | Let the library own thresholds and publish benchmark results for both small and large batches. |
-| Generic policy features can obscure the assignment | Keep the NornRune pack, expected results, and one-page design note prominent. |
+| SIMD work may not pay at baseline scale | Let the library own thresholds and publish benchmark results for both small and large batches. |
+| Generic policy features can obscure baseline behavior | Keep the NornRune pack, expected results, and semantic model summary prominent. |
 | Parallel overhead may exceed useful work | Select parallel execution only after benchmarked crossover points. |
 | A debugger can diverge from the fast engine | Execute the same compiled program and require differential equivalence. |
 | Persistent full traces can grow rapidly | Store driving findings by default and apply retention to opt-in traces. |
@@ -1512,4 +1512,4 @@ The implementation is complete when all of the following statements are supporte
 
 The system is a compiler because it converts policy source into a validated, normalized, and scheduled execution representation. It is a decision engine because it evaluates facts and evidence under explicit uncertainty semantics. Its physical design follows the workload: immutable policy programs, columnar request batches, bitplane logic, whole-slice SIMD operations, and row-aligned parallel shards.
 
-PostgreSQL 19 provides durable policy history and decision auditability without entering the hot path. The semantic debugger, TUI, and Delve integration expose the same compiled program at three levels: policy meaning, execution state, and Go implementation. The `devx`, Make, Docker, Compose, and documentation surfaces make both the assignment demonstration and the full service reproducible from a fresh environment.
+PostgreSQL 19 provides durable policy history and decision auditability without entering the hot path. The semantic debugger, TUI, and Delve integration expose the same compiled program at three levels: policy meaning, execution state, and Go implementation. The `devx`, Make, Docker, Compose, and documentation surfaces make both the embedded demonstration and the full service reproducible from a fresh environment.

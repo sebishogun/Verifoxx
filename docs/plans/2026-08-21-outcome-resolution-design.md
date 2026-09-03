@@ -166,5 +166,5 @@ Tests will cover:
   ranges.
 - Zero allocations in repeated valid resolution.
 
-The tests use numeric IDs and fixed slices. Assignment labels appear only as
+The tests use numeric IDs and fixed slices. Mapping labels appear only as
 test fixture meaning, not as engine branches.

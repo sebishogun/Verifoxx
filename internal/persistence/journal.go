@@ -22,7 +22,7 @@ var (
 	ErrAuditBatchTooLarge = errors.New("persistence: audit batch too large")
 	// ErrJournalQueueFull reports a dropped best-effort audit submission.
 	ErrJournalQueueFull = errors.New("persistence: audit journal queue full")
-	// ErrJournalClosed reports submission after journal shutdown began.
+	// ErrJournalClosed reports Submit after journal shutdown began.
 	ErrJournalClosed = errors.New("persistence: audit journal closed")
 )
 

@@ -396,7 +396,7 @@ policy_concurrent_publish
   Publisher's last durable completion agreeing.
 
 Also call two PolicyStore instances directly for identical Candidates so real
-PostgreSQL unique-index serialization is exercised independently of the
+PostgreSQL unique-index serialization is tested independently of the
 Publisher mutex.
 
 **Step 2: Run end-to-end tests and verify failure**

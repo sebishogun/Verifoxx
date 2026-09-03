@@ -65,6 +65,9 @@ func loadFrontendSources(
 	if err := language.UnmarshalText([]byte(flags.format)); err != nil {
 		return sources{}, frontendSelection{}, usageError(fmt.Errorf("%w: %s", errInvalidFrontendFormat, flags.format))
 	}
+	if language == public.LanguageSQL {
+		return sources{}, frontendSelection{}, usageError(fmt.Errorf("%w: %s", errInvalidFrontendFormat, flags.format))
+	}
 	if language == public.LanguageProtobuf {
 		return sources{}, frontendSelection{}, usageError(errRuntimeProtobuf)
 	}

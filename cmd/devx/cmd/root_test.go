@@ -58,7 +58,7 @@ func TestRootDefinesApprovedCommandGroups(t *testing.T) {
 		"build":       {"build", "build:exp", "build:purego", "clean"},
 		"run":         {"demo", "full", "serve", "tui"},
 		"database":    {"db:down", "db:reset", "db:status", "db:up", "graph:check", "migrate", "migrate:check", "migrate:create"},
-		"generation":  {"policy:check", "policy:compile", "proto:check", "proto:gen", "results:check", "results:gen"},
+		"generation":  {"policy:check", "policy:compile", "proto:check", "proto:gen", "results:check", "results:gen", "wasm:check"},
 		"testing":     {"fuzz", "test", "test:e2e", "test:integration", "test:race", "test:unit"},
 		"performance": {"bench", "bench:compare", "load", "perf", "profile"},
 		"debugging":   {"debug", "debug:dap", "debug:tui"},

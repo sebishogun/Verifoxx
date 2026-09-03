@@ -11,7 +11,7 @@ import (
 )
 
 func TestJournalRequiredFailureStormReturnsEverySlot(t *testing.T) {
-	const submissions = 32
+	const submits = 32
 	storeFailure := errors.New("forced audit failure")
 	var fail atomic.Bool
 	fail.Store(true)
@@ -34,10 +34,10 @@ func TestJournalRequiredFailureStormReturnsEverySlot(t *testing.T) {
 		}
 	}()
 
-	results := make(chan error, submissions)
+	results := make(chan error, submits)
 	var done sync.WaitGroup
-	done.Add(submissions)
-	for range submissions {
+	done.Add(submits)
+	for range submits {
 		go func() {
 			defer done.Done()
 			batch := testWriterBatch()
@@ -63,8 +63,8 @@ func TestJournalRequiredFailureStormReturnsEverySlot(t *testing.T) {
 		}
 	}
 	stats := journal.Stats()
-	if stats.Accepted != submissions+uint64(config.QueueDepth) ||
-		stats.Failed != submissions || stats.Succeeded != uint64(config.QueueDepth) ||
+	if stats.Accepted != submits+uint64(config.QueueDepth) ||
+		stats.Failed != submits || stats.Succeeded != uint64(config.QueueDepth) ||
 		stats.Dropped != 0 || stats.InFlight != 0 {
 		t.Fatalf("Stats() after failure recovery = %+v", stats)
 	}

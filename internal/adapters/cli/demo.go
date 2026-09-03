@@ -108,9 +108,9 @@ func runDemo(inputs sources, engineVersion string, runtime simdops.RuntimeInfo, 
 
 	var selector rowSelector
 	var overrideStorage [2]fieldOverride
-	r3Assignments := [...]string{"environment.usage=standard"}
+	r3Bindings := [...]string{"environment.usage=standard"}
 	r3Start := baselineRenderedAt
-	r3Overrides, err := parseOverrides(overrideStorage[:0], compiled, r3Assignments[:])
+	r3Overrides, err := parseOverrides(overrideStorage[:0], compiled, r3Bindings[:])
 	if err != nil {
 		return nil, pipelineFailure("prepare R3 simulation", err)
 	}
@@ -127,9 +127,9 @@ func runDemo(inputs sources, engineVersion string, runtime simdops.RuntimeInfo, 
 	}
 	r3Done := now()
 
-	r2Assignments := [...]string{"action.type=aggregate_analysis", "action.output=aggregate_counts"}
+	r2Bindings := [...]string{"action.type=aggregate_analysis", "action.output=aggregate_counts"}
 	r2Start := r3Done
-	r2Overrides, err := parseOverrides(overrideStorage[:0], compiled, r2Assignments[:])
+	r2Overrides, err := parseOverrides(overrideStorage[:0], compiled, r2Bindings[:])
 	if err != nil {
 		return nil, pipelineFailure("prepare R2 simulation", err)
 	}

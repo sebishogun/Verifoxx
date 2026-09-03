@@ -25,6 +25,9 @@ func TestTechnicalDocumentationFilesAndLocalLinks(t *testing.T) {
 		"docs/operations.md",
 		"docs/debugging.md",
 		"docs/performance.md",
+		"docs/policy-diff.md",
+		"docs/wasm.md",
+		"docs/telemetry.md",
 	}
 	for _, path := range paths {
 		content := readDocument(t, path)

@@ -298,9 +298,9 @@ The script must:
 - load the exported `file://` document;
 - assert every visible `.edge-label rect` is disjoint from every other visible
   label and every `.node rect` in SVG coordinates;
-- focus the roving node, exercise ArrowDown and ArrowUp, and assert focus and
+- focus the roving node, send ArrowDown and ArrowUp, and assert focus and
   `aria-selected` move then return;
-- locate a layer with siblings, exercise ArrowRight and ArrowLeft, and assert
+- locate a layer with siblings, send ArrowRight and ArrowLeft, and assert
   deterministic focus movement;
 - assert the relationship inspector lists all incident edges of the selected
   node and those edges have `.related`;

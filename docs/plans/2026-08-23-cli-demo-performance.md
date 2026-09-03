@@ -110,7 +110,7 @@ metadata or results.
 
 Find request rows by strongly typed `schema.RequestID`. Store the two baseline
 OutcomeIDs as scalar values before result storage is reused. Parse the fixed
-assignments through `parseOverrides` into stack-backed storage, then call
+overrides through `parseOverrides` into stack-backed storage, then call
 `compactWithOverrides` and `engine.evaluate` for each scenario:
 
 ```text

@@ -115,7 +115,7 @@ func fillSlots(t *testing.T, p *Program, entries []struct {
 
 // frozenTable returns a hand-built frozen symbol table over the given words
 // in one-based ID order. All words must share one masked slot so the table
-// exercises a probe chain; the fixture asserts that property.
+// drives a probe chain; the fixture asserts that property.
 func frozenTable(t *testing.T, words ...string) Program {
 	t.Helper()
 	var p Program

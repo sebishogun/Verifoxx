@@ -1,0 +1,1 @@
+{"provider":{"id":"fixture","version":"1"},"items":[{"kind":"requirement","text":"R1","citations":[{"page":0,"start":0,"end":2,"quote":"R1"}]},{"kind":"restriction","parent":1,"text":"must remain local","citations":[{"page":0,"start":3,"end":20,"quote":"must remain local"}]}]}

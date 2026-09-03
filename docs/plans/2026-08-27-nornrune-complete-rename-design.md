@@ -36,7 +36,7 @@ The rename covers:
 - the `verifoxx2` README's link to the primary project. The `verifoxx2`
   repository itself remains live and keeps its current name.
 
-The original assignment PDF remains byte-identical as a historical source
+The original source PDF remains byte-identical as historical provenance
 artifact, but its filename follows the new brand. Its embedded wording is the
 only intentional old-name exception. Git history is not rewritten.
 
@@ -46,7 +46,7 @@ The name changes; policy behavior does not. Before editing, record the current
 test, generated-file, result, and benchmark gates. During migration, tests lock
 the following invariants:
 
-- all five supplied requests retain their decisions, rationales, applied
+- all five baseline requests retain their decisions, rationales, applied
   requirements, evidence use, uncertainty, and remediation semantics;
 - native, CEL, Rego, Cedar, and generated Protobuf policies retain conformance;
 - scalar, automatic SIMD, pure-Go, 386, scheduler, debug, HTTP, gRPC, and

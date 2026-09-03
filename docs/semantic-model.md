@@ -1,4 +1,4 @@
-# Design Note
+# Semantic Model
 
 ## Semantic Representation
 
@@ -16,7 +16,7 @@ cycles, resolution completeness, and resource limits. Lowering canonicalizes
 that AST into an immutable instruction schedule with struct-of-arrays values,
 four-valued truth masks, reason masks, provenance tables, and precompiled
 explanations. Evaluation therefore operates over one reusable representation;
-the five request IDs are data, not branches in the evaluator.
+the baseline request IDs are data, not branches in the evaluator.
 
 ## Why It Exceeds Flat Extraction
 
@@ -38,7 +38,7 @@ to the four decisions, and deterministic precedence combines multiple clauses:
 - `Approve` means every relevant condition and required evidence is satisfied.
 - `Reject` is reserved for a violated non-negotiable condition, such as
   individual-level disclosure.
-- `Revise` requires an enumerated bounded correction. In the supplied policy,
+- `Revise` requires an enumerated bounded correction. In the baseline conformance policy,
   an otherwise eligible trusted internal request may add the allowed scoped
   usage-adjustment approval.
 - `Escalate` prevents automatic approval when safe evaluation is impossible.

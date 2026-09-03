@@ -763,7 +763,7 @@ Cover meaningful policy transitions, for example:
   individual-disclosure violation but still respects all other requirements.
 - Multiple `--set` flags are applied in flag order after duplicate rejection.
 
-Also cover missing `--set`, malformed assignments, unknown fields, absent or
+Also cover missing `--set`, malformed overrides, unknown fields, absent or
 malformed request IDs, external inputs, no input mutation, JSON-only stdout,
 and writer failure.
 
@@ -783,7 +783,7 @@ Expected: FAIL because `simulate` is not registered.
 **Step 8: Implement `simulate`**
 
 Register `cobra.ExactArgs(1)`, all three source flags, and repeatable
-`--set`. Require at least one assignment. Compile first so override fields and
+`--set`. Require at least one override. Compile first so override fields and
 kinds resolve against immutable metadata; decode once; compact the selected row
 with overrides; evaluate and encode one result.
 

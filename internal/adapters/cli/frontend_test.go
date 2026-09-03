@@ -106,6 +106,24 @@ func TestFrontendFlagsRejectInvalidSelections(t *testing.T) {
 	}
 }
 
+func TestSQLFormatIsRejectedBeforeReadingInputs(t *testing.T) {
+	reads := 0
+	deps := frontendTestDependencies()
+	deps.readFile = func(string) ([]byte, error) {
+		reads++
+		return nil, errors.New("unexpected read")
+	}
+	deps.readBoundedFile = func(string, uint32) ([]byte, error) {
+		reads++
+		return nil, errors.New("unexpected read")
+	}
+	code, stdout, stderr := runCLIWithDependencies(t, deps,
+		"compile", "--format", "sql", "--policy", "policy.sql", "--bindings", "bindings.json")
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "unsupported policy format: sql") || reads != 0 {
+		t.Fatalf("SQL format = (%d,%q,%q), reads %d, want early usage error", code, stdout, stderr, reads)
+	}
+}
+
 func TestFrontendInputsAllowOnlyOneStdinReader(t *testing.T) {
 	deps := frontendTestDependencies()
 	for _, args := range [][]string{

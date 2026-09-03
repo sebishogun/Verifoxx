@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -271,6 +272,20 @@ func TestNewRejectsInvalidDependenciesAndConfiguration(t *testing.T) {
 				t.Fatalf("New() = (%p, %v), want nil %v", server, err, ErrInvalidServer)
 			}
 		})
+	}
+}
+
+func TestServiceStatusRedactsExistingGRPCStatus(t *testing.T) {
+	const protected = "protected backend detail"
+	got := status.Convert(serviceStatus(status.Error(codes.Internal, protected)))
+	if got.Code() != codes.Internal {
+		t.Fatalf("redacted status code = %s, want %s", got.Code(), codes.Internal)
+	}
+	if got.Message() != "request failed" || strings.Contains(got.Message(), protected) {
+		t.Fatalf("redacted status message = %q", got.Message())
+	}
+	if details := got.Details(); len(details) != 0 {
+		t.Fatalf("redacted status retained details: %v", details)
 	}
 }
 

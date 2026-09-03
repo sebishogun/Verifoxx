@@ -84,7 +84,7 @@ timeout 120s go test -timeout 90s -run '^$' \
 ```
 
 Run the semantic worker and TUI in separate terminals for resize and
-alternate-screen checks. Exercise `[AST]`/`[PROGRAM]`, Session/Persisted
+alternate-screen checks. Toggle `[AST]`/`[PROGRAM]`, Session/Persisted
 history, request focus, stepping, restart, and clean exit. PostgreSQL history is
 optional and reads `NORNRUNE_DATABASE_URL`; the Session timeline remains usable
 without it.

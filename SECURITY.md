@@ -21,7 +21,7 @@ for each confirmed report.
 
 ## Semantic Security Boundaries
 
-NornRune policy decisions depend on the supplied policy, request, evidence,
+NornRune policy decisions depend on the provided policy, request, and evidence,
 clock, and execution-environment attestations. The engine does not establish
 that external evidence is authentic merely because it is well-formed. Missing,
 stale, unclear, incomplete, or conflicting required evidence must escalate.

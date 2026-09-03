@@ -59,7 +59,7 @@ environment.usage
 
 This package is the NornRune policy pack. It prevents the CLI from embedding
 `internal/fixtures/nornrune-policy.json`, which is the original natural-language
-assignment source rather than compiler input. It also removes the production
+override source rather than compiler input. It also removes the production
 schema from conformance-test-only code and gives later adapters one source of
 truth.
 
@@ -127,7 +127,7 @@ Use the same compact one-row path as `explain`, applying one or more overrides
 while the destination builder is active. Field names resolve through compiled
 field metadata. Values are parsed according to the field kind and symbols are
 interned through the destination builder. Unknown fields, malformed
-assignments, incompatible values, duplicate target fields, and a missing
+bindings, incompatible values, duplicate target fields, and a missing
 `--set` are usage errors. The command emits the simulated one-result envelope;
 it does not mutate embedded or caller-provided input.
 
@@ -162,7 +162,7 @@ The process contract is:
 |---:|---|
 | 0 | Command completed successfully |
 | 1 | Input, decode, validation, compile, evaluation, encoding, or write failure |
-| 2 | Invalid command, flags, arguments, request ID, or simulation assignment |
+| 2 | Invalid command, flags, arguments, request ID, or simulation override |
 
 Cobra's automatic error and usage printing is disabled. The adapter renders
 each error once to stderr. Successful machine output is the only content sent
@@ -192,7 +192,7 @@ memory. They cover:
 - Stable compile metadata
 - Request lookup and one-result explanation
 - Symbol, integer, timestamp, Boolean, and presence overrides
-- Invalid fields, types, IDs, assignments, and duplicate overrides
+- Invalid fields, types, IDs, bindings, and duplicate overrides
 - Cobra usage errors and process exit codes
 - Decode, compile, evaluate, encode, and writer failures where injectable
 - JSON-only stdout and bounded stderr errors

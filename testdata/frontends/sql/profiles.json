@@ -1,0 +1,29 @@
+{
+  "cases": [
+    {
+      "name": "boolean precedence",
+      "snowflake": "TEAM = 'blue' OR COUNT >= -2 AND ENABLED",
+      "databricks": "team = 'blue' OR count >= -2 AND enabled"
+    },
+    {
+      "name": "null definedness",
+      "snowflake": "TEAM IS NULL OR ENABLED IS NOT NULL",
+      "databricks": "team IS NULL OR enabled IS NOT NULL"
+    },
+    {
+      "name": "string membership",
+      "snowflake": "TEAM IN ('blue', 'green')",
+      "databricks": "team IN ('blue', 'green')"
+    },
+    {
+      "name": "reversed integer comparison",
+      "snowflake": "5 < COUNT",
+      "databricks": "5 < count"
+    },
+    {
+      "name": "nested negation",
+      "snowflake": "NOT (ENABLED OR COUNT < 0)",
+      "databricks": "NOT (enabled OR count < 0)"
+    }
+  ]
+}

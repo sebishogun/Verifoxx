@@ -1,0 +1,73 @@
+groups:
+  - name: nornrune.evaluation
+    rules:
+      - alert: nornrune_evaluation_decision_rate_change
+        expr: |
+          (
+            abs(
+              rate(nornrune_evaluation_outcomes_total[5m])
+                / on() group_left clamp_min(sum(rate(nornrune_evaluation_outcomes_total[5m])), 1e-9)
+              -
+              rate(nornrune_evaluation_outcomes_total[1h])
+                / on() group_left clamp_min(sum(rate(nornrune_evaluation_outcomes_total[1h])), 1e-9)
+            ) > 0.25
+          )
+            and on() sum(rate(nornrune_evaluation_outcomes_total[5m])) > 0
+            and on() sum(rate(nornrune_evaluation_outcomes_total[1h])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Decision mix shifted more than 25 percentage points against the one-hour baseline.
+          description: Per-outcome shares changed independently of total request volume, indicating a possible policy regression.
+      - alert: nornrune_evaluation_escalation_spike
+        expr: |
+          rate(nornrune_evaluation_escalations_total[5m])
+            > 2 * clamp_min(rate(nornrune_evaluation_escalations_total[1h]), 1e-9)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Escalations doubled against the one-hour baseline for five minutes.
+          description: Inspect the per-reason breakdown; a single reason spiking indicates an upstream data-quality problem.
+  - name: nornrune.audit
+    rules:
+      - alert: nornrune_audit_failures
+        expr: |
+          increase(nornrune_audit_outcomes_total{outcome="required_failure"}[5m]) > 0
+            or increase(nornrune_audit_outcomes_total{outcome="optional_drop"}[5m]) > 0
+            or increase(nornrune_audit_journal_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Audit persistence failed or dropped work within the last five minutes.
+          description: Check database health, required failures, best-effort terminal failures, and journal saturation.
+  - name: nornrune.service
+    rules:
+      - alert: nornrune_service_queue_saturation
+        expr: nornrune_service_queue_depth >= 2 * nornrune_evaluation_workers
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Admission queue held at least two waiting requests per worker for five minutes.
+          description: Sustained saturation at fixed worker count means arrival rate exceeds evaluation throughput.
+      - alert: nornrune_shutdown_timeouts
+        expr: increase(nornrune_shutdown_failures_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: A telemetry shutdown flush missed its deadline within the last fifteen minutes.
+          description: Verify collector availability; shutdown ordering still drained journal and workers first.
+  - name: nornrune.policy
+    rules:
+      - alert: nornrune_policy_reload_failures
+        expr: increase(nornrune_policy_reloads_total{outcome!="success"}[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: A policy reload failed within the last fifteen minutes.
+          description: outcome=invalid points at policy content; persistence_failure points at the policy store.

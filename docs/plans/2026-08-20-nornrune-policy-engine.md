@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build the complete production-oriented NornRune policy compiler, SIMD batch evaluator, audit service, semantic debugger, network adapters, developer tooling, and required candidate-exercise submission.
+**Goal:** Build the complete production-oriented NornRune policy compiler, SIMD batch evaluator, audit service, semantic debugger, network adapters, developer tooling, and product documentation.
 
 **Architecture:** Parse bounded policy documents into a pointerless AST, validate and lower them into an immutable SoA program, then evaluate SoA request batches through scalar, SIMD, and row-sharded executors. Keep adapters outside the core; persist canonical policy versions and immutable decisions in PostgreSQL 19 while exposing normalized AST nodes and edges through SQL/PGQ.
 
@@ -66,7 +66,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 8. Run `go mod tidy` and inspect `go.mod` and `go.sum`.
 9. Commit when requested: `chore: initialize nornrune module`.
 
-### Task 2: Add Embedded Assignment Inputs
+### Task 2: Add Embedded Baseline Inputs
 
 **Files:**
 - Create: `internal/fixtures/embed.go`
@@ -84,7 +84,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 5. Embed the files with `go:embed` and expose read-only byte slices.
 6. Run `go test -timeout 60s ./internal/fixtures`; expect success.
 7. Compare every fixture value against the PDF, which remains the source of truth.
-8. Commit when requested: `chore: add candidate exercise fixtures`.
+8. Commit when requested: `chore: add baseline conformance fixtures`.
 
 ## Phase 2: Define The Semantic Data Model
 
@@ -318,7 +318,7 @@ SoA data + grouped lifetimes + zero per-record allocation
 
 **Steps:**
 
-1. Write failing tests for the five supplied requests, missing fields, unknown fields, duplicate IDs, missing references, wrong types, and malformed input.
+1. Write failing tests for the five baseline requests, missing fields, unknown fields, duplicate IDs, missing references, wrong types, and malformed input.
 2. Run `go test -timeout 60s ./internal/adapters/jsonbatch`; expect failure.
 3. Implement direct decoding into caller-owned batch columns.
 4. Distinguish malformed transport data from semantically missing policy facts.
@@ -972,26 +972,26 @@ SoA data + grouped lifetimes + zero per-record allocation
 5. Run `go test -timeout 60s ./internal/security ./internal/adapters/httpapi ./internal/adapters/grpcapi`; expect success.
 6. Commit when requested: `feat: enforce service safety limits`.
 
-## Phase 17: Documentation And Submission
+## Phase 17: Documentation And Product Contract
 
-### Task 48: Write The README And Required One-Page Design Note
+### Task 48: Write The README And One-Page Semantic Model Summary
 
 **Files:**
 - Create: `README.md`
-- Create: `docs/design-note.md`
+- Create: `docs/semantic-model.md`
 - Create: `docs/ai-usage.md`
-- Test: `internal/doccheck/submission_test.go`
+- Test: `internal/doccheck/product_documents_test.go`
 
 **Steps:**
 
-1. Write a failing documentation test that checks required files, commands, result fields, and a bounded design-note size.
+1. Write a failing documentation test that checks required files, commands, result fields, and a bounded semantic-model summary.
 2. Run `go test -timeout 60s ./internal/doccheck`; expect failure.
 3. Write README quick starts for embedded CLI, TUI, Docker, and full Compose modes.
 4. Document dependencies and input/output formats.
-5. Write a one-page design note covering semantic representation, why it exceeds flat extraction, decision logic, escalation boundaries, and next improvements.
+5. Write a one-page semantic model summary covering the representation, why it exceeds flat extraction, decision logic, escalation boundaries, and next improvements.
 6. State where AI tools assisted without disguising authorship.
 7. Run `go test -timeout 60s ./internal/doccheck`; expect success.
-8. Commit when requested: `docs: add candidate submission guide`.
+8. Commit when requested: `docs: add product documentation`.
 
 ### Task 49: Write Technical And Operational Documentation
 
@@ -1089,16 +1089,16 @@ Then verify manually:
 - The TUI steps through nodes and displays masks, evidence, outcomes, and source spans.
 - Neovim connects to the debug worker through Delve DAP while the TUI runs separately.
 - `devx doctor`, `devx demo`, and `devx full` work from documented commands.
-- The one-page design note remains within the assignment limit.
+- The one-page semantic model summary remains within its 700-word bound.
 
-## Phase 18: Post-Submission OSS Compatibility Frontends
+## Phase 18: OSS Compatibility Frontends
 
 ### Task 52: Add CEL, Rego, Cedar, And Protobuf Compatibility Frontends
 
 **Scope:**
 
-This is a post-submission expansion task, not part of the bounded assignment
-deliverable. Treat each source language as a compiler frontend over the shared
+This is a subsequent product expansion over the bounded baseline release.
+Treat each source language as a compiler frontend over the shared
 NornRune semantic IR. Do not claim drop-in compatibility or a fixed speedup
 until upstream conformance suites and controlled benchmarks prove both.
 
@@ -1186,6 +1186,8 @@ until upstream conformance suites and controlled benchmarks prove both.
 
 ### Task 53: Add A Reviewed Natural-Language Policy Frontend
 
+**Status:** Complete (2026-08-30)
+
 **Scope:**
 
 Treat model output as an untrusted policy proposal, never as an executable or
@@ -1232,7 +1234,7 @@ human approval. Do not claim legal correctness or autonomous compliance.
    provider publish or activate a policy directly.
 6. Add a deterministic non-LLM fixture provider and provider contract tests.
    Then add optional LLM adapters without making network access part of default
-   tests or the offline assignment demonstration.
+   tests or the offline embedded demonstration.
 7. Build a licensed or public-domain corpus with hand-reviewed expected
    requirements, restrictions, evidence rules, exceptions, conflicts, and
    citation spans. Measure precision, recall, citation validity, unsupported
@@ -1245,6 +1247,8 @@ human approval. Do not claim legal correctness or autonomous compliance.
 10. Commit when requested: `feat: add reviewed natural language frontend`.
 
 ### Task 54: Add SQL And PostgreSQL RLS Frontends
+
+**Status:** Complete (2026-08-31)
 
 **Scope:**
 
@@ -1304,6 +1308,8 @@ project claim.
 
 ### Task 55: Add Semantic Policy Diff And Regression Analysis
 
+**Status:** Complete (2026-08-31)
+
 **Scope:**
 
 Report proven equivalence or change only within explicit bounded domains and
@@ -1360,6 +1366,8 @@ when one is available.
 
 ### Task 56: Add A Conformant WebAssembly Target
 
+**Status:** Complete (2026-08-31)
+
 **Scope:**
 
 Export the same validated immutable Program and evaluator semantics through a
@@ -1409,6 +1417,8 @@ their own conformance and deployment tests.
 9. Commit when requested: `feat: add conformant wasm target`.
 
 ### Task 57: Add Low-Overhead OpenTelemetry And Production Telemetry
+
+**Status:** Complete (2026-08-31)
 
 **Scope:**
 
@@ -1472,6 +1482,8 @@ policy source, database credentials, or other protected payloads.
 
 ### Task 58: Draw Production Semantic Debugger Graphs
 
+**Status:** Complete (2026-08-24)
+
 **Scope:**
 
 Replace the Bubble Tea debugger's indented expression traversal with a
@@ -1534,6 +1546,8 @@ stepping. Keep graph construction and rendering outside evaluator kernels.
 
 ### Task 59: Close Production Scheduler, Benchmark CLI, And Field-Alignment Gaps
 
+**Status:** Complete (2026-08-24)
+
 **Scope:**
 
 Close the medium and low findings from the completed Tasks 1-51 audit before
@@ -1590,6 +1604,8 @@ automated repository and CI gate.
 
 ### Task 60: Configure OpenCode Subagent And Reviewer Models
 
+**Status:** Complete (2026-08-31)
+
 **Scope:**
 
 Configure OpenCode so spawned general-purpose and exploration subagents use
@@ -1608,3 +1624,61 @@ configuration and preserve all unrelated user settings.
 4. Validate the resulting configuration, restart OpenCode because configuration
    is loaded once, and smoke-test one general, one explore, and one reviewer
    invocation to confirm the effective model and reasoning level.
+
+## Phase 23: Product Framing Completion
+
+### Task 61: Complete Product Framing
+
+**Status:** Complete (2026-08-31)
+
+**Dependency:** Begin only after Task 54 is complete and merged into `main`.
+
+**Scope:**
+
+Present NornRune solely as a maintained policy-engine product. Remove legacy
+hiring-context framing from active code, commands, fixtures, tests,
+documentation, CI, deployment assets, package names, and release metadata.
+Preserve the original source materials only inside an explicitly historical
+archive that is excluded from product navigation and framing checks.
+
+**Files:**
+- Move: original source PDF to `docs/archive/source-material/`
+- Move: `Requirements.md` to `docs/archive/source-material/`
+- Modify: `README.md`
+- Modify: `AGENTS.md`
+- Modify: active files under `cmd/`, `internal/`, `policies/`, `testdata/`,
+  `docs/`, `deploy/`, `.github/`, and release configuration as required
+- Create: `docs/archive/source-material/README.md`
+- Create or modify: tracked-file product-framing scanner and tests
+
+**Steps:**
+
+1. Inventory tracked legacy hiring-context vocabulary. Classify each reference
+   as active product framing, necessary technical terminology, or archived
+   historical source.
+2. Move the original PDF and transcription into the historical source-material
+   archive. Add a short archive notice stating that the files are retained for
+   provenance and are not current product requirements.
+3. Rewrite active product documentation, CLI help/output, fixture names,
+   comments, package identifiers, tests, CI labels, deployment material, and
+   release metadata to describe supported product behavior directly. Do not
+   weaken policy semantics or remove conformance coverage while renaming inputs.
+4. Replace legacy fixture and result names with stable product
+   conformance names. Preserve R1-R3 requirement IDs and R1-R5 request behavior
+   where they remain useful as a regression corpus, but describe them as the
+   baseline conformance policy and requests.
+5. Update source-of-truth guidance so active architecture, policy-language,
+   conformance, security, and product requirement documents govern development;
+   archived source material is historical only.
+6. Add a tracked-file scanner that rejects legacy product-framing terms outside a
+   narrow reviewed allowlist for `docs/archive/source-material/`. Scan file
+   contents, paths, generated metadata, and user-visible command output without
+   scanning `.git`, build output, or untracked files.
+7. Run native, purego, 386, race/checkptr, integration, documentation, branding,
+   generated-code, Docker, and release gates with explicit timeouts. Verify the
+   installed CLI, README, machine-readable output, image labels, and release
+   archives contain no active legacy framing.
+8. Review all moves and rewrites for broken links, stale package paths, lost
+   provenance, changed baseline decisions, and accidental archive inclusion in
+   product navigation.
+9. Commit when requested: `refactor: present nornrune as a product`.

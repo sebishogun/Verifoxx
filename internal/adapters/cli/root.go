@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -28,6 +29,7 @@ type dependencies struct {
 	runTUI          func(context.Context, tuiRunOptions, sources, io.Reader, io.Writer) error
 	openBrowser     func(context.Context, string) error
 	databaseURL     func() config.SecretURL
+	now             func() time.Time
 	policy          string
 	requests        string
 	evidence        string
@@ -76,6 +78,7 @@ func productionDependencies() dependencies {
 		requests: fixtures.RequestsJSON(),
 		evidence: fixtures.EvidenceJSON(),
 		version:  buildinfo.Version(),
+		now:      time.Now,
 	}
 }
 
@@ -258,6 +261,7 @@ func newRoot(stdout, stderr io.Writer, deps dependencies) *cobra.Command {
 		newSimulateCommand(deps),
 		newDemoCommand(deps),
 		newGraphCommand(deps),
+		newDiffCommand(deps),
 		newTUICommand(deps),
 		newDebugWorkerCommand(deps),
 		newMigrationCommand(deps),

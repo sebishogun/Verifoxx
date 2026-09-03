@@ -25,11 +25,12 @@ const (
 	LanguageRego
 	LanguageCedar
 	LanguageProtobuf
+	LanguageSQL
 )
 
-var languageNames = [...]string{"native", "cel", "rego", "cedar", "protobuf"}
+var languageNames = [...]string{"native", "cel", "rego", "cedar", "protobuf", "sql"}
 
-func (value Language) Valid() bool { return value >= LanguageNative && value <= LanguageProtobuf }
+func (value Language) Valid() bool { return value >= LanguageNative && value <= LanguageSQL }
 func (value Language) String() string {
 	return enumString(uint8(value), languageNames[:])
 }
@@ -111,11 +112,12 @@ const (
 	NodeKindAny
 	NodeKindNot
 	NodeKindDefined
+	NodeKindExists
 )
 
-var nodeKindNames = [...]string{"boolean", "compare", "all", "any", "not", "defined"}
+var nodeKindNames = [...]string{"boolean", "compare", "all", "any", "not", "defined", "exists"}
 
-func (value NodeKind) Valid() bool { return value >= NodeKindBoolean && value <= NodeKindDefined }
+func (value NodeKind) Valid() bool { return value >= NodeKindBoolean && value <= NodeKindExists }
 func (value NodeKind) String() string {
 	return enumString(uint8(value), nodeKindNames[:])
 }

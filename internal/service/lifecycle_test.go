@@ -181,6 +181,41 @@ func TestServiceAdmitReleaseAllocations(t *testing.T) {
 	}
 }
 
+func TestLifecycleFlushesTelemetryAfterDatabaseAndBeforeWorkers(t *testing.T) {
+	t.Parallel()
+
+	gate, err := New(1)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	recorder := &lifecycleRecorder{}
+	telemetryErr := errors.New("collector unavailable")
+	lifecycle, err := NewLifecycle(gate, testLifecycleConfig(), ShutdownHooks{
+		CloseDatabase: func(context.Context) error {
+			recorder.append("database")
+			return nil
+		},
+		FlushTelemetry: func(context.Context) error {
+			recorder.append("telemetry")
+			return telemetryErr
+		},
+		JoinWorkers: func(context.Context) error {
+			recorder.append("workers")
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewLifecycle() error = %v", err)
+	}
+	shutdownErr := lifecycle.Shutdown(context.Background())
+	if !errors.Is(shutdownErr, telemetryErr) {
+		t.Fatalf("Shutdown() error = %v, want telemetry flush error", shutdownErr)
+	}
+	if got := recorder.snapshot(); !equalStrings(got, []string{"database", "telemetry", "workers"}) {
+		t.Fatalf("shutdown order = %v", got)
+	}
+}
+
 func TestLifecycleContinuesCleanupAndJoinsWorkersLast(t *testing.T) {
 	t.Parallel()
 

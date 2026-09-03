@@ -149,6 +149,8 @@ func (compiler *Compiler) lower(dst *program.Program, policy *public.Policy) err
 			node, err = compiler.astBuilder.AddBoolean(value, span)
 		case public.NodeKindDefined:
 			node, err = compiler.astBuilder.AddDefined(schema.FieldID(policy.NodeFields[row]), span)
+		case public.NodeKindExists:
+			node, err = compiler.astBuilder.AddExists(schema.FieldID(policy.NodeFields[row]), span)
 		case public.NodeKindCompare:
 			if policy.NodeOps[row] == public.CompareOpIn {
 				start := policy.NodeListStarts[row]

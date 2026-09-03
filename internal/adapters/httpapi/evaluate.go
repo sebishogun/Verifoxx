@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	coreservice "github.com/sebishogun/nornrune/internal/service"
+	publictelemetry "github.com/sebishogun/nornrune/telemetry"
 )
 
 var (
@@ -24,13 +25,16 @@ func (server *Server) handleEvaluate(response http.ResponseWriter, request *http
 	}
 	defer server.release(&admission, cancel)
 
-	body, err := readRequestBody(ctx, response, request, server.config.MaxBodyBytes)
+	decodeContext, decodeSpan := server.config.Telemetry.Start(ctx, publictelemetry.OperationDecode, publictelemetry.TransportHTTP)
+	body, err := readRequestBody(decodeContext, response, request, server.config.MaxBodyBytes)
 	if err != nil {
+		server.config.Telemetry.Finish(decodeSpan, traceStatus(err))
 		writeBodyError(response, err)
 		return
 	}
 	evaluation, err := decodeEvaluationRequest(body)
 	if err != nil {
+		server.config.Telemetry.Finish(decodeSpan, publictelemetry.SpanStatusInvalidArgument)
 		if errors.Is(err, errInvalidJSON) {
 			writeError(response, http.StatusBadRequest, "invalid_json", "request body is malformed JSON")
 		} else {
@@ -38,20 +42,28 @@ func (server *Server) handleEvaluate(response http.ResponseWriter, request *http
 		}
 		return
 	}
-	encoded, err := server.api.EvaluateBatch(ctx, evaluation, body[:0])
+	server.config.Telemetry.Finish(decodeSpan, publictelemetry.SpanStatusOK)
+	evaluationContext, evaluationSpan := server.config.Telemetry.Start(ctx, publictelemetry.OperationEvaluation, publictelemetry.TransportHTTP)
+	encoded, err := server.api.EvaluateBatch(evaluationContext, evaluation, body[:0])
 	if err != nil {
+		server.config.Telemetry.Finish(evaluationSpan, traceStatus(err))
 		writeServiceError(response, err)
 		return
 	}
 	if int64(len(encoded)) > server.config.MaxBodyBytes {
+		server.config.Telemetry.Finish(evaluationSpan, publictelemetry.SpanStatusResourceExhausted)
 		writeError(response, http.StatusRequestEntityTooLarge, "output_too_large", "evaluation output exceeds limit")
 		return
 	}
 	if len(encoded) == 0 || !json.Valid(encoded) {
+		server.config.Telemetry.Finish(evaluationSpan, publictelemetry.SpanStatusUnavailable)
 		writeServiceError(response, coreservice.ErrUnavailable)
 		return
 	}
+	server.config.Telemetry.Finish(evaluationSpan, publictelemetry.SpanStatusOK)
+	_, encodeSpan := server.config.Telemetry.Start(ctx, publictelemetry.OperationResponseEncode, publictelemetry.TransportHTTP)
 	writeBytes(response, http.StatusOK, encoded)
+	server.config.Telemetry.Finish(encodeSpan, publictelemetry.SpanStatusOK)
 }
 
 func decodeEvaluationRequest(body []byte) (coreservice.EvaluationRequest, error) {

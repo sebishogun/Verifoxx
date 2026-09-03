@@ -208,7 +208,7 @@ zero. Confirm production encoder code contains no map, reflection, `fmt`,
 
 **Step 3: Request independent specification and quality reviews**
 
-Review against Task 25, the approved architecture, this design, the assignment
+Review against Task 25, the approved architecture, this design, the product contract,
 output contract, malformed-input safety, deterministic order, and exact golden
 bytes. Fix every Critical and Important finding with a RED regression.
 

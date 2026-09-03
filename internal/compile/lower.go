@@ -108,7 +108,7 @@ type Lowerer struct {
 	scheduleOldToNew   []schema.InstructionID
 
 	// Scratch-slot liveness, release buckets, free-slot bits, relevance, and
-	// final per-instruction assignments. All slices survive Lower calls so a
+	// final per-instruction bindings. All slices survive Lower calls so a
 	// warmed Lowerer plans without per-instruction allocation.
 	slotLastUses    []uint32
 	slotReleaseHead []schema.InstructionID

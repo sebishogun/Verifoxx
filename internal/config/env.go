@@ -26,6 +26,12 @@ const (
 	EnvDatabaseMinConnections = "NORNRUNE_DATABASE_MIN_CONNECTIONS"
 	EnvDatabaseMaxConnections = "NORNRUNE_DATABASE_MAX_CONNECTIONS"
 	EnvDatabaseConnectTimeout = "NORNRUNE_DATABASE_CONNECT_TIMEOUT"
+
+	EnvTelemetryEnabled        = "NORNRUNE_TELEMETRY_ENABLED"
+	EnvOTelEndpoint            = "NORNRUNE_OTEL_ENDPOINT"
+	EnvTraceSampleRatio        = "NORNRUNE_TRACE_SAMPLE_RATIO"
+	EnvTelemetryExportInterval = "NORNRUNE_TELEMETRY_EXPORT_INTERVAL"
+	EnvTelemetryQueueSize      = "NORNRUNE_TELEMETRY_QUEUE_SIZE"
 )
 
 // LookupEnv supplies environment values without coupling tests to process state.
@@ -90,6 +96,21 @@ func applyEnvironment(config *Config, lookup LookupEnv) error {
 			return fmt.Errorf("%w: environment %s", ErrInvalidConfig, EnvAuditMode)
 		}
 	}
+	if config.TelemetryEnabled, err = environmentBool(config.TelemetryEnabled, lookup, EnvTelemetryEnabled); err != nil {
+		return err
+	}
+	applyEnvironmentString(&config.OTelEndpoint, lookup, EnvOTelEndpoint)
+	if config.TraceSampleRatio, err = environmentFloat64(config.TraceSampleRatio, lookup, EnvTraceSampleRatio); err != nil {
+		return err
+	}
+	if config.TelemetryExportInterval, err = environmentDuration(
+		config.TelemetryExportInterval, lookup, EnvTelemetryExportInterval,
+	); err != nil {
+		return err
+	}
+	if config.TelemetryQueueSize, err = environmentInt(config.TelemetryQueueSize, lookup, EnvTelemetryQueueSize); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -97,6 +118,30 @@ func applyEnvironmentString(destination *string, lookup LookupEnv, name string) 
 	if value, ok := lookup(name); ok {
 		*destination = value
 	}
+}
+
+func environmentBool(current bool, lookup LookupEnv, name string) (bool, error) {
+	value, ok := lookup(name)
+	if !ok {
+		return current, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%w: environment %s", ErrInvalidConfig, name)
+	}
+	return parsed, nil
+}
+
+func environmentFloat64(current float64, lookup LookupEnv, name string) (float64, error) {
+	value, ok := lookup(name)
+	if !ok {
+		return current, nil
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%w: environment %s", ErrInvalidConfig, name)
+	}
+	return parsed, nil
 }
 
 func environmentInt(current int, lookup LookupEnv, name string) (int, error) {

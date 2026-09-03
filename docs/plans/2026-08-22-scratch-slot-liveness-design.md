@@ -135,7 +135,7 @@ Tests cover:
 - semantic roots retained past the final instruction;
 - several root roles merged onto one instruction;
 - deterministic lowest-slot reuse;
-- retain-all debug assignments;
+- retain-all debug mappings;
 - malformed and non-topological Program rejection without partial mutation;
 - warm planner reuse without stale rows or allocation;
 - exact frozen ownership and 386-safe conversions;

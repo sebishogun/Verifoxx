@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sebishogun/nornrune/internal/security"
+	publictelemetry "github.com/sebishogun/nornrune/telemetry"
 )
 
 var (
@@ -23,6 +24,7 @@ const maxBodyBytes int64 = security.MaximumRequestBytes
 
 // Config fixes request storage and deadline limits for one HTTP adapter.
 type Config struct {
+	Telemetry      *publictelemetry.Runtime
 	MaxBodyBytes   int64
 	RequestTimeout time.Duration
 }

@@ -237,7 +237,7 @@ func TestCompileRejectsUnsupportedRego(t *testing.T) {
 		{name: "else", source: "package nornrune\nallow := true if { true } else := true if { true }", code: public.CodeUnsupported},
 		{name: "recursion", source: "package nornrune\nallow if { allow }", code: public.CodeUnsupported},
 		{name: "comprehension", source: "package nornrune\nallow if { [x | x := 1] }", code: public.CodeUnsupported},
-		{name: "variable assignment", source: "package nornrune\nallow if { x := input.count; x > 1 }", code: public.CodeUnsupported},
+		{name: "variable binding", source: "package nornrune\nallow if { x := input.count; x > 1 }", code: public.CodeUnsupported},
 		{name: "unification", source: "package nornrune\nallow if { input.count = 1 }", code: public.CodeUnsupported},
 		{name: "partial document", source: "package nornrune\nallow contains input.team if { true }", code: public.CodeUnsupported},
 		{name: "non boolean head", source: "package nornrune\nallow := \"yes\"", code: public.CodeType},

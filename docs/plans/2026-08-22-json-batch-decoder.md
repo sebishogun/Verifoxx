@@ -170,7 +170,7 @@ git add internal/adapters/jsonbatch
 git commit -m "feat: decode request facts and evidence csr"
 ```
 
-### Task 5: Decode Supplied Packs And Prove Recovery
+### Task 5: Decode Baseline Packs And Prove Recovery
 
 **Files:**
 - Modify: `internal/adapters/jsonbatch/decoder.go`

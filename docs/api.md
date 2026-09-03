@@ -182,7 +182,7 @@ An empty `policy_sha256` selects the active policy; otherwise it must contain
 raw 32-byte SHA-256 data, not hexadecimal text. Protobuf values are translated
 at the adapter and do not enter the evaluator.
 
-Exercise the public gRPC batch API with the bounded repository client:
+Drive the public gRPC batch API with the bounded repository client:
 
 ```bash
 timeout 60s go run ./cmd/loadgen \

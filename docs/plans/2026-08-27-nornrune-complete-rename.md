@@ -41,7 +41,7 @@ Walk tracked source/config/documentation roots without following symlinks. For
 text files, reject case-sensitive `Verifoxx`, `verifoxx`, and `VERIFOXX`.
 Allow only:
 
-- `NornRune_AI_Engineer_Assignment.pdf`, whose binary contents are never read;
+- the historical source PDF, whose binary contents are never read;
 - this implementation plan; and
 - `docs/plans/2026-08-27-nornrune-complete-rename-design.md`.
 
@@ -395,7 +395,7 @@ marketing prose throughout technical guides.
 
 Replace product identity in prose, examples, links, paths, diagrams, commands,
 environment variables, image names, and plan history. Preserve technical facts,
-dates, measured numbers, and assignment semantics. Do not alter the source PDF.
+dates, measured numbers, and baseline semantics. Do not alter the source PDF.
 
 **Step 3: Run documentation GREEN**
 

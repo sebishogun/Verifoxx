@@ -6,7 +6,7 @@
 
 ## Goal
 
-Add one presentation-oriented `nornrune demo` command that exercises the
+Add one presentation-oriented `nornrune demo` command that runs the
 complete embedded policy workflow in one process while keeping every existing
 command's JSON contract unchanged.
 

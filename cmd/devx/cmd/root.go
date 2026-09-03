@@ -142,6 +142,7 @@ var commandDefinitions = [...]commandDefinition{
 	{name: "policy:check", group: "generation"},
 	{name: "results:gen", group: "generation"},
 	{name: "results:check", group: "generation"},
+	{name: "wasm:check", group: "generation"},
 	{name: "test", group: "testing"},
 	{name: "test:unit", group: "testing"},
 	{name: "test:integration", group: "testing"},

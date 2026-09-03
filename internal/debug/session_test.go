@@ -390,7 +390,7 @@ func TestSessionBoundsBreakpointsAndCheckpoints(t *testing.T) {
 	}
 }
 
-func TestSessionQueuedCommandsPreserveSubmissionOrder(t *testing.T) {
+func TestSessionQueuedCommandsPreserveSubmitOrder(t *testing.T) {
 	t.Parallel()
 
 	p, batch, _ := debugFixture(t)

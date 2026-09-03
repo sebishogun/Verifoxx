@@ -7,9 +7,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/sebishogun/nornrune/internal/observability"
 	coreservice "github.com/sebishogun/nornrune/internal/service"
+	publictelemetry "github.com/sebishogun/nornrune/telemetry"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const policyPathPrefix = "/v1/policies/"
@@ -49,6 +52,11 @@ func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	response.Header().Set("Content-Type", "application/json")
 	response.Header().Set("X-Content-Type-Options", "nosniff")
 	response.Header().Set("Cache-Control", "no-store")
+	if server.config.Telemetry != nil {
+		ctx := server.config.Telemetry.Extract(request.Context(), propagation.HeaderCarrier(request.Header))
+		request = request.WithContext(ctx)
+		server.config.Telemetry.Inject(ctx, propagation.HeaderCarrier(response.Header()))
+	}
 	if request.URL == nil || request.URL.RawQuery != "" {
 		writeError(response, http.StatusBadRequest, "invalid_request", "request URL is invalid")
 		return
@@ -121,17 +129,23 @@ func requireJSON(response http.ResponseWriter, request *http.Request) bool {
 }
 
 func (server *Server) admit(request *http.Request) (context.Context, context.CancelFunc, coreservice.Admission, error) {
-	ctx, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
+	spanContext, span := server.config.Telemetry.Start(request.Context(), publictelemetry.OperationAdmission, publictelemetry.TransportHTTP)
+	ctx, cancel := context.WithTimeout(spanContext, server.config.RequestTimeout)
+	started := time.Now()
 	admission, err := server.admission.Admit(ctx)
 	if err != nil {
+		server.config.Telemetry.Finish(span, traceStatus(err))
 		cancel()
 		return nil, nil, coreservice.Admission{}, err
 	}
+	_ = server.config.Telemetry.AdmissionStarted(time.Since(started))
+	server.config.Telemetry.Finish(span, publictelemetry.SpanStatusOK)
 	return ctx, cancel, admission, nil
 }
 
 func (server *Server) release(admission *coreservice.Admission, cancel context.CancelFunc) {
 	_ = server.admission.Release(admission)
+	server.config.Telemetry.AdmissionFinished()
 	cancel()
 }
 
@@ -158,6 +172,29 @@ func writeServiceError(response http.ResponseWriter, err error) {
 		writeError(response, http.StatusServiceUnavailable, "service_unavailable", "service is unavailable")
 	default:
 		writeError(response, http.StatusInternalServerError, "internal_error", "internal service error")
+	}
+}
+
+func traceStatus(err error) publictelemetry.SpanStatus {
+	switch {
+	case err == nil:
+		return publictelemetry.SpanStatusOK
+	case errors.Is(err, context.Canceled):
+		return publictelemetry.SpanStatusCanceled
+	case errors.Is(err, context.DeadlineExceeded):
+		return publictelemetry.SpanStatusDeadlineExceeded
+	case errors.Is(err, errBodyTooLarge):
+		return publictelemetry.SpanStatusResourceExhausted
+	case errors.Is(err, errInvalidJSON), errors.Is(err, errInvalidEnvelope),
+		errors.Is(err, coreservice.ErrInvalidRequest), errors.Is(err, coreservice.ErrInvalidPolicy):
+		return publictelemetry.SpanStatusInvalidArgument
+	case errors.Is(err, coreservice.ErrPolicyNotFound):
+		return publictelemetry.SpanStatusNotFound
+	case errors.Is(err, coreservice.ErrAuditUnavailable), errors.Is(err, coreservice.ErrServiceBusy),
+		errors.Is(err, coreservice.ErrServiceStopping), errors.Is(err, coreservice.ErrUnavailable):
+		return publictelemetry.SpanStatusUnavailable
+	default:
+		return publictelemetry.SpanStatusInternal
 	}
 }
 
