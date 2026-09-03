@@ -13,11 +13,12 @@ import (
 // JournalConfig fixes all writer concurrency and slot storage at construction.
 // QueueDepth is the total admitted budget, including active writes.
 type JournalConfig struct {
-	Capacity     persistence.AuditCapacity
-	WriteTimeout time.Duration
-	Mode         persistence.AuditMode
-	Writers      int
-	QueueDepth   int
+	BestEffortComplete func(persisted bool)
+	Capacity           persistence.AuditCapacity
+	WriteTimeout       time.Duration
+	Mode               persistence.AuditMode
+	Writers            int
+	QueueDepth         int
 }
 
 // JournalStats is one lock-free batch-level counter snapshot.
@@ -38,21 +39,22 @@ type journalSlot struct {
 
 // Journal owns fixed audit batches and PostgreSQL writer goroutines.
 type Journal struct {
-	store        persistence.AuditStore
-	available    chan *journalSlot
-	jobs         chan *journalSlot
-	stopping     chan struct{}
-	closed       chan struct{}
-	slots        []journalSlot
-	workersDone  sync.WaitGroup
-	accepted     atomic.Uint64
-	succeeded    atomic.Uint64
-	failed       atomic.Uint64
-	dropped      atomic.Uint64
-	inFlight     atomic.Uint64
-	writeTimeout time.Duration
-	closeOnce    sync.Once
-	mode         persistence.AuditMode
+	store              persistence.AuditStore
+	available          chan *journalSlot
+	jobs               chan *journalSlot
+	stopping           chan struct{}
+	closed             chan struct{}
+	bestEffortComplete func(bool)
+	slots              []journalSlot
+	workersDone        sync.WaitGroup
+	accepted           atomic.Uint64
+	succeeded          atomic.Uint64
+	failed             atomic.Uint64
+	dropped            atomic.Uint64
+	inFlight           atomic.Uint64
+	writeTimeout       time.Duration
+	closeOnce          sync.Once
+	mode               persistence.AuditMode
 }
 
 // NewJournal allocates all persistent-mode storage before starting writers.
@@ -62,11 +64,12 @@ func NewJournal(store persistence.AuditStore, config JournalConfig) (*Journal, e
 		return nil, fmt.Errorf("%w: audit mode", persistence.ErrInvalidJournal)
 	}
 	journal := &Journal{
-		store:        store,
-		stopping:     make(chan struct{}),
-		closed:       make(chan struct{}),
-		writeTimeout: config.WriteTimeout,
-		mode:         config.Mode,
+		store:              store,
+		stopping:           make(chan struct{}),
+		closed:             make(chan struct{}),
+		bestEffortComplete: config.BestEffortComplete,
+		writeTimeout:       config.WriteTimeout,
+		mode:               config.Mode,
 	}
 	if config.Mode == persistence.AuditOff {
 		return journal, nil
@@ -217,6 +220,9 @@ func (journal *Journal) worker() {
 			journal.succeeded.Add(1)
 		} else {
 			journal.failed.Add(1)
+		}
+		if !slot.required && journal.bestEffortComplete != nil {
+			journal.bestEffortComplete(err == nil)
 		}
 		journal.inFlight.Add(^uint64(0))
 		if slot.required {

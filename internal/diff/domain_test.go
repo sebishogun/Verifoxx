@@ -80,8 +80,9 @@ func TestDomainValidationCardinalityAndCompleteness(t *testing.T) {
 			{},
 			{Records: []Evidence{{Kind: "approval", State: "current", Subject: "request", Scope: "aggregate", Timing: "pre_execution"}}},
 		},
-		MaxCandidates: 12,
-		BatchRows:     4,
+		MaxCandidates:  12,
+		BatchRows:      4,
+		EvidenceClosed: true,
 	}
 	cardinality, complete, err := domain.Validate()
 	if err != nil || cardinality != 12 || !complete {
@@ -91,6 +92,12 @@ func TestDomainValidationCardinalityAndCompleteness(t *testing.T) {
 	cardinality, complete, err = domain.Validate()
 	if err != nil || cardinality != 12 || complete {
 		t.Fatalf("open Validate() = (%d,%v,%v), want (12,false,nil)", cardinality, complete, err)
+	}
+	domain.Fields[0].Closed = true
+	domain.EvidenceClosed = false
+	cardinality, complete, err = domain.Validate()
+	if err != nil || cardinality != 12 || complete {
+		t.Fatalf("open evidence Validate() = (%d,%v,%v), want (12,false,nil)", cardinality, complete, err)
 	}
 }
 

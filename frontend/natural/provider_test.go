@@ -69,6 +69,21 @@ func TestAppendSegmentsSkipsEmptyRuns(t *testing.T) {
 	}
 }
 
+func TestAppendSegmentsClampsMaxUint32BeforeIntArithmetic(t *testing.T) {
+	document, err := NewDocument([]byte("alpha"), []uint32{0}, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	segments, err := AppendSegments(nil, document, ^uint32(0), DefaultLimits())
+	if err != nil {
+		t.Fatalf("AppendSegments() error = %v", err)
+	}
+	want := []Segment{{Span: Span{Start: 0, End: 5}, PageStart: 0, PageEnd: 1}}
+	if !reflect.DeepEqual(segments, want) {
+		t.Fatalf("segments = %#v, want %#v", segments, want)
+	}
+}
+
 func TestAppendSegmentsLimitFailureIsAtomic(t *testing.T) {
 	document, err := NewDocument([]byte("one\n\ntwo"), []uint32{0}, DefaultLimits())
 	if err != nil {

@@ -110,6 +110,24 @@ func TestABIEnumsAreFixedAndBounded(t *testing.T) {
 	if !ErrorNone.Valid() || !ErrorInternal.Valid() || ErrorCode(255).Valid() {
 		t.Fatal("error-code validity contract changed")
 	}
+	operations := [...]Operation{
+		OperationMetadata, OperationAllocate, OperationLoadProgram, OperationUploadInput, OperationEvaluate,
+		OperationResultLength, OperationReadResult, OperationReset, OperationCancel, OperationSetFuel, OperationLastError,
+	}
+	for row, operation := range operations {
+		if operation != Operation(row+1) {
+			t.Fatalf("operation %d = %d, want %d", row, operation, row+1)
+		}
+	}
+	errors := [...]ErrorCode{
+		ErrorNone, ErrorInvalidArgument, ErrorIncompatibleVersion, ErrorLimitExceeded, ErrorInvalidArtifact,
+		ErrorInvalidFrame, ErrorInvalidState, ErrorCancelled, ErrorFuelExhausted, ErrorOutputTooSmall, ErrorInternal,
+	}
+	for row, code := range errors {
+		if code != ErrorCode(row) {
+			t.Fatalf("error code %d = %d, want %d", row, code, row)
+		}
+	}
 	if CapabilityAll != CapabilityRequestMetadata|CapabilityClock|CapabilityStorage|CapabilityNetwork|CapabilityLogging {
 		t.Fatalf("CapabilityAll = %#x", CapabilityAll)
 	}

@@ -29,6 +29,26 @@ func TestStableEnumValues(t *testing.T) {
 	if ItemKindInvalid.Valid() || ItemKind(9).Valid() {
 		t.Fatal("out-of-range ItemKind is valid")
 	}
+	semanticKinds := []SemanticKind{
+		SemanticKindRequirement,
+		SemanticKindApplicability,
+		SemanticKindClause,
+		SemanticKindAssertion,
+		SemanticKindEvidence,
+		SemanticKindResolution,
+		SemanticKindRemediation,
+		SemanticKindExplanation,
+		SemanticKindOutcome,
+		SemanticKindAssumption,
+	}
+	for row, kind := range semanticKinds {
+		if got, want := uint8(kind), uint8(row+1); got != want || !kind.Valid() {
+			t.Fatalf("SemanticKind at row %d = %d (valid %t), want %d", row, got, kind.Valid(), want)
+		}
+	}
+	if SemanticKindInvalid.Valid() || SemanticKind(11).Valid() {
+		t.Fatal("out-of-range SemanticKind is valid")
+	}
 
 	codes := []DiagnosticCode{
 		CodeInvalidDocument,
@@ -88,6 +108,7 @@ func TestNewDocumentRejectsInvalidInput(t *testing.T) {
 		{name: "duplicate page", source: []byte("source"), pages: []uint32{0, 0}},
 		{name: "unsorted page", source: []byte("source"), pages: []uint32{0, 4, 2}},
 		{name: "page past source", source: []byte("source"), pages: []uint32{0, 7}},
+		{name: "page splits UTF-8 rune", source: []byte("éx"), pages: []uint32{0, 1}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -163,6 +184,21 @@ func TestBuilderAppendsOwnedProposal(t *testing.T) {
 	}
 	if got, want := proposal.ItemParents, []ItemID{0, 1}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("ItemParents = %v, want %v", got, want)
+	}
+}
+
+func TestBuilderRejectsInvalidUTF8Rows(t *testing.T) {
+	var builder Builder
+	builder.Reset([sha256.Size]byte{}, ProviderInfo{ID: "fixture", Version: "1"}, DefaultLimits())
+	if _, err := builder.AddCitation(0, Span{Start: 0, End: 1}, []byte{0xc3}); !errors.Is(err, ErrInvalidProposal) {
+		t.Fatalf("AddCitation() error = %v, want ErrInvalidProposal", err)
+	}
+	citation, err := builder.AddCitation(0, Span{Start: 0, End: 1}, []byte("R"))
+	if err != nil {
+		t.Fatalf("valid AddCitation() error = %v", err)
+	}
+	if _, err := builder.AddItem(ItemKindRequirement, 0, []byte{0xc3}, []CitationID{citation}); !errors.Is(err, ErrInvalidProposal) {
+		t.Fatalf("AddItem() error = %v, want ErrInvalidProposal", err)
 	}
 }
 

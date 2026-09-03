@@ -40,6 +40,12 @@ func TestConformanceNodeMatchesNativeResultFrame(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mismatchManifest := manifest
+	mismatchManifest.Limits.MaxInputBytes--
+	mismatch, err := EncodeProgram(nil, compiled, mismatchManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	directory := t.TempDir()
 	paths := []string{
@@ -47,8 +53,9 @@ func TestConformanceNodeMatchesNativeResultFrame(t *testing.T) {
 		filepath.Join(directory, "program.bin"),
 		filepath.Join(directory, "input.bin"),
 		filepath.Join(directory, "result.bin"),
+		filepath.Join(directory, "mismatched-program.bin"),
 	}
-	for row, contents := range [][]byte{module, artifact, inputFrame, want} {
+	for row, contents := range [][]byte{module, artifact, inputFrame, want, mismatch} {
 		if err := os.WriteFile(paths[row], contents, 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -60,7 +67,7 @@ func TestConformanceNodeMatchesNativeResultFrame(t *testing.T) {
 	for _, scriptName := range []string{"conformance.mjs", "browser-conformance.mjs"} {
 		t.Run(scriptName, func(t *testing.T) {
 			script := filepath.Join(repository, "testdata", "wasm", scriptName)
-			command := exec.CommandContext(ctx, node, "--no-warnings", script, paths[0], paths[1], paths[2], paths[3])
+			command := exec.CommandContext(ctx, node, "--no-warnings", script, paths[0], paths[1], paths[2], paths[3], paths[4])
 			command.Dir = repository
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("node conformance: %v\n%s", err, output)

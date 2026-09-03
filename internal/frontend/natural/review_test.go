@@ -159,6 +159,37 @@ func TestAppendReviewReturnsValidationDiagnostics(t *testing.T) {
 	}
 }
 
+func TestAppendReviewRetainsStructuralDiagnosticAtLimit(t *testing.T) {
+	document, proposal := reviewProposal(t)
+	appendItem := func(kind public.ItemKind, text string, citation public.CitationID) {
+		proposal.ItemKinds = append(proposal.ItemKinds, kind)
+		proposal.ItemParents = append(proposal.ItemParents, 1)
+		proposal.ItemTextStarts = append(proposal.ItemTextStarts, uint32(len(proposal.ItemBytes)))
+		proposal.ItemTextLengths = append(proposal.ItemTextLengths, uint32(len(text)))
+		proposal.ItemCitationStarts = append(proposal.ItemCitationStarts, uint32(len(proposal.ItemCitationIDs)))
+		proposal.ItemCitationCounts = append(proposal.ItemCitationCounts, 1)
+		proposal.ItemBytes = append(proposal.ItemBytes, text...)
+		proposal.ItemCitationIDs = append(proposal.ItemCitationIDs, citation)
+	}
+	appendItem(public.ItemKindAmbiguity, "scope is unclear", 1)
+	appendItem(public.ItemKindAssumption, "malformed citation", 0)
+
+	limits := public.DefaultLimits()
+	limits.MaxDiagnostics = 1
+	dst := []byte("prefix")
+	var reviewer Reviewer
+	got, diagnostics, err := reviewer.AppendReview(dst, document, proposal, limits)
+	if err != nil {
+		t.Fatalf("AppendReview() error = %v", err)
+	}
+	if !bytes.Equal(got, dst) {
+		t.Fatalf("AppendReview() output = %q, want unchanged %q", got, dst)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Code != public.CodeInvalidProposal {
+		t.Fatalf("AppendReview() diagnostics = %#v, want structural failure", diagnostics)
+	}
+}
+
 func TestAppendReviewOutputLimitIsAtomicAndRedacted(t *testing.T) {
 	document, proposal := reviewProposal(t)
 	limits := public.DefaultLimits()

@@ -23,15 +23,14 @@ type searchPlan struct {
 
 	cardinality   uint64
 	evidenceCount uint32
+	usesEvidence  bool
 }
 
 func buildSearchPlan(dst *searchPlan, oldProgram, newProgram *program.Program, domain Domain) (*searchPlan, error) {
 	if oldProgram == nil || newProgram == nil || domain.MaxCandidates == 0 || domain.BatchRows == 0 || domain.BatchRows > MaxBatchRows {
 		return nil, ErrInvalidDomain
 	}
-	validationDomain := domain
-	validationDomain.MaxCandidates = math.MaxUint64
-	if _, _, err := validationDomain.Validate(); err != nil {
+	if err := domain.validateShape(); err != nil {
 		return nil, err
 	}
 	if dst == nil {
@@ -45,6 +44,7 @@ func buildSearchPlan(dst *searchPlan, oldProgram, newProgram *program.Program, d
 	dst.changed = dst.changed[:0]
 	dst.cardinality = 1
 	dst.evidenceCount = 1
+	dst.usesEvidence = programUsesEvidence(oldProgram) || programUsesEvidence(newProgram)
 	if err := collectDependencies(dst, oldProgram, newProgram, domain); err != nil {
 		return nil, err
 	}
@@ -53,10 +53,10 @@ func buildSearchPlan(dst *searchPlan, oldProgram, newProgram *program.Program, d
 		var ok bool
 		dst.cardinality, ok = checkedProduct(dst.cardinality, uint64(count))
 		if !ok {
-			return nil, ErrInvalidDomain
+			return nil, ErrCandidateBudget
 		}
 	}
-	if programUsesEvidence(oldProgram) || programUsesEvidence(newProgram) {
+	if dst.usesEvidence {
 		if len(domain.EvidenceSets) == 0 {
 			return nil, ErrInvalidDomain
 		}
@@ -64,7 +64,7 @@ func buildSearchPlan(dst *searchPlan, oldProgram, newProgram *program.Program, d
 		var ok bool
 		dst.cardinality, ok = checkedProduct(dst.cardinality, uint64(dst.evidenceCount))
 		if !ok {
-			return nil, ErrInvalidDomain
+			return nil, ErrCandidateBudget
 		}
 	}
 	if dst.cardinality > domain.MaxCandidates {
@@ -74,6 +74,15 @@ func buildSearchPlan(dst *searchPlan, oldProgram, newProgram *program.Program, d
 		return nil, ErrCandidateBudget
 	}
 	return dst, nil
+}
+
+func (plan *searchPlan) complete(domain Domain) bool {
+	for _, fieldRow := range plan.fieldRows {
+		if uint64(fieldRow) >= uint64(len(domain.Fields)) || !domain.Fields[fieldRow].Closed {
+			return false
+		}
+	}
+	return !plan.usesEvidence || domain.EvidenceClosed
 }
 
 func programUsesEvidence(compiled *program.Program) bool {

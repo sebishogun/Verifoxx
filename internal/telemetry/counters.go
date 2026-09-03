@@ -163,12 +163,10 @@ type durationCounters struct {
 }
 
 type totalCounters struct {
-	batches              atomic.Uint64
 	failures             atomic.Uint64
 	rows                 atomic.Uint64
 	durationNanoseconds  atomic.Uint64
 	queueWaitNanoseconds atomic.Uint64
-	queueObservations    atomic.Uint64
 	shutdownFailures     atomic.Uint64
 	exportDrops          atomic.Uint64
 	activeAdmissions     atomic.Int64
@@ -205,9 +203,7 @@ func (counters *Counters) Add(delta BatchDelta) error {
 	if delta.QueueObserved {
 		saturatingAdd(&counters.durations.queue[durationBucket(delta.QueueWait)], 1)
 		saturatingAdd(&counters.totals.queueWaitNanoseconds, uint64(delta.QueueWait))
-		saturatingAdd(&counters.totals.queueObservations, 1)
 	}
-	saturatingAdd(&counters.totals.batches, delta.Batches)
 	saturatingAdd(&counters.totals.failures, delta.Failures)
 	saturatingAdd(&counters.totals.rows, delta.Rows)
 	saturatingAdd(&counters.totals.durationNanoseconds, uint64(delta.Duration))
@@ -238,7 +234,6 @@ func (counters *Counters) ObserveAdmission(queueWait time.Duration) error {
 	}
 	saturatingAdd(&counters.durations.queue[durationBucket(queueWait)], 1)
 	saturatingAdd(&counters.totals.queueWaitNanoseconds, uint64(queueWait))
-	saturatingAdd(&counters.totals.queueObservations, 1)
 	counters.AdmissionStarted()
 	return nil
 }
@@ -271,16 +266,19 @@ func (counters *Counters) Snapshot() Snapshot {
 	for row := range snapshot.Reloads {
 		snapshot.Reloads[row] = counters.outcomes.reloads[row].Load()
 	}
+	var latencyTotal, queueTotal uint64
 	for row := range snapshot.LatencyBuckets {
 		snapshot.LatencyBuckets[row] = counters.durations.latency[row].Load()
 		snapshot.QueueBuckets[row] = counters.durations.queue[row].Load()
+		latencyTotal = SaturatingSum(latencyTotal, snapshot.LatencyBuckets[row])
+		queueTotal = SaturatingSum(queueTotal, snapshot.QueueBuckets[row])
 	}
-	snapshot.Batches = counters.totals.batches.Load()
+	snapshot.Batches = latencyTotal
 	snapshot.Failures = counters.totals.failures.Load()
 	snapshot.Rows = counters.totals.rows.Load()
 	snapshot.DurationNanoseconds = counters.totals.durationNanoseconds.Load()
 	snapshot.QueueWaitNanoseconds = counters.totals.queueWaitNanoseconds.Load()
-	snapshot.QueueObservations = counters.totals.queueObservations.Load()
+	snapshot.QueueObservations = queueTotal
 	snapshot.ShutdownFailures = counters.totals.shutdownFailures.Load()
 	snapshot.ExportDrops = counters.totals.exportDrops.Load()
 	snapshot.ActiveAdmissions = counters.totals.activeAdmissions.Load()
@@ -330,4 +328,12 @@ func saturatingAdd(value *atomic.Uint64, delta uint64) {
 			return
 		}
 	}
+}
+
+// SaturatingSum adds fixed telemetry counters without allowing wraparound.
+func SaturatingSum(left, right uint64) uint64 {
+	if math.MaxUint64-left < right {
+		return math.MaxUint64
+	}
+	return left + right
 }

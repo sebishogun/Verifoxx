@@ -10,7 +10,8 @@ func TestPolicyDiffGuideStatesExactProofBoundary(t *testing.T) {
 	content := strings.ToLower(readDocument(t, "docs/policy-diff.md"))
 	required := []string{
 		"finite", "closed", "4x4", "inconclusive", "counterexample", "native replay",
-		"proof provider", "exit code `3`", "exit code `4`", "expiry", "cold search", "0 b/op",
+		"proof provider", "return promptly", "context is done", "exit code `3`", "exit code `4`",
+		"expiry", "cold search", "0 b/op",
 	}
 	for _, phrase := range required {
 		if !strings.Contains(content, phrase) {

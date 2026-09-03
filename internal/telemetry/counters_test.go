@@ -79,6 +79,16 @@ func TestCountersSaturateInsteadOfWrapping(t *testing.T) {
 	}
 }
 
+func TestSnapshotDerivesHistogramCountsFromLoadedBuckets(t *testing.T) {
+	var counters Counters
+	counters.durations.latency[0].Store(1)
+	counters.durations.queue[0].Store(1)
+	snapshot := counters.Snapshot()
+	if snapshot.Batches != 1 || snapshot.QueueObservations != 1 {
+		t.Fatalf("histogram counts = batches:%d queue:%d, want 1/1", snapshot.Batches, snapshot.QueueObservations)
+	}
+}
+
 func TestCountersAndSnapshotContainNoDynamicFields(t *testing.T) {
 	for _, valueType := range []reflect.Type{reflect.TypeFor[Counters](), reflect.TypeFor[Snapshot]()} {
 		for row := range valueType.NumField() {

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 
-	"github.com/sebishogun/nornrune/internal/jsonstrict"
 	policydiff "github.com/sebishogun/nornrune/policy/diff"
 )
 
@@ -28,11 +27,12 @@ type Config struct {
 }
 
 type configJSON struct {
-	Fields        []fieldJSON       `json:"fields"`
-	EvidenceSets  []evidenceSetJSON `json:"evidence_sets"`
-	Transitions   []transitionJSON  `json:"transitions"`
-	MaxCandidates uint64            `json:"max_candidates"`
-	BatchRows     uint32            `json:"batch_rows"`
+	Fields         []fieldJSON       `json:"fields"`
+	EvidenceSets   []evidenceSetJSON `json:"evidence_sets"`
+	Transitions    []transitionJSON  `json:"transitions"`
+	MaxCandidates  uint64            `json:"max_candidates"`
+	BatchRows      uint32            `json:"batch_rows"`
+	EvidenceClosed bool              `json:"evidence_closed"`
 }
 
 type fieldJSON struct {
@@ -74,7 +74,7 @@ func DecodeConfig(source []byte, limits Limits) (Config, error) {
 		limits.MaxEvidenceRecords <= 0 || len(source) == 0 || len(source) > limits.MaxBytes {
 		return Config{}, ErrInvalidConfig
 	}
-	if jsonstrict.Validate(source, 64) != nil {
+	if preflightConfigJSON(source, limits) != nil {
 		return Config{}, ErrInvalidConfig
 	}
 	decoder := json.NewDecoder(bytes.NewReader(source))
@@ -95,6 +95,7 @@ func DecodeConfig(source []byte, limits Limits) (Config, error) {
 	config.Domain.Fields = make([]policydiff.FieldDomain, len(decoded.Fields))
 	config.Domain.MaxCandidates = decoded.MaxCandidates
 	config.Domain.BatchRows = decoded.BatchRows
+	config.Domain.EvidenceClosed = decoded.EvidenceClosed
 	valueCount := 0
 	for row := range decoded.Fields {
 		kind, ok := decodeKind(decoded.Fields[row].Kind)

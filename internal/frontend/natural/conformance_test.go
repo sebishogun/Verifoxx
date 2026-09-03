@@ -115,6 +115,44 @@ func TestCompileRejectsSignedMalformedNativePolicyAtomically(t *testing.T) {
 	}
 }
 
+func TestCompileRejectsSignedDraftWithUnmappedSemanticRow(t *testing.T) {
+	document, proposal, draft := baselineReview(t)
+	var policy map[string]any
+	if err := json.Unmarshal(draft.PolicySource, &policy); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	assumptions, ok := policy["assumptions"].([]any)
+	if !ok {
+		t.Fatalf("assumptions = %#v", policy["assumptions"])
+	}
+	policy["assumptions"] = append(assumptions, "This assumption was not reviewed.")
+	mutated, err := json.Marshal(policy)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	draft.PolicySource = mutated
+
+	signer, verifier := approvalKeys(t)
+	var reviewer Reviewer
+	token, diagnostics, err := reviewer.IssueApproval(
+		document, proposal, draft, []byte("reviewer-1"), 100, 200, signer, public.DefaultLimits(),
+	)
+	if err != nil || len(diagnostics) != 0 {
+		t.Fatalf("IssueApproval() = diagnostics %#v, error %v", diagnostics, err)
+	}
+	var lowerer Lowerer
+	var compiled program.Program
+	compileDiagnostics, err := lowerer.Compile(
+		&compiled, document, proposal, draft, token, verifier, 150, 5, public.DefaultLimits(),
+	)
+	if len(compileDiagnostics) != 0 {
+		t.Fatalf("Compile() diagnostics = %#v", compileDiagnostics)
+	}
+	if !errors.Is(err, public.ErrInvalidDraft) {
+		t.Fatalf("Compile() error = %v, want ErrInvalidDraft", err)
+	}
+}
+
 func TestNaturalFrontendHasNoPublicationImports(t *testing.T) {
 	for _, source := range []string{"lower.go", "review.go", "citations.go"} {
 		content, err := readLocalSource(source)
@@ -171,12 +209,31 @@ func baselineReview(tb testing.TB) (*public.Document, *public.Proposal, *public.
 		mappings = append(mappings, requirementItem, restrictionItem)
 	}
 	proposal := builder.Finish()
+	policySource := []byte(nornrunepolicy.Source())
+	fields, symbols, err := nornrunepolicy.NewSchema()
+	if err != nil {
+		tb.Fatalf("NewSchema() error = %v", err)
+	}
+	policyBuilder := ast.NewBuilder(ast.Hints{SourceBytes: len(policySource)})
+	if err := jsonpolicy.Decode(policyBuilder, policySource, fields, symbols, jsonpolicy.Limits{}); err != nil {
+		tb.Fatalf("Decode reviewed policy: %v", err)
+	}
+	semanticKinds, semanticIDs := appendPolicySemanticRows(nil, nil, policyBuilder.Document())
+	mappingStarts := make([]uint32, len(semanticKinds))
+	mappingCounts := make([]uint16, len(semanticKinds))
+	mappingItems := make([]public.ItemID, 0, len(semanticKinds)*len(mappings))
+	for row := range semanticKinds {
+		mappingStarts[row] = uint32(len(mappingItems))
+		mappingCounts[row] = uint16(len(mappings))
+		mappingItems = append(mappingItems, mappings...)
+	}
 	draft := &public.ReviewedDraft{
-		PolicySource:         []byte(nornrunepolicy.Source()),
-		RequirementIDs:       []uint32{1, 2, 3},
-		MappingStarts:        []uint32{0, 2, 4},
-		MappingCounts:        []uint16{2, 2, 2},
-		MappingProposalItems: mappings,
+		PolicySource:         policySource,
+		SemanticKinds:        semanticKinds,
+		SemanticIDs:          semanticIDs,
+		MappingStarts:        mappingStarts,
+		MappingCounts:        mappingCounts,
+		MappingProposalItems: mappingItems,
 	}
 	return document, &proposal, draft
 }

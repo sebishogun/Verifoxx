@@ -50,21 +50,35 @@ func CheckRegression(result Result, oldSource, newSource []byte, exceptions []Ex
 	if result.Outcome == Inconclusive {
 		return RegressionDecision{Reason: "comparison is inconclusive"}
 	}
+	if !result.Complete {
+		return RegressionDecision{Reason: "comparison is incomplete"}
+	}
 	if !result.Forbidden {
 		return RegressionDecision{Allowed: true, Reason: "no forbidden transition"}
 	}
-	if !result.HasCounterexample {
-		return RegressionDecision{Reason: "forbidden result has no counterexample"}
+	forbiddenCandidates := uint64(0)
+	for _, count := range result.ForbiddenTransitions {
+		if ^uint64(0)-forbiddenCandidates < count {
+			return RegressionDecision{Reason: "forbidden candidate count is invalid"}
+		}
+		forbiddenCandidates += count
+	}
+	if forbiddenCandidates != 1 {
+		return RegressionDecision{Reason: "exceptions require exactly one forbidden candidate"}
+	}
+	if !result.HasForbiddenCounterexample {
+		return RegressionDecision{Reason: "forbidden result has no forbidden counterexample"}
 	}
 	oldDigest := SourceDigest(oldSource)
 	newDigest := SourceDigest(newSource)
-	witnessDigest := CounterexampleDigest(result.Counterexample)
+	witness := result.ForbiddenCounterexample
+	witnessDigest := CounterexampleDigest(witness)
 	now = now.UTC()
 	for row := range exceptions {
 		exception := &exceptions[row]
 		if !validException(*exception) || !now.Before(exception.Expires.UTC()) ||
 			exception.OldDigest != oldDigest || exception.NewDigest != newDigest || exception.WitnessDigest != witnessDigest ||
-			exception.OldDecision != result.Counterexample.Old.Decision || exception.NewDecision != result.Counterexample.New.Decision {
+			exception.OldDecision != witness.Old.Decision || exception.NewDecision != witness.New.Decision {
 			continue
 		}
 		return RegressionDecision{Allowed: true, ExceptionID: exception.ID, Reason: exception.Reason}
@@ -218,6 +232,9 @@ func appendEvaluation(dst []byte, evaluation Evaluation) []byte {
 			dst = binary.LittleEndian.AppendUint32(dst, value)
 		}
 	}
+	dst = append(dst, evaluation.AssumptionsDigest[:]...)
+	dst = append(dst, evaluation.DriverTemplatesDigest[:]...)
+	dst = append(dst, evaluation.EvidenceIssuesDigest[:]...)
 	return dst
 }
 

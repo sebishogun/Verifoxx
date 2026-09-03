@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -89,6 +91,39 @@ func TestSemanticIdentityIgnoresPresentationAndPolicyIdentity(t *testing.T) {
 	changedSpans.OutcomeSourceStarts[0]++
 	if !semanticIdentity(oldProgram, &changedSpans) {
 		t.Fatal("source-span-only changes changed semantic identity")
+	}
+}
+
+func TestSemanticIdentityIgnoresPolicyIdentityTemplateCapacity(t *testing.T) {
+	source, err := os.ReadFile("../../testdata/policies/valid-full.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := bytes.Replace(source, []byte(`"name": "nornrune"`), []byte(`"name": "renamed"`), 1)
+	fields := FieldSchema{Fields: []FieldSpec{
+		{Name: "subject.trust", Kind: FieldKindString, Group: FieldGroupSubject},
+		{Name: "context.environment", Kind: FieldKindString, Group: FieldGroupContext},
+		{Name: "context.usage", Kind: FieldKindString, Group: FieldGroupContext},
+	}}
+
+	var analyzer Analyzer
+	oldProgram, newProgram, err := analyzer.compilePair(source, renamed, fields)
+	if err != nil {
+		t.Fatalf("compile pair: %v", err)
+	}
+	if slices.Equal(oldProgram.TemplateMaxBytes, newProgram.TemplateMaxBytes) {
+		t.Fatal("fixture did not change metadata-derived template capacity")
+	}
+	if !semanticIdentity(oldProgram, newProgram) {
+		t.Fatal("metadata-derived template capacity changed semantic identity")
+	}
+	oldAssumptions := oldProgram.Explanations.Assumptions()
+	newAssumptions := newProgram.Explanations.Assumptions()
+	if len(oldAssumptions) == 0 || !templateRowsEqual(oldProgram, newProgram, oldAssumptions[0], newAssumptions[0]) {
+		t.Fatal("metadata-derived template capacity changed row semantics")
+	}
+	if templateSequenceDigest(oldProgram, oldAssumptions) != templateSequenceDigest(newProgram, newAssumptions) {
+		t.Fatal("metadata-derived template capacity changed semantic digest")
 	}
 }
 

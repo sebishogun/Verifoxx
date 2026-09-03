@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"errors"
+	"math"
 	"net/url"
 	"strings"
 	"time"
@@ -63,13 +64,13 @@ type (
 )
 
 type Config struct {
+	QueueDepth       func() uint64
 	Endpoint         string
 	ServiceVersion   string
 	BuildVersion     string
 	ExportInterval   time.Duration
 	TraceSampleRatio float64
 	ExportQueueSize  uint32
-	QueueDepth       func() uint64
 	Enabled          bool
 }
 
@@ -109,6 +110,7 @@ func (config Config) valid() bool {
 	if !validToken(config.ServiceVersion) || !validToken(config.BuildVersion) ||
 		config.ExportInterval < 100*time.Millisecond || config.ExportInterval > time.Hour ||
 		config.ExportQueueSize == 0 || config.ExportQueueSize > 1<<16 ||
+		math.IsNaN(config.TraceSampleRatio) || math.IsInf(config.TraceSampleRatio, 0) ||
 		config.TraceSampleRatio < 0 || config.TraceSampleRatio > 1 {
 		return false
 	}

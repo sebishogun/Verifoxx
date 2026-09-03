@@ -21,11 +21,14 @@ type Evaluation struct {
 	ReasonEvidenceStates []uint32
 	RemediationIDs       []uint32
 
-	Index       uint64
-	SourceStart uint32
-	SourceEnd   uint32
-	OutcomeID   uint32
-	Decision    Decision
+	Index                 uint64
+	AssumptionsDigest     [32]byte
+	DriverTemplatesDigest [32]byte
+	EvidenceIssuesDigest  [32]byte
+	SourceStart           uint32
+	SourceEnd             uint32
+	OutcomeID             uint32
+	Decision              Decision
 }
 
 // Counterexample owns the smallest differing candidate and both evaluations.
@@ -39,12 +42,15 @@ type Counterexample struct {
 
 // Result is the owned bounded comparison result.
 type Result struct {
-	Uncertainty       string
-	Counterexample    Counterexample
-	Transitions       [16]uint64
-	Candidates        uint64
-	Outcome           Outcome
-	Complete          bool
-	Forbidden         bool
-	HasCounterexample bool
+	Uncertainty                string
+	Counterexample             Counterexample
+	ForbiddenCounterexample    Counterexample
+	Transitions                [16]uint64
+	ForbiddenTransitions       [16]uint64
+	Candidates                 uint64
+	Outcome                    Outcome
+	Complete                   bool
+	Forbidden                  bool
+	HasCounterexample          bool
+	HasForbiddenCounterexample bool
 }

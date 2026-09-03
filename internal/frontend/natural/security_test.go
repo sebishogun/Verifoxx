@@ -45,7 +45,7 @@ func TestAmbiguityAndConflictBlockSignerInvocation(t *testing.T) {
 			}
 			document, proposal := oneRequirementProposal(t, source, test.kind)
 			draft := &public.ReviewedDraft{
-				PolicySource: []byte(`{"schema_version":1}`), RequirementIDs: []uint32{1},
+				PolicySource: []byte(`{"schema_version":1}`), SemanticKinds: []public.SemanticKind{public.SemanticKindRequirement}, SemanticIDs: []uint32{1},
 				MappingStarts: []uint32{0}, MappingCounts: []uint16{1}, MappingProposalItems: []public.ItemID{1},
 			}
 			var reviewer Reviewer

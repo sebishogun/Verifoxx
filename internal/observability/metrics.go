@@ -10,6 +10,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	internaltelemetry "github.com/sebishogun/nornrune/internal/telemetry"
 	publictelemetry "github.com/sebishogun/nornrune/telemetry"
 )
 
@@ -211,7 +212,7 @@ func cumulativeBuckets(values [publictelemetry.LatencyBucketCount]uint64) map[fl
 	buckets := make(map[float64]uint64, len(bounds))
 	var total uint64
 	for row, bound := range bounds {
-		total += values[row]
+		total = internaltelemetry.SaturatingSum(total, values[row])
 		buckets[bound.Seconds()] = total
 	}
 	return buckets

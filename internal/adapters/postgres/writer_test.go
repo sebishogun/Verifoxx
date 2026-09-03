@@ -329,6 +329,43 @@ func TestJournalBestEffortFailureReturnsSlotAndUpdatesStats(t *testing.T) {
 	}
 }
 
+func TestJournalReportsBestEffortTerminalOutcome(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		storeErr  error
+		persisted bool
+	}{
+		{name: "persisted", persisted: true},
+		{name: "failed", storeErr: errors.New("write failed")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			outcomes := make(chan bool, 1)
+			store := &fakeAuditStore{append: func(context.Context, *persistence.AuditBatch) error {
+				return test.storeErr
+			}}
+			config := testJournalConfig(persistence.AuditBestEffort)
+			config.BestEffortComplete = func(persisted bool) { outcomes <- persisted }
+			journal, err := NewJournal(store, config)
+			if err != nil {
+				t.Fatalf("NewJournal() error = %v", err)
+			}
+			t.Cleanup(func() { _ = journal.Close(context.Background()) })
+			batch := testWriterBatch()
+			if err := journal.Submit(context.Background(), &batch); err != nil {
+				t.Fatalf("Submit() error = %v", err)
+			}
+			select {
+			case persisted := <-outcomes:
+				if persisted != test.persisted {
+					t.Fatalf("terminal outcome persisted = %t, want %t", persisted, test.persisted)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("best-effort terminal outcome was not reported")
+			}
+		})
+	}
+}
+
 func TestJournalRequiredSubmitAndCloseCompleteTogether(t *testing.T) {
 	entered := make(chan struct{}, 1)
 	release := make(chan struct{})

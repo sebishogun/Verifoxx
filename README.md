@@ -278,8 +278,10 @@ debug, benchmark, and container workflows. Run `./cli/devx status` to see which
 optional tools are available.
 
 The field-alignment script is the local and CI production-layout gate. It pins
-the reviewed analyzer version and checks `internal`, `cmd`, and `policies`
-packages without automatically rewriting structs.
+the reviewed analyzer version and checks hand-written production packages under
+`cmd`, `frontend`, `internal`, `migrations`, `policies`, `policy`, `target`, and
+`telemetry` without automatically rewriting structs. Generated protobuf types
+under `api/gen` remain generator-owned and are excluded.
 
 See the one-page [semantic model summary](docs/semantic-model.md) and the
 [development tooling disclosure](docs/ai-usage.md).
@@ -296,8 +298,9 @@ See the one-page [semantic model summary](docs/semantic-model.md) and the
 - [Semantic policy diff](docs/policy-diff.md): finite-domain comparison,
   replayable counterexamples, CI matrices, and expiring exceptions.
 - [WebAssembly target](docs/wasm.md): versioned ABI, deterministic artifacts,
-- [Production telemetry](docs/telemetry.md): fixed-cardinality counters, snapshot Prometheus/OTLP export, sampled tracing,
   memory ownership, and native/runtime conformance.
+- [Production telemetry](docs/telemetry.md): fixed-cardinality counters,
+  Prometheus/OTLP export, sampled tracing, and bounded shutdown.
 - [Policy language](docs/policy-language.md): expressions, four-state truth,
   resolution, and remediation.
 - [Concurrency](docs/concurrency.md): worker ownership, lock table,

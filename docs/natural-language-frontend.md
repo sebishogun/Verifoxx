@@ -47,6 +47,10 @@ SoA column lengths, CSR edge ownership, one-based IDs, parent ordering, limits,
 duplicates, exact citation provenance, evidence and restriction ancestry, and
 requirement reachability.
 
+The claim-byte ceiling applies to provider identity, provider version, and item
+text in aggregate, so untrusted metadata is rejected before canonical hashing
+or review rendering.
+
 The following findings block review approval:
 
 - fabricated, malformed, cross-page, or unverifiable citations;
@@ -65,10 +69,13 @@ The deterministic JSON review view identifies the exact document and canonical
 proposal digests and lists each proposal item beside its claim, parent, page,
 byte span, and exact quote. Bounded duplicate, conflict, ambiguity, and omitted-
 restriction diagnostics remain visible in the artifact while blocking approval.
-The reviewer creates or corrects a native policy draft and supplies CSR mappings
-from every native requirement to the proposal items reviewed for it. Every
-proposal requirement must be mapped, and each mapping must include its
-requirement row.
+The reviewer creates or corrects a native policy draft and supplies typed CSR
+mappings from every resulting requirement, applicability, clause, assertion,
+evidence obligation, resolution, remediation, explanation, outcome, and
+assumption row to the proposal items reviewed for it. Every non-ambiguity
+proposal item must be mapped. Requirement proposal items must map to native
+requirement rows, and every mapping inherits the proposal item's validated
+citations.
 
 Approval signs a versioned digest containing:
 
@@ -84,6 +91,9 @@ Ed25519 keys are used only in tests. Key storage and reviewer authentication are
 adapter responsibilities.
 
 Token serialization is a strict bounded binary format with magic `NRAT`.
+An identity that cannot fit even with the minimum nonempty signature is rejected
+before proposal hashing or calling the signer. The actual signature length is
+checked before returned reviewer and signature bytes are owned.
 Decoding owns reviewer and signature bytes, rejects truncation and trailing
 data, and does not verify authorization by itself. Compilation separately
 revalidates the proposal and draft and authenticates the token.
@@ -91,10 +101,10 @@ revalidates the proposal and draft and authenticates the token.
 ## Compilation Boundary
 
 An approved draft is still decoded through the existing hand-written native
-JSON decoder and normal AST validator. Its decoded requirement IDs must exactly
-match reviewed provenance mappings before atomic lowering. Failed token checks,
-JSON decoding, AST diagnostics, or requirement matching leave the destination
-Program unchanged.
+JSON decoder and normal AST validator. Its complete typed semantic-row set must
+exactly match the reviewed provenance mappings before atomic lowering. Failed
+token checks, JSON decoding, AST diagnostics, or provenance matching leave the
+destination Program unchanged.
 
 The natural-language packages do not import service publication or persistence
 code. Registry activation remains a separate application decision after

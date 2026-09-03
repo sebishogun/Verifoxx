@@ -84,6 +84,9 @@ func Lex(source []byte, dialect Dialect, limits public.Limits) (*Tokens, []Diagn
 			if offset < 0 {
 				return nil, oneDiagnostic(dialect, public.CodeSyntax, span(start, len(source)))
 			}
+			if dialect == DialectPostgreSQL && offset == start+2 {
+				return nil, oneDiagnostic(dialect, public.CodeSyntax, span(start, offset))
+			}
 			kind = TokenIdentifier
 		case '`':
 			if dialect != DialectDatabricks {

@@ -16,6 +16,7 @@ import (
 type Metadata struct {
 	ArtifactHash         [sha256.Size]byte
 	ProgramHash          [sha256.Size]byte
+	Limits               Limits
 	RequiredCapabilities Capability
 	ABI                  ABIVersion
 	Schema               SchemaVersion
@@ -90,11 +91,11 @@ func EncodeProgram(dst []byte, compiled *program.Program, manifest Manifest) ([]
 	return buildEnvelope(dst, manifest, sections)
 }
 
-func DecodeProgram(src []byte, limits Limits) (*program.Program, Metadata, error) {
+func DecodeProgram(src []byte, manifest Manifest) (*program.Program, Metadata, error) {
 	if currentProgramLayoutDigest != version1ProgramLayoutDigest {
 		return nil, Metadata{}, ErrIncompatibleVersion
 	}
-	header, descriptors, err := preflightEnvelope(src, limits)
+	header, descriptors, err := preflightEnvelope(src, manifest)
 	if err != nil {
 		return nil, Metadata{}, err
 	}
@@ -108,7 +109,7 @@ func DecodeProgram(src []byte, limits Limits) (*program.Program, Metadata, error
 		return nil, Metadata{}, errInvalidArtifact
 	}
 	metadata := Metadata{
-		ProgramHash: decoded.ContentHash, RequiredCapabilities: header.capabilities,
+		ProgramHash: decoded.ContentHash, Limits: header.limits, RequiredCapabilities: header.capabilities,
 		ABI: header.abi, Schema: header.schema, Profile: header.profile,
 	}
 	copy(metadata.ArtifactHash[:], src[artifactHashOffset:artifactHashOffset+artifactHashBytes])

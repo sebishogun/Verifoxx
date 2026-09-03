@@ -210,7 +210,7 @@ Untagged unit tests use a fake store and compiler to cover:
 Tagged PostgreSQL 19 tests reuse Task 27's one-container test and run before its
 destructive no-runtime-role subtest. They cover:
 
-- first publication and active-pointer assignment;
+- first publication and active-pointer update;
 - exact source, hash, semantic version, compiler version, and timestamp round
   trips;
 - duplicate-hash idempotency and one immutable version row;

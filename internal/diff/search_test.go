@@ -125,6 +125,28 @@ func TestSearchPlanChecksPrunedCardinalityBudget(t *testing.T) {
 	}
 }
 
+func TestSearchPlanRejectsDomainKindMismatch(t *testing.T) {
+	var analyzer Analyzer
+	oldProgram, newProgram, err := analyzer.compilePair([]byte(nornrune.Source()), []byte(nornrune.Source()), nativeFieldSchema())
+	if err != nil {
+		t.Fatalf("compile pair: %v", err)
+	}
+	domain := nativeDomain(128)
+	for row := range domain.Fields {
+		if domain.Fields[row].Name != "action.output" {
+			continue
+		}
+		domain.Fields[row].Kind = FieldKindBoolean
+		domain.Fields[row].Values = []Value{
+			{Kind: FieldKindBoolean, State: ValueMissing},
+			{Kind: FieldKindBoolean, State: ValuePresent, Boolean: true},
+		}
+	}
+	if _, err := buildSearchPlan(nil, oldProgram, newProgram, domain); !errors.Is(err, ErrInvalidDomain) {
+		t.Fatalf("domain kind mismatch: got %v, want %v", err, ErrInvalidDomain)
+	}
+}
+
 func TestExhaustiveOrderIsDeterministicWithoutDuplicates(t *testing.T) {
 	plan := searchPlan{
 		fieldRows:     []uint32{4, 2},

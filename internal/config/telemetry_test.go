@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -41,6 +42,21 @@ func TestTelemetryConfigurationRejectsUnboundedOrCredentialedValues(t *testing.T
 		func() Config { value := valid; value.TelemetryExportInterval = 0; return value }(),
 		func() Config { value := valid; value.TelemetryQueueSize = 0; return value }(),
 		func() Config { value := valid; value.TelemetryQueueSize = 1 << 20; return value }(),
+	}
+	for _, config := range invalid {
+		if err := config.Validate(); err == nil {
+			t.Fatalf("Validate(%+v) error = nil", config)
+		}
+	}
+}
+
+func TestTelemetryConfigurationValidatesRuntimeSettingsWhenOTLPDisabled(t *testing.T) {
+	valid := Default()
+	invalid := []Config{
+		func() Config { value := valid; value.TraceSampleRatio = -1; return value }(),
+		func() Config { value := valid; value.TraceSampleRatio = math.NaN(); return value }(),
+		func() Config { value := valid; value.TelemetryExportInterval = 0; return value }(),
+		func() Config { value := valid; value.TelemetryQueueSize = 0; return value }(),
 	}
 	for _, config := range invalid {
 		if err := config.Validate(); err == nil {

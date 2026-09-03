@@ -300,7 +300,7 @@ func serviceStatus(err error) error {
 		return status.Error(codes.Unavailable, "service is unavailable")
 	default:
 		if code := status.Code(err); code != codes.Unknown {
-			return err
+			return status.Error(code, "request failed")
 		}
 		return status.Error(codes.Internal, "internal service error")
 	}

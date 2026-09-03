@@ -392,7 +392,7 @@ Pin `github.com/open-policy-agent/opa v1.19.1`. Test:
 - `input.<path>` Boolean fields, scalar field/literal comparisons, constant homogeneous array/set membership, and presence-aware `not` semantics for true, false, and missing input;
 - optional `default allow := false` and `default allow := true` semantics;
 - undefined input without a default maps to Escalate;
-- imports, `data`, functions, `else`, recursion, comprehensions, variables, assignment/unification, partial documents, object/set results, with-modifiers, mutation-like/other built-ins, field-to-field comparisons, and non-Boolean heads are rejected;
+- imports, `data`, functions, `else`, recursion, comprehensions, variables, binding/unification, partial documents, object/set results, with-modifiers, mutation-like/other built-ins, field-to-field comparisons, and non-Boolean heads are rejected;
 - duplicate/default conflicts, exact OPA byte spans, malformed/Unicode/depth/size limits, and deterministic diagnostics;
 - differential true/false/undefined cases against OPA's official evaluator.
 

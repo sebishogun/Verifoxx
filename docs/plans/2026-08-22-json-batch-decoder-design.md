@@ -90,7 +90,7 @@ to the fixed evidence SoA:
 qualifier (`stale`, `unclear`, `unverifiable`, `invalid`, `conflicting`, or
 `conflict`) replaces the primary state with the corresponding Program state;
 `reviewer_state=one_valid_one_revoked` similarly becomes `conflicting`. This
-preserves the assignment's uncertainty information without adding per-record
+preserves the baseline policy's uncertainty information without adding per-record
 attribute maps. A required override absent from the Program state catalog is an
 invalid reference rather than silently discarded evidence. Multiple unresolved
 qualifiers resolve independently of JSON key order using the conservative
@@ -140,7 +140,7 @@ still applies when `MaxDepth` is zero or greater than that ceiling.
 
 Tests cover:
 
-- All five supplied requests and four evidence records, exact typed columns,
+- All five baseline requests and four evidence records, exact typed columns,
   presence masks, and CSR ranges.
 - Missing and null facts versus missing required structural keys.
 - Unknown/duplicate fields, IDs, keys, and evidence references.

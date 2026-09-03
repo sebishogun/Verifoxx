@@ -45,6 +45,7 @@ CREATE POLICY verified ON records AS RESTRICTIVE FOR ALL TO PUBLIC USING (enable
 		{name: "select restriction denies", activation: rlsActivation{team: &blue, enabled: &no, command: &selectCommand, role: &analyst}, outcome: 2},
 		{name: "select null denies with missing", activation: rlsActivation{enabled: &yes, command: &selectCommand, role: &analyst}, outcome: 2, missing: true},
 		{name: "insert permits", activation: rlsActivation{count: &count5, enabled: &yes, command: &insertCommand, role: &outsider}, outcome: 1},
+		{name: "insert missing role denies", activation: rlsActivation{count: &count5, enabled: &yes, command: &insertCommand}, outcome: 2, missing: true},
 		{name: "insert check denies", activation: rlsActivation{count: &count11, enabled: &yes, command: &insertCommand, role: &outsider}, outcome: 2},
 		{name: "update using permits", activation: rlsActivation{team: &blue, enabled: &yes, command: &updateUsing, role: &analyst}, outcome: 1},
 		{name: "update check permits", activation: rlsActivation{count: &count5, enabled: &yes, command: &updateCheck, role: &analyst}, outcome: 1},
@@ -121,6 +122,10 @@ func TestPostgreSQLRLSOmittedClausesApplyToEveryCommand(t *testing.T) {
 			got, _ = evaluateRLS(t, &compiled, rlsActivation{command: &command, role: &outsider})
 			if got != 2 {
 				t.Fatalf("outsider outcome = %d, want reject", got)
+			}
+			got, reasons := evaluateRLS(t, &compiled, rlsActivation{command: &command})
+			if got != 2 || !slices.Contains(reasons, truth.ReasonMissing) {
+				t.Fatalf("missing-role outcome/reasons = %d/%v, want reject/missing", got, reasons)
 			}
 		})
 	}

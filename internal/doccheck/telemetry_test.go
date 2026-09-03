@@ -16,6 +16,7 @@ func TestTelemetryGuideDefinesStableNamesModesAndPrivacyBoundary(t *testing.T) {
 		"fixed cardinality", "cumulative", "request id", "evidence", "policy source",
 		"credentials", "error string", "disabled", "counters-only", "prometheus", "otlp",
 		"traceparent", "non-blocking", "drop", "shutdown", "readiness", "0 b/op",
+		"late sampled span", "bounds only that caller's wait", "cleanup continues",
 	} {
 		if !strings.Contains(content, phrase) {
 			t.Errorf("telemetry guide does not cover %q", phrase)
@@ -61,5 +62,22 @@ func TestPrometheusRulesCoverBoundedMultiWindowAlerts(t *testing.T) {
 	}
 	if !strings.Contains(content, "severity") {
 		t.Error("alerting rules do not carry a fixed severity label")
+	}
+	for _, failure := range []string{`outcome="required_failure"`, `outcome="optional_drop"`, "nornrune_audit_journal_failures_total"} {
+		if !strings.Contains(content, failure) {
+			t.Errorf("audit alert does not cover %q", failure)
+		}
+	}
+	normalized := strings.Join(strings.Fields(content), " ")
+	for _, expression := range []string{
+		"rate(nornrune_evaluation_outcomes_total[5m]) / on() group_left clamp_min(sum(rate(nornrune_evaluation_outcomes_total[5m])), 1e-9)",
+		"rate(nornrune_evaluation_outcomes_total[1h]) / on() group_left clamp_min(sum(rate(nornrune_evaluation_outcomes_total[1h])), 1e-9)",
+		"and on() sum(rate(nornrune_evaluation_outcomes_total[5m])) > 0",
+		"and on() sum(rate(nornrune_evaluation_outcomes_total[1h])) > 0",
+		"nornrune_service_queue_depth >= 2 * nornrune_evaluation_workers",
+	} {
+		if !strings.Contains(normalized, expression) {
+			t.Errorf("alerting rules do not contain %q", expression)
+		}
 	}
 }

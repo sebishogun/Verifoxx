@@ -95,6 +95,7 @@ func TestLexRejectsMalformedOrMismatchedInputWithExactSpan(t *testing.T) {
 		{name: "invalid utf8", dialect: DialectPostgreSQL, source: []byte{0xff}, code: public.CodeSyntax, span: public.Span{Start: 0, End: 1}},
 		{name: "unterminated string", dialect: DialectPostgreSQL, source: []byte("'x"), code: public.CodeSyntax, span: public.Span{Start: 0, End: 2}},
 		{name: "unterminated quote", dialect: DialectPostgreSQL, source: []byte(`"x`), code: public.CodeSyntax, span: public.Span{Start: 0, End: 2}},
+		{name: "empty quoted identifier", dialect: DialectPostgreSQL, source: []byte(`""`), code: public.CodeSyntax, span: public.Span{Start: 0, End: 2}},
 		{name: "unterminated comment", dialect: DialectPostgreSQL, source: []byte("/* x"), code: public.CodeSyntax, span: public.Span{Start: 0, End: 4}},
 		{name: "nested comment", dialect: DialectPostgreSQL, source: []byte("/* /* */"), code: public.CodeUnsupported, span: public.Span{Start: 3, End: 5}},
 		{name: "wrong quote", dialect: DialectPostgreSQL, source: []byte("`x`"), code: public.CodeUnsupported, span: public.Span{Start: 0, End: 1}},

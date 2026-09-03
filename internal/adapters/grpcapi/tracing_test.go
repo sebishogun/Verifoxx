@@ -10,7 +10,9 @@ import (
 	coreservice "github.com/sebishogun/nornrune/internal/service"
 	publictelemetry "github.com/sebishogun/nornrune/telemetry"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 func TestGRPCPropagatesFixedRedactedTraceSpans(t *testing.T) {
@@ -67,5 +69,41 @@ func TestGRPCPropagatesFixedRedactedTraceSpans(t *testing.T) {
 		if !found {
 			t.Errorf("missing span %q", name)
 		}
+	}
+}
+
+func TestGRPCRedactsBackendStatusFromClientAndTrace(t *testing.T) {
+	const protected = "protected backend detail"
+	exporter := tracetest.NewInMemoryExporter()
+	runtime, err := publictelemetry.New(context.Background(), publictelemetry.Config{
+		Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second,
+		ExportQueueSize: 32, TraceSampleRatio: 1,
+	}, publictelemetry.WithSpanExporter(exporter))
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := &fakePolicyAPI{evaluate: func(context.Context, coreservice.EvaluationRequest, []byte) ([]byte, error) {
+		return nil, status.Error(codes.Internal, protected)
+	}}
+	harness := newGRPCTestHarness(t, api, nil, Config{
+		MaxMessageBytes: 1 << 20, RequestTimeout: time.Second, Telemetry: runtime,
+	})
+	_, err = harness.client.EvaluateBatch(context.Background(), validEvaluationRequest())
+	clientStatus := status.Convert(err)
+	if clientStatus.Code() != codes.Internal || clientStatus.Message() != "request failed" || strings.Contains(clientStatus.Message(), protected) {
+		t.Fatalf("client status exposed backend detail: %v", clientStatus)
+	}
+	if err := runtime.ForceFlush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	foundFixedStatus := false
+	for _, span := range exporter.GetSpans() {
+		if strings.Contains(span.Status.Description, protected) {
+			t.Fatalf("span %q status contains backend detail %q", span.Name, protected)
+		}
+		foundFixedStatus = foundFixedStatus || span.Status.Description == "request failed"
+	}
+	if !foundFixedStatus {
+		t.Fatal("no exported span carried the fixed error status")
 	}
 }

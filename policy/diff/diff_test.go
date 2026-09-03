@@ -61,7 +61,7 @@ func TestProverPublicContract(t *testing.T) {
 }
 
 func TestRegressionPublicContract(t *testing.T) {
-	result := diff.Result{Outcome: diff.Equivalent}
+	result := diff.Result{Outcome: diff.Equivalent, Complete: true}
 	decision := diff.CheckRegression(result, nil, nil, []diff.Exception{}, time.Unix(0, 0))
 	if !decision.Allowed {
 		t.Fatalf("equivalent regression result rejected: %+v", decision)

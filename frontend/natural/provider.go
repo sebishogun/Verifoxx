@@ -55,10 +55,9 @@ func AppendSegments(dst []Segment, document *Document, maxBytes uint32, limits L
 		}
 
 		for start := paragraphStart; start < paragraphEnd; {
-			end := start + int(maxBytes)
-			if end >= paragraphEnd {
-				end = paragraphEnd
-			} else {
+			end := paragraphEnd
+			if uint64(maxBytes) < uint64(paragraphEnd-start) {
+				end = start + int(maxBytes)
 				for end > start && !utf8.RuneStart(source[end]) {
 					end--
 				}

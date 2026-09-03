@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add deterministic reusable truth/reason slot assignments to every frozen Program and prove that no live result is overwritten.
+**Goal:** Add deterministic reusable truth/reason slot mappings to every frozen Program and prove that no live result is overwritten.
 
 **Architecture:** A linear last-use pass operates on the final topological InstructionID schedule. Release buckets and a lowest-free-ID bitset assign separate truth and reason slots without maps, recursion, or per-instruction allocation; semantic roots remain live through an end sentinel, while retain-all mode gives debug execution unique slots.
 
@@ -195,7 +195,7 @@ Assert:
 go test -count=1 -timeout 60s ./internal/compile -run '^TestAssignTruthSlots'
 ```
 
-Expected: failure because slot assignment is absent.
+Expected: failure because the slot mapping is absent.
 
 **Step 3: Implement release buckets and the free bitset**
 

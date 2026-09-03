@@ -47,6 +47,8 @@ type ProofRequest struct {
 }
 
 // Prover may propose an equivalence claim or a candidate witness.
+// Implementations must return promptly when the context is done. Compare calls
+// Prove synchronously and cannot preempt a provider that ignores cancellation.
 type Prover interface {
 	Prove(context.Context, ProofRequest) (Proof, error)
 }

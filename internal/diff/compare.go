@@ -3,11 +3,13 @@ package diff
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"errors"
-	"math"
 	"slices"
 	"strings"
 
+	"github.com/sebishogun/nornrune/internal/ast"
 	"github.com/sebishogun/nornrune/internal/eval"
 	"github.com/sebishogun/nornrune/internal/program"
 	resultbatch "github.com/sebishogun/nornrune/internal/result"
@@ -37,10 +39,16 @@ func (analyzer *Analyzer) Compare(
 	if analyzer == nil || ctx == nil || dst == nil {
 		return ErrInvalidPolicy
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := matrix.Validate(); err != nil {
 		return err
 	}
 	oldProgram, newProgram, err := analyzer.compilePair(oldSource, newSource, fields)
+	if contextErr := ctx.Err(); contextErr != nil {
+		return contextErr
+	}
 	if errors.Is(err, ErrUnsupportedOutcomes) {
 		*dst = Result{Outcome: Inconclusive, Uncertainty: "unsupported outcome catalog"}
 		return nil
@@ -48,10 +56,10 @@ func (analyzer *Analyzer) Compare(
 	if err != nil {
 		return err
 	}
-	validationDomain := domain
-	validationDomain.MaxCandidates = math.MaxUint64
-	_, complete, err := validationDomain.Validate()
-	if err != nil {
+	if err = domain.validateShape(); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if semanticIdentity(oldProgram, newProgram) {
@@ -66,6 +74,14 @@ func (analyzer *Analyzer) Compare(
 	if err != nil {
 		if errors.Is(err, ErrInvalidDomain) {
 			*dst = Result{Outcome: Inconclusive, Uncertainty: "domain does not cover every policy dependency"}
+			return nil
+		}
+		return err
+	}
+	complete := plan.complete(domain)
+	if err := analyzer.comparison.materializer.prepareEvidenceIndexes(ctx, oldProgram, newProgram, domain); err != nil {
+		if errors.Is(err, ErrCandidateBudget) {
+			*dst = Result{Outcome: Inconclusive, Uncertainty: "candidate evidence budget exhausted"}
 			return nil
 		}
 		return err
@@ -90,10 +106,14 @@ func (analyzer *Analyzer) Compare(
 		if remaining := plan.cardinality - start; rows > remaining {
 			rows = remaining
 		}
-		if err := analyzer.comparison.materializer.materializeContext(
+		if err := analyzer.comparison.materializer.materializePreparedContext(
 			ctx,
 			&analyzer.comparison.batches, oldProgram, newProgram, plan, domain, start, uint32(rows),
 		); err != nil {
+			if errors.Is(err, ErrCandidateBudget) {
+				*dst = Result{Outcome: Inconclusive, Uncertainty: "candidate evidence budget exhausted", Candidates: start}
+				return nil
+			}
 			return err
 		}
 		if err := analyzer.comparison.oldExecutor.Execute(
@@ -107,7 +127,8 @@ func (analyzer *Analyzer) Compare(
 			return err
 		}
 		if err := compareResultBatch(
-			&next, oldProgram, newProgram, &analyzer.comparison.oldResults, &analyzer.comparison.newResults,
+			&next, oldProgram, newProgram, analyzer.oldAST.Document(), analyzer.newAST.Document(),
+			&analyzer.comparison.oldResults, &analyzer.comparison.newResults,
 			plan, domain, matrix, start,
 		); err != nil {
 			if errors.Is(err, ErrUnsupportedOutcomes) {
@@ -138,7 +159,7 @@ func (analyzer *Analyzer) replayProofWitness(
 	if !ok {
 		return false
 	}
-	if err := analyzer.comparison.materializer.materializeContext(
+	if err := analyzer.comparison.materializer.materializePreparedContext(
 		ctx,
 		&analyzer.comparison.batches, oldProgram, newProgram, plan, domain, index, 1,
 	); err != nil {
@@ -235,12 +256,12 @@ func classifyEvaluation(matrix RiskMatrix, oldDecision, newDecision Decision, di
 	if !different {
 		return Equivalent, false, false, nil
 	}
-	if oldDecision == newDecision {
-		return Changed, true, false, nil
-	}
 	transition, ok := matrix.Lookup(oldDecision, newDecision)
 	if !ok {
 		return OutcomeInvalid, false, false, ErrInvalidRiskMatrix
+	}
+	if oldDecision == newDecision {
+		return Changed, true, !transition.Allowed, nil
 	}
 	return transition.Class, true, !transition.Allowed, nil
 }
@@ -248,6 +269,7 @@ func classifyEvaluation(matrix RiskMatrix, oldDecision, newDecision Decision, di
 func compareResultBatch(
 	dst *Result,
 	oldProgram, newProgram *program.Program,
+	oldDocument, newDocument *ast.Document,
 	oldResults, newResults *resultbatch.Batch,
 	plan *searchPlan,
 	domain Domain,
@@ -280,9 +302,23 @@ func compareResultBatch(
 		dst.Forbidden = dst.Forbidden || forbidden
 		if !dst.HasCounterexample {
 			dst.Counterexample = ownCounterexample(
-				oldProgram, newProgram, oldResults, newResults, plan, domain, row, start+uint64(row), oldDecision, newDecision,
+				oldProgram, newProgram, oldDocument, newDocument, oldResults, newResults,
+				plan, domain, row, start+uint64(row), oldDecision, newDecision,
 			)
 			dst.HasCounterexample = true
+			if forbidden {
+				dst.ForbiddenCounterexample = dst.Counterexample
+				dst.HasForbiddenCounterexample = true
+			}
+		} else if forbidden && !dst.HasForbiddenCounterexample {
+			dst.ForbiddenCounterexample = ownCounterexample(
+				oldProgram, newProgram, oldDocument, newDocument, oldResults, newResults,
+				plan, domain, row, start+uint64(row), oldDecision, newDecision,
+			)
+			dst.HasForbiddenCounterexample = true
+		}
+		if forbidden {
+			dst.ForbiddenTransitions[index]++
 		}
 	}
 	return nil
@@ -490,7 +526,7 @@ func assumptionsEqual(oldProgram, newProgram *program.Program) bool {
 func templateRowsEqual(oldProgram, newProgram *program.Program, oldID, newID schema.TemplateID) bool {
 	oldTemplate, oldOK := oldProgram.Templates.Lookup(oldID)
 	newTemplate, newOK := newProgram.Templates.Lookup(newID)
-	return oldOK && newOK && oldTemplate.MaxBytes == newTemplate.MaxBytes && bytes.Equal(oldTemplate.LiteralBytes, newTemplate.LiteralBytes) &&
+	return oldOK && newOK && bytes.Equal(oldTemplate.LiteralBytes, newTemplate.LiteralBytes) &&
 		slices.Equal(oldTemplate.Ops, newTemplate.Ops) && slices.Equal(oldTemplate.Args, newTemplate.Args)
 }
 
@@ -507,6 +543,7 @@ func resultRange(offsets []uint32, values int, row uint32) ([2]int, bool) {
 
 func ownCounterexample(
 	oldProgram, newProgram *program.Program,
+	oldDocument, newDocument *ast.Document,
 	oldResults, newResults *resultbatch.Batch,
 	plan *searchPlan,
 	domain Domain,
@@ -530,8 +567,8 @@ func ownCounterexample(
 		scenario := uint32(index/evidenceStride) % plan.evidenceCount
 		counterexample.Evidence = cloneEvidence(domain.EvidenceSets[scenario].Records)
 	}
-	counterexample.Old = ownEvaluation(oldProgram, oldResults, row, index, oldDecision)
-	counterexample.New = ownEvaluation(newProgram, newResults, row, index, newDecision)
+	counterexample.Old = ownEvaluation(oldDocument, oldProgram, oldResults, row, index, oldDecision)
+	counterexample.New = ownEvaluation(newDocument, newProgram, newResults, row, index, newDecision)
 	return counterexample
 }
 
@@ -546,7 +583,7 @@ func cloneEvidence(source []Evidence) []Evidence {
 	return cloned
 }
 
-func ownEvaluation(compiled *program.Program, batch *resultbatch.Batch, row uint32, index uint64, decision Decision) Evaluation {
+func ownEvaluation(document *ast.Document, compiled *program.Program, batch *resultbatch.Batch, row uint32, index uint64, decision Decision) Evaluation {
 	evaluation := Evaluation{Index: index, OutcomeID: uint32(batch.OutcomeIDs[row]), Decision: decision}
 	evaluation.RequirementIDs = copyResultRange(batch.RequirementOffsets, batch.RequirementIDs, row)
 	evaluation.EvidenceIDs = copyResultRange(batch.EvidenceOffsets, batch.EvidenceIDs, row)
@@ -562,10 +599,80 @@ func ownEvaluation(compiled *program.Program, batch *resultbatch.Batch, row uint
 	evaluation.ReasonNodes = copyIDs(batch.ReasonNodes[reasons[0]:reasons[1]])
 	evaluation.ReasonEvidenceIDs = copyIDs(batch.ReasonEvidenceIDs[reasons[0]:reasons[1]])
 	evaluation.ReasonEvidenceStates = copyIDs(batch.ReasonEvidenceStates[reasons[0]:reasons[1]])
+	evaluation.AssumptionsDigest = templateSequenceDigest(compiled, compiled.Explanations.Assumptions())
+	evaluation.DriverTemplatesDigest = driverTemplatesDigest(compiled, batch.DriverExplanations[driver[0]:driver[1]])
+	evaluation.EvidenceIssuesDigest = evidenceIssuesDigest(
+		compiled,
+		batch.ReasonNodes[reasons[0]:reasons[1]],
+		batch.ReasonIDs[reasons[0]:reasons[1]],
+	)
 	if len(batch.DriverNodes[driver[0]:driver[1]]) != 0 {
-		evaluation.SourceStart, evaluation.SourceEnd = nodeSourceSpan(compiled, batch.DriverNodes[driver[0]])
+		evaluation.SourceStart, evaluation.SourceEnd = nodeSourceSpan(document, compiled, batch.DriverNodes[driver[0]])
 	}
 	return evaluation
+}
+
+func templateSequenceDigest(compiled *program.Program, ids []schema.TemplateID) [32]byte {
+	encoded := make([]byte, 0, 4+len(ids)*16)
+	encoded = binary.LittleEndian.AppendUint32(encoded, uint32(len(ids)))
+	for _, id := range ids {
+		encoded = appendTemplateSemantics(encoded, compiled, id)
+	}
+	return sha256.Sum256(encoded)
+}
+
+func driverTemplatesDigest(compiled *program.Program, ids []schema.ExplanationID) [32]byte {
+	encoded := make([]byte, 0, 4+len(ids)*32)
+	encoded = binary.LittleEndian.AppendUint32(encoded, uint32(len(ids)))
+	for _, id := range ids {
+		explanation, ok := compiled.Explanations.Lookup(id)
+		if !ok {
+			encoded = append(encoded, 0)
+			continue
+		}
+		encoded = append(encoded, 1)
+		encoded = appendTemplateSemantics(encoded, compiled, explanation.Rationale)
+		encoded = binary.LittleEndian.AppendUint32(encoded, uint32(len(explanation.Uncertainty)))
+		for _, templateID := range explanation.Uncertainty {
+			encoded = appendTemplateSemantics(encoded, compiled, templateID)
+		}
+	}
+	return sha256.Sum256(encoded)
+}
+
+func evidenceIssuesDigest(compiled *program.Program, nodes []schema.NodeID, reasons []schema.ReasonID) [32]byte {
+	encoded := make([]byte, 0, 4+len(reasons)*16)
+	encoded = binary.LittleEndian.AppendUint32(encoded, uint32(len(reasons)))
+	for row := range reasons {
+		templateID, found, valid := evidenceIssueTemplate(compiled, nodes[row], reasons[row])
+		if !valid {
+			encoded = append(encoded, 0)
+			continue
+		}
+		if !found {
+			encoded = append(encoded, 1)
+			continue
+		}
+		encoded = append(encoded, 2)
+		encoded = appendTemplateSemantics(encoded, compiled, templateID)
+	}
+	return sha256.Sum256(encoded)
+}
+
+func appendTemplateSemantics(dst []byte, compiled *program.Program, id schema.TemplateID) []byte {
+	template, ok := compiled.Templates.Lookup(id)
+	if !ok {
+		return append(dst, 0)
+	}
+	dst = append(dst, 1)
+	dst = binary.LittleEndian.AppendUint32(dst, uint32(len(template.LiteralBytes)))
+	dst = append(dst, template.LiteralBytes...)
+	dst = binary.LittleEndian.AppendUint32(dst, uint32(len(template.Ops)))
+	for row, op := range template.Ops {
+		dst = append(dst, byte(op))
+		dst = binary.LittleEndian.AppendUint32(dst, template.Args[row])
+	}
+	return dst
 }
 
 func copyResultRange[T ~uint32](offsets []uint32, values []T, row uint32) []uint32 {
@@ -581,7 +688,12 @@ func copyIDs[T ~uint32](source []T) []uint32 {
 	return cloned
 }
 
-func nodeSourceSpan(compiled *program.Program, node schema.NodeID) (uint32, uint32) {
+func nodeSourceSpan(document *ast.Document, compiled *program.Program, node schema.NodeID) (uint32, uint32) {
+	if document != nil {
+		if span, ok := document.Span(node); ok {
+			return span.Start, span.End
+		}
+	}
 	for row, candidate := range compiled.InstructionNodes {
 		if candidate == node {
 			return compiled.InstructionSourceStarts[row], compiled.InstructionSourceEnds[row]

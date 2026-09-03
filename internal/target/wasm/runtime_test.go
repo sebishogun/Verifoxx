@@ -34,14 +34,14 @@ func TestRuntimeEnforcesStateFuelCancellationAndResultOwnership(t *testing.T) {
 		t.Fatalf("LoadProgram = %v: %s", code, runtime.LastError())
 	}
 	metadata := runtime.Metadata()
-	if metadata.ProgramHash != compiled.ContentHash || metadata.ArtifactHash == [32]byte{} {
+	if metadata.ProgramHash != compiled.ContentHash || metadata.ArtifactHash == [32]byte{} || metadata.Limits != manifest.Limits {
 		t.Fatalf("Metadata = %+v", metadata)
 	}
 	if code := runtime.UploadInput(inputFrame); code != ErrorNone {
 		t.Fatalf("UploadInput = %v: %s", code, runtime.LastError())
 	}
 
-	cost := uint64(input.Rows) * uint64(compiled.InstructionCount())
+	cost := wasmTestFuelCost(t, compiled, input)
 	if code := runtime.SetFuel(cost - 1); code != ErrorNone {
 		t.Fatal(code)
 	}
@@ -100,6 +100,186 @@ func TestRuntimeEnforcesStateFuelCancellationAndResultOwnership(t *testing.T) {
 	second := make([]byte, length)
 	if _, code := runtime.ReadResult(second); code != ErrorNone || second[0] == encoded[0] {
 		t.Fatal("ReadResult exposed mutable runtime storage")
+	}
+}
+
+func TestRuntimeFuelChargesEvidenceAndResultWork(t *testing.T) {
+	compiled := compileWASMTestProgram(t)
+	manifest := testManifest()
+	artifact, err := EncodeProgram(nil, compiled, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := buildWASMTestBatch(t, compiled)
+	input.EvidenceOffsets = []uint32{0, 1}
+	input.EvidenceRefs = []uint32{0}
+	input.Evidence = eval.EvidenceBatch{
+		IDs: []schema.EvidenceID{1}, Kinds: []schema.EvidenceKindID{1}, States: []schema.EvidenceStateID{1},
+		Subjects: []schema.SymbolID{0}, Scopes: []schema.SymbolID{0}, Reviewers: []schema.SymbolID{0},
+		Timings: []schema.SymbolID{0}, Timestamps: []int64{0},
+	}
+	frame, err := EncodeInputFrame(nil, input, manifest.Limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := NewRuntime(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.LoadProgram(artifact) != ErrorNone || runtime.UploadInput(frame) != ErrorNone {
+		t.Fatal(runtime.LastError())
+	}
+	instructionOnlyFuel := uint64(input.Rows) * uint64(compiled.InstructionCount())
+	if runtime.SetFuel(instructionOnlyFuel) != ErrorNone {
+		t.Fatal(runtime.LastError())
+	}
+	if code := runtime.Evaluate(); code != ErrorFuelExhausted {
+		t.Fatalf("Evaluate() with instruction-only fuel = %v, want %v", code, ErrorFuelExhausted)
+	}
+	if runtime.SetFuel(wasmTestFuelCost(t, compiled, input)) != ErrorNone {
+		t.Fatal(runtime.LastError())
+	}
+	if code := runtime.Evaluate(); code != ErrorNone {
+		t.Fatalf("Evaluate() with complete fuel = %v: %s", code, runtime.LastError())
+	}
+}
+
+func TestEvaluationFuelChargesInListItemsPerRow(t *testing.T) {
+	input := eval.Batch{Rows: 3}
+	small := &program.Program{Opcodes: []program.Opcode{program.OpcodeIn}, ListCounts: []uint16{1}}
+	large := &program.Program{Opcodes: []program.Opcode{program.OpcodeIn}, ListCounts: []uint16{5}}
+	smallCost := wasmTestFuelCost(t, small, input)
+	largeCost := wasmTestFuelCost(t, large, input)
+	if want := smallCost + 12; largeCost != want {
+		t.Fatalf("five-item IN fuel = %d, want %d", largeCost, want)
+	}
+}
+
+func TestEvaluationFuelChargesBooleanOperandEdgesPerRow(t *testing.T) {
+	small := &program.Program{Opcodes: []program.Opcode{program.OpcodeAll}, OperandCounts: []uint16{2}}
+	large := &program.Program{Opcodes: []program.Opcode{program.OpcodeAll}, OperandCounts: []uint16{5}}
+	for _, test := range []struct {
+		name  string
+		rows  uint32
+		delta uint64
+	}{
+		{name: "rows", rows: 3, delta: 9},
+		{name: "empty batch", rows: 0, delta: 3},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			smallCost := wasmTestFuelCost(t, small, eval.Batch{Rows: test.rows})
+			largeCost := wasmTestFuelCost(t, large, eval.Batch{Rows: test.rows})
+			if want := smallCost + test.delta; largeCost != want {
+				t.Fatalf("five-operand All fuel = %d, want %d", largeCost, want)
+			}
+		})
+	}
+}
+
+func TestRuntimeRecoveredPanicClearsEvaluationState(t *testing.T) {
+	compiled := compileWASMTestProgram(t)
+	manifest := testManifest()
+	artifact, err := EncodeProgram(nil, compiled, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := buildWASMTestBatch(t, compiled)
+	frame, err := EncodeInputFrame(nil, input, manifest.Limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := NewRuntime(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cost := wasmTestFuelCost(t, compiled, input)
+	if runtime.LoadProgram(artifact) != ErrorNone || runtime.UploadInput(frame) != ErrorNone || runtime.SetFuel(cost) != ErrorNone || runtime.Evaluate() != ErrorNone {
+		t.Fatal(runtime.LastError())
+	}
+	if runtime.UploadInput(frame) != ErrorNone || runtime.SetFuel(cost) != ErrorNone {
+		t.Fatal(runtime.LastError())
+	}
+	runtime.program.TruthSlots[0] = 0
+	if code := runtime.Evaluate(); code != ErrorInternal {
+		t.Fatalf("Evaluate() after corruption = %v, want %v", code, ErrorInternal)
+	}
+	if runtime.hasInput || runtime.hasResult || runtime.fuel != 0 || runtime.cancelled.Load() || runtime.ResultLength() != 0 {
+		t.Fatalf("recovered panic retained evaluation state: input=%v result=%v fuel=%d cancelled=%v bytes=%d",
+			runtime.hasInput, runtime.hasResult, runtime.fuel, runtime.cancelled.Load(), runtime.ResultLength())
+	}
+	if code := runtime.Evaluate(); code != ErrorInvalidState {
+		t.Fatalf("Evaluate() after recovered panic = %v, want %v", code, ErrorInvalidState)
+	}
+}
+
+func TestRuntimeMetadataRecordIncludesLimitsAndLoadedHashes(t *testing.T) {
+	manifest := testManifest()
+	compiled := compileWASMTestProgram(t)
+	artifact, err := EncodeProgram(nil, compiled, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := NewRuntime(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := make([]byte, MetadataBytes)
+	written, code := runtime.ReadMetadata(record)
+	if code != ErrorNone || written != MetadataBytes {
+		t.Fatalf("ReadMetadata before load = %d/%v", written, code)
+	}
+	metadata, err := DecodeMetadata(record)
+	if err != nil || metadata.Limits != manifest.Limits || metadata.Profile != manifest.Profile || metadata.ProgramHash != [32]byte{} {
+		t.Fatalf("metadata before load = %+v, %v", metadata, err)
+	}
+	if code := runtime.LoadProgram(artifact); code != ErrorNone {
+		t.Fatalf("LoadProgram = %v: %s", code, runtime.LastError())
+	}
+	if _, code := runtime.ReadMetadata(record); code != ErrorNone {
+		t.Fatalf("ReadMetadata after load = %v", code)
+	}
+	metadata, err = DecodeMetadata(record)
+	if err != nil || metadata.ProgramHash != compiled.ContentHash || metadata.ArtifactHash == [32]byte{} || metadata.Limits != manifest.Limits {
+		t.Fatalf("metadata after load = %+v, %v", metadata, err)
+	}
+	if _, code := runtime.ReadMetadata(record[:MetadataBytes-1]); code != ErrorOutputTooSmall {
+		t.Fatalf("short metadata buffer = %v", code)
+	}
+}
+
+func TestRuntimeRejectsArtifactFromDifferentBaseProfile(t *testing.T) {
+	browserManifest := testManifest()
+	browserManifest.Profile = ProfileBrowser
+	artifact, err := EncodeProgram(nil, compileWASMTestProgram(t), browserManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := NewRuntime(testManifest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := runtime.LoadProgram(artifact); code != ErrorIncompatibleVersion {
+		t.Fatalf("WASI runtime loaded Browser artifact: %v", code)
+	}
+}
+
+func TestRuntimeRejectsArtifactWithDifferentLimits(t *testing.T) {
+	artifactManifest := testManifest()
+	artifact, err := EncodeProgram(nil, compileWASMTestProgram(t), artifactManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostManifest := artifactManifest
+	hostManifest.Limits.MaxInputBytes++
+	runtime, err := NewRuntime(hostManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := runtime.LoadProgram(artifact); code != ErrorIncompatibleVersion {
+		t.Fatalf("LoadProgram limit mismatch = %v, want %v", code, ErrorIncompatibleVersion)
+	}
+	if runtime.program != nil || runtime.Metadata().ProgramHash != [32]byte{} {
+		t.Fatal("limit mismatch published a Program")
 	}
 }
 
@@ -223,4 +403,13 @@ func buildWASMTestBatchRows(t testing.TB, compiled *program.Program, rows uint32
 		t.Fatal(err)
 	}
 	return batch
+}
+
+func wasmTestFuelCost(t testing.TB, compiled *program.Program, input eval.Batch) uint64 {
+	t.Helper()
+	cost, ok := evaluationFuelCost(newEvaluationFuelProfile(compiled), input)
+	if !ok {
+		t.Fatal("evaluation fuel cost overflow")
+	}
+	return cost
 }

@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Evaluate the supplied five-request pack end to end and lock canonical assignment-facing JSON with decisions Approve, Reject, Revise, Escalate, Escalate.
+**Goal:** Evaluate the baseline five-request pack end to end and lock canonical product-facing JSON with decisions Approve, Reject, Revise, Escalate, Escalate.
 
 **Architecture:** Add optional evidence subject/scope/timing symbols to the existing pointerless expression pipeline, then use one conformance test to decode, compile, decode the batch, execute, project, and compare golden JSON. Keep projection test-local until Task 25.
 
@@ -64,7 +64,7 @@ R4 Escalate [R1,R2]
 R5 Escalate [R2,R3]
 ```
 
-Project outcome/driver/reason/remediation and request evidence CSR IDs into all assignment-facing fields without switching on request ID. Compare indented canonical JSON with both output files.
+Project outcome/driver/reason/remediation and request evidence CSR IDs into all product-facing fields without switching on request ID. Compare indented canonical JSON with both output files.
 
 **Step 2: Verify RED**
 

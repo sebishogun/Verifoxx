@@ -34,7 +34,7 @@ func CompilePostgreSQLRLS(source []byte, schema Schema, limits public.Limits) (*
 		RoleStarts: make([]uint32, 0, 8), RoleCounts: make([]uint16, 0, 8),
 		PolicySpans: make([]public.Span, 0, 8), NameStarts: make([]uint32, 0, 8),
 		NameLengths: make([]uint32, 0, 8), RoleNameStarts: make([]uint32, 0, 16),
-		RoleNameLengths: make([]uint32, 0, 16), NameBytes: make([]byte, 0, 128),
+		RoleNameLengths: make([]uint32, 0, 16), RolePublic: make([]uint8, 0, 16), NameBytes: make([]byte, 0, 128),
 		RoleBytes: make([]byte, 0, 128),
 	}
 	for expressions.current() != TokenEOF && !expressions.failed() {
@@ -121,18 +121,19 @@ func parseRLSStatement(parser *expressionParser, result *RLS) {
 	if parser.current() == TokenTo {
 		parser.position++
 		for {
+			isPublic := parser.current() == TokenPublic
 			role, _, roleOK := parseRLSRole(parser)
 			if !roleOK {
 				return
 			}
-			appendRLSRole(result, role)
+			appendRLSRole(result, role, isPublic)
 			if parser.current() != TokenComma {
 				break
 			}
 			parser.position++
 		}
 	} else {
-		appendRLSRole(result, []byte("public"))
+		appendRLSRole(result, []byte("public"), true)
 	}
 	roleCount := len(result.RoleNameStarts) - roleStart
 	if roleCount == 0 || roleCount > math.MaxUint16 || uint64(len(result.RoleNameStarts)) > uint64(parser.limits.MaxChildren) {
@@ -265,7 +266,16 @@ func parseRLSRole(parser *expressionParser) ([]byte, public.Span, bool) {
 		parser.position++
 		return []byte("public"), span, true
 	}
+	if parser.current() == TokenIdentifier && isUnquotedPostgreSQLSessionRole(parser.tokenBytes(parser.position)) {
+		parser.fail(public.CodeUnsupported, parser.currentSpan())
+		return nil, public.Span{}, false
+	}
 	return parseRLSIdentifier(parser)
+}
+
+func isUnquotedPostgreSQLSessionRole(token []byte) bool {
+	return len(token) != 0 && token[0] != '"' &&
+		(equalFoldASCII(token, "current_role") || equalFoldASCII(token, "current_user") || equalFoldASCII(token, "session_user"))
 }
 
 func normalizedPostgreSQLIdentifier(token []byte) []byte {
@@ -281,10 +291,14 @@ func normalizedPostgreSQLIdentifier(token []byte) []byte {
 	return result
 }
 
-func appendRLSRole(result *RLS, role []byte) {
+func appendRLSRole(result *RLS, role []byte, isPublic bool) {
 	result.RoleNameStarts = append(result.RoleNameStarts, uint32(len(result.RoleBytes)))
 	result.RoleNameLengths = append(result.RoleNameLengths, uint32(len(role)))
 	result.RoleBytes = append(result.RoleBytes, role...)
+	result.RolePublic = append(result.RolePublic, 0)
+	if isPublic {
+		result.RolePublic[len(result.RolePublic)-1] = 1
+	}
 }
 
 func duplicateRLSName(result *RLS, name []byte) bool {
@@ -342,7 +356,13 @@ func composeRLS(parser *expressionParser, result *RLS) public.NodeID {
 			return 0
 		}
 	}
-	return foldRLS(parser, commandRoots, false, false, wholeSpan)
+	root := foldRLS(parser, commandRoots, false, false, wholeSpan)
+	roleExists, err := parser.builder.AddExists(roleField, wholeSpan)
+	roleExists = parser.completedNode(roleExists, err, wholeSpan)
+	if parser.failed() {
+		return 0
+	}
+	return addRLSGroup(parser, true, roleExists, root, wholeSpan)
 }
 
 func composeRLSRole(parser *expressionParser, result *RLS, row int, roleField public.FieldID, sourceSpan public.Span) public.NodeID {
@@ -351,10 +371,14 @@ func composeRLSRole(parser *expressionParser, result *RLS, row int, roleField pu
 	roots := make([]public.NodeID, 0, count)
 	for offset := uint32(0); offset < count; offset++ {
 		roleRow := start + offset
+		if uint64(roleRow) >= uint64(len(result.RolePublic)) {
+			parser.fail(public.CodeInvalidPolicy, sourceSpan)
+			return 0
+		}
 		nameStart := result.RoleNameStarts[roleRow]
 		nameEnd := nameStart + result.RoleNameLengths[roleRow]
 		name := result.RoleBytes[nameStart:nameEnd]
-		if bytes.Equal(name, []byte("public")) {
+		if result.RolePublic[roleRow] != 0 {
 			return addRLSBoolean(parser, true, sourceSpan)
 		}
 		node, err := parser.builder.AddCompare(roleField, public.CompareOpEqual, public.StringLiteral(name), sourceSpan)

@@ -105,7 +105,7 @@ sent by value to the fixed job channel; workers create no child goroutines.
 
 Cancellation is checked before admission, while waiting for the first work
 token, while submitting each shard, before a worker begins evaluation, and
-after all shard completions. If submission is canceled, unsent shards release
+after all shard completions. If dispatch is canceled, unsent shards release
 their reserved tokens and complete their pre-added wait-group entries. The
 caller still waits for already submitted shards before clearing borrowed input
 pointers or returning the batch state. Cancellation therefore cannot create a

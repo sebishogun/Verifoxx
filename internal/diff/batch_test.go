@@ -1,7 +1,10 @@
 package diff
 
 import (
+	"context"
+	"errors"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 
@@ -162,19 +165,171 @@ func TestCandidateBatchMaterializesEvidenceCSRAndClearsPoison(t *testing.T) {
 	}
 }
 
+func TestCandidateBatchFiltersEvidenceThroughEachProgramCatalog(t *testing.T) {
+	oldSource := []byte(nornrune.Source())
+	newSource := []byte(strings.ReplaceAll(nornrune.Source(), "approval_record", "security_review"))
+	var analyzer Analyzer
+	oldProgram, newProgram, err := analyzer.compilePair(oldSource, newSource, nativeFieldSchema())
+	if err != nil {
+		t.Fatalf("compile pair: %v", err)
+	}
+	domain := Domain{
+		EvidenceSets: []EvidenceSet{{Records: []Evidence{
+			{Kind: "approval_record", State: "valid"},
+			{Kind: "security_review", State: "valid"},
+			{Kind: "execution_environment_attestation", State: "verified"},
+		}}},
+		MaxCandidates: 1,
+		BatchRows:     1,
+	}
+	plan := searchPlan{cardinality: 1, evidenceCount: 1}
+	var materializer candidateMaterializer
+	var batches candidateBatches
+	if err := materializer.materialize(&batches, oldProgram, newProgram, &plan, domain, 0, 1); err != nil {
+		t.Fatalf("materialize evidence: %v", err)
+	}
+	if len(batches.old.Evidence.Kinds) != 2 || len(batches.new.Evidence.Kinds) != 2 {
+		t.Fatalf("evidence rows = old %d, new %d", len(batches.old.Evidence.Kinds), len(batches.new.Evidence.Kinds))
+	}
+	oldKind, _ := catalogID(oldProgram, oldProgram.EvidenceKindNames, "approval_record")
+	newKind, _ := catalogID(newProgram, newProgram.EvidenceKindNames, "security_review")
+	if batches.old.Evidence.Kinds[0] != schema.EvidenceKindID(oldKind) ||
+		batches.new.Evidence.Kinds[0] != schema.EvidenceKindID(newKind) {
+		t.Fatalf("filtered kinds = old %v, new %v", batches.old.Evidence.Kinds, batches.new.Evidence.Kinds)
+	}
+	if len(batches.old.EvidenceRefs) != 2 || len(batches.new.EvidenceRefs) != 2 ||
+		batches.old.EvidenceOffsets[1] != 2 || batches.new.EvidenceOffsets[1] != 2 {
+		t.Fatalf("filtered CSR = old (%v,%v), new (%v,%v)",
+			batches.old.EvidenceOffsets, batches.old.EvidenceRefs,
+			batches.new.EvidenceOffsets, batches.new.EvidenceRefs)
+	}
+	if !slices.Equal(batches.old.Evidence.IDs, []schema.EvidenceID{1, 3}) ||
+		!slices.Equal(batches.new.Evidence.IDs, []schema.EvidenceID{2, 3}) {
+		t.Fatalf("filtered evidence IDs = old %v, new %v", batches.old.Evidence.IDs, batches.new.Evidence.IDs)
+	}
+}
+
+func TestCandidateBatchRejectsExpandedEvidenceAboveSafetyCeiling(t *testing.T) {
+	var analyzer Analyzer
+	oldProgram, newProgram, err := analyzer.compilePair([]byte(nornrune.Source()), []byte(nornrune.Source()), nativeFieldSchema())
+	if err != nil {
+		t.Fatalf("compile pair: %v", err)
+	}
+	records := make([]Evidence, 1<<17)
+	for row := range records {
+		records[row] = Evidence{Kind: "approval_record", State: "valid"}
+	}
+	domain := Domain{
+		EvidenceSets:  []EvidenceSet{{Records: records}},
+		MaxCandidates: 3,
+		BatchRows:     3,
+	}
+	plan := searchPlan{cardinality: 3, evidenceCount: 1}
+	var materializer candidateMaterializer
+	var batches candidateBatches
+	if err := materializer.materialize(&batches, oldProgram, newProgram, &plan, domain, 0, 3); !errors.Is(err, ErrCandidateBudget) {
+		t.Fatalf("materialize expanded evidence: got %v, want %v", err, ErrCandidateBudget)
+	}
+	if cap(materializer.oldEvidence.refs) != 0 || cap(materializer.newEvidence.refs) != 0 {
+		t.Fatalf("expanded evidence allocated refs: old=%d new=%d", cap(materializer.oldEvidence.refs), cap(materializer.newEvidence.refs))
+	}
+}
+
+func TestCandidateBatchRejectsUnknownEvidenceAboveSourceCeiling(t *testing.T) {
+	var analyzer Analyzer
+	oldProgram, newProgram, err := analyzer.compilePair([]byte(nornrune.Source()), []byte(nornrune.Source()), nativeFieldSchema())
+	if err != nil {
+		t.Fatalf("compile pair: %v", err)
+	}
+	records := make([]Evidence, int(maxCandidateEvidenceRows)+1)
+	for row := range records {
+		records[row] = Evidence{Kind: "unknown_kind", State: "unknown_state"}
+	}
+	domain := Domain{EvidenceSets: []EvidenceSet{{Records: records}}, MaxCandidates: 1, BatchRows: 1}
+	plan := searchPlan{cardinality: 1, evidenceCount: 1}
+	var materializer candidateMaterializer
+	var batches candidateBatches
+	if err := materializer.materialize(&batches, oldProgram, newProgram, &plan, domain, 0, 1); !errors.Is(err, ErrCandidateBudget) {
+		t.Fatalf("materialize unknown source evidence: got %v, want %v", err, ErrCandidateBudget)
+	}
+}
+
+func TestCandidateBatchRejectsTooManyEvidenceScenarios(t *testing.T) {
+	var analyzer Analyzer
+	oldProgram, newProgram, err := analyzer.compilePair([]byte(nornrune.Source()), []byte(nornrune.Source()), nativeFieldSchema())
+	if err != nil {
+		t.Fatalf("compile pair: %v", err)
+	}
+	domain := Domain{
+		EvidenceSets:  make([]EvidenceSet, int(MaxBatchRows)+1),
+		MaxCandidates: uint64(MaxBatchRows) + 1,
+		BatchRows:     1,
+	}
+	plan := searchPlan{cardinality: uint64(MaxBatchRows) + 1, evidenceCount: MaxBatchRows + 1}
+	var materializer candidateMaterializer
+	var batches candidateBatches
+	if err := materializer.materialize(&batches, oldProgram, newProgram, &plan, domain, 0, 1); !errors.Is(err, ErrCandidateBudget) {
+		t.Fatalf("materialize evidence scenarios: got %v, want %v", err, ErrCandidateBudget)
+	}
+}
+
+type cancelAfterEvidenceChecks struct {
+	context.Context
+	checks uint32
+}
+
+func (ctx *cancelAfterEvidenceChecks) Err() error {
+	ctx.checks++
+	if ctx.checks > 2 {
+		return context.Canceled
+	}
+	return nil
+}
+
+func TestCandidateBatchChecksCancellationWhileIndexingEvidence(t *testing.T) {
+	var analyzer Analyzer
+	oldProgram, newProgram, err := analyzer.compilePair([]byte(nornrune.Source()), []byte(nornrune.Source()), nativeFieldSchema())
+	if err != nil {
+		t.Fatalf("compile pair: %v", err)
+	}
+	records := make([]Evidence, 128)
+	for row := range records {
+		records[row] = Evidence{Kind: "unknown_kind", State: "unknown_state"}
+	}
+	domain := Domain{EvidenceSets: []EvidenceSet{{Records: records}}, MaxCandidates: 1, BatchRows: 1}
+	plan := searchPlan{cardinality: 1, evidenceCount: 1}
+	ctx := &cancelAfterEvidenceChecks{Context: context.Background()}
+	var materializer candidateMaterializer
+	var batches candidateBatches
+	if err := materializer.materializeContext(ctx, &batches, oldProgram, newProgram, &plan, domain, 0, 1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("materialize cancellation during evidence indexing: got %v, want %v", err, context.Canceled)
+	}
+}
+
 func TestCandidateBatchErrorLeavesDestinationUnchanged(t *testing.T) {
 	var analyzer Analyzer
 	oldProgram, newProgram, err := analyzer.compilePair([]byte(nornrune.Source()), []byte(nornrune.Source()), nativeFieldSchema())
 	if err != nil {
 		t.Fatalf("compile pair: %v", err)
 	}
-	plan := searchPlan{cardinality: 1, evidenceCount: 1}
-	domain := Domain{EvidenceSets: []EvidenceSet{{Records: []Evidence{{Kind: "unknown", State: "valid"}}}}, MaxCandidates: 1, BatchRows: 1}
+	plan := searchPlan{
+		fieldRows: []uint32{0}, optionCounts: []uint32{1}, strides: []uint64{1},
+		oldFieldIDs: []schema.FieldID{1}, newFieldIDs: []schema.FieldID{1},
+		cardinality: 1, evidenceCount: 1,
+	}
+	domain := Domain{
+		Fields: []FieldDomain{{
+			Name: "requester.team", Kind: FieldKindString, Closed: true,
+			Values: []Value{{State: ValuePresent, Kind: FieldKindInvalid}},
+		}},
+		MaxCandidates: 1,
+		BatchRows:     1,
+	}
 	want := candidateBatches{old: eval.Batch{Rows: 99}, new: eval.Batch{Rows: 100}}
 	got := want
 	var materializer candidateMaterializer
 	if err := materializer.materialize(&got, oldProgram, newProgram, &plan, domain, 0, 1); err == nil {
-		t.Fatal("materialize invalid evidence: got nil error")
+		t.Fatal("materialize invalid candidate: got nil error")
 	}
 	if got.old.Rows != want.old.Rows || got.new.Rows != want.new.Rows {
 		t.Fatalf("destination changed on error: got (%d,%d)", got.old.Rows, got.new.Rows)

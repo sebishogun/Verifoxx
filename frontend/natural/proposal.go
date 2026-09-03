@@ -1,6 +1,9 @@
 package natural
 
-import "crypto/sha256"
+import (
+	"crypto/sha256"
+	"unicode/utf8"
+)
 
 // ItemID and CitationID are one-based proposal identifiers.
 type ItemID uint32
@@ -13,10 +16,12 @@ type ProviderInfo struct {
 }
 
 // ReviewedDraft is reviewer-owned native policy source plus CSR provenance
-// from each native requirement to proposal items.
+// from every resulting semantic row to reviewed proposal items and their
+// validated citations. SemanticKinds and SemanticIDs are parallel.
 type ReviewedDraft struct {
 	PolicySource         []byte
-	RequirementIDs       []uint32
+	SemanticKinds        []SemanticKind
+	SemanticIDs          []uint32
 	MappingStarts        []uint32
 	MappingCounts        []uint16
 	MappingProposalItems []ItemID
@@ -106,7 +111,7 @@ func (builder *Builder) AddCitation(page uint32, span Span, quote []byte) (Citat
 		uint64(len(proposal.CitationQuoteBytes))+uint64(len(quote)) > uint64(^uint32(0)) {
 		return 0, ErrLimit
 	}
-	if len(quote) == 0 || span.End <= span.Start || uint64(len(quote)) > uint64(^uint32(0)) {
+	if len(quote) == 0 || !utf8.Valid(quote) || span.End <= span.Start || uint64(len(quote)) > uint64(^uint32(0)) {
 		return 0, ErrInvalidProposal
 	}
 
@@ -131,7 +136,7 @@ func (builder *Builder) AddItem(kind ItemKind, parent ItemID, text []byte, citat
 		len(citations) > int(^uint16(0)) {
 		return 0, ErrLimit
 	}
-	if !kind.Valid() || len(text) == 0 || len(citations) == 0 || uint64(parent) > uint64(len(proposal.ItemKinds)) {
+	if !kind.Valid() || len(text) == 0 || !utf8.Valid(text) || len(citations) == 0 || uint64(parent) > uint64(len(proposal.ItemKinds)) {
 		return 0, ErrInvalidProposal
 	}
 	for _, citation := range citations {

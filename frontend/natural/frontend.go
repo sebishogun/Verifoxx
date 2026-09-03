@@ -48,6 +48,30 @@ func (kind ItemKind) String() string {
 	return itemKindNames[kind]
 }
 
+// SemanticKind identifies one reviewer-owned native policy row. Requirement
+// and applicability IDs retain the native requirement ID; other IDs are
+// one-based within their kind.
+type SemanticKind uint8
+
+const (
+	SemanticKindInvalid SemanticKind = iota
+	SemanticKindRequirement
+	SemanticKindApplicability
+	SemanticKindClause
+	SemanticKindAssertion
+	SemanticKindEvidence
+	SemanticKindResolution
+	SemanticKindRemediation
+	SemanticKindExplanation
+	SemanticKindOutcome
+	SemanticKindAssumption
+)
+
+// Valid reports whether kind identifies a reviewable native semantic row.
+func (kind SemanticKind) Valid() bool {
+	return kind >= SemanticKindRequirement && kind <= SemanticKindAssumption
+}
+
 // DiagnosticCode identifies a stable natural-frontend failure class.
 type DiagnosticCode uint8
 
@@ -84,7 +108,7 @@ type Limits struct {
 	MaxItems         uint32
 	MaxCitations     uint32
 	MaxCitationEdges uint32
-	MaxClaimBytes    uint32
+	MaxClaimBytes    uint32 // Aggregate provider identity, version, and item text bytes.
 	MaxQuoteBytes    uint32
 	MaxDiagnostics   uint32
 	MaxReviewBytes   uint32
@@ -128,7 +152,8 @@ func NewDocument(source []byte, pageStarts []uint32, limits Limits) (*Document, 
 		return nil, ErrLimit
 	}
 	for row := 1; row < len(pageStarts); row++ {
-		if pageStarts[row] <= pageStarts[row-1] || uint64(pageStarts[row]) >= uint64(len(source)) {
+		if pageStarts[row] <= pageStarts[row-1] || uint64(pageStarts[row]) >= uint64(len(source)) ||
+			!utf8Boundary(source, pageStarts[row]) {
 			return nil, ErrInvalidDocument
 		}
 	}
@@ -143,4 +168,8 @@ func NewDocument(source []byte, pageStarts []uint32, limits Limits) (*Document, 
 
 func overLimit(length int, limit uint32) bool {
 	return limit != 0 && uint64(length) > uint64(limit)
+}
+
+func utf8Boundary(source []byte, offset uint32) bool {
+	return int(offset) == len(source) || utf8.RuneStart(source[offset])
 }

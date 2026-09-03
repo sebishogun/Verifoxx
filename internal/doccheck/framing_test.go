@@ -11,51 +11,38 @@ import (
 )
 
 // Product framing must describe NornRune as a maintained policy engine.
-// Historical records keep their original wording: the archived source
-// material, the dated development plans, and the verbatim license text. The
-// scanner's own file is exempt because it necessarily contains the banned
-// literals it enforces.
-var framingAllowedPaths = map[string]bool{
-	"LICENSE":                           true,
-	"internal/doccheck/framing_test.go": true,
-}
-
+// Only the immutable source-material archive keeps its original wording.
 var framingAllowedPrefixes = [...]string{
 	"docs/archive/source-material/",
-	"docs/plans/",
 }
 
-// framingBannedWords are rejected wherever they appear in tracked product
-// files, in any case or inflection. "exercis" is a stem and also matches
-// "exercises", "exercised", and "exercising".
+// The split literals let this checker inspect its own source.
 var framingBannedWords = [...]string{
-	"exercis",
-	"assignment",
-	"take-home",
-	"takehome",
-	"grader",
-	"recruiter",
-	"interview",
+	"exer" + "cis",
+	"assign" + "ment",
+	"take" + "-home",
+	"take" + "home",
+	"grad" + "er",
+	"recruit" + "er",
+	"inter" + "view",
 }
 
-// framingBannedPhrases are job-submission framing that must not reappear.
 var framingBannedPhrases = [...]string{
-	"candidate-exercise",
-	"candidate submission",
-	"candidate-facing",
-	"evaluator-facing",
-	"supplied request",
-	"supplied pack",
-	"supplied policy",
-	"supplied input",
-	"five supplied",
-	"design note",
+	"candidate-" + "exer" + "cise",
+	"candidate " + "sub" + "mission",
+	"candidate-" + "facing",
+	"evaluator-" + "facing",
+	"supplied " + "request",
+	"supplied " + "pack",
+	"supplied " + "policy",
+	"supplied " + "input",
+	"five " + "supplied",
+	"design " + "note",
 }
 
-// framingSubmissionAllowedPrefixes keep "audit submission", "journal
-// submission", and "batch submission" usable as pipeline terminology; every
-// other "submission" is candidate-submission framing.
-var framingSubmissionAllowedPrefixes = [...]string{"audit ", "journal ", "batch "}
+const framingIntakeTerm = "sub" + "mission"
+
+var framingIntakeAllowedPrefixes = [...]string{"audit ", "journal ", "batch "}
 
 func TestTrackedFilesContainNoProductFraming(t *testing.T) {
 	command := exec.Command("git", "ls-files", "-z")
@@ -71,6 +58,10 @@ func TestTrackedFilesContainNoProductFraming(t *testing.T) {
 			continue
 		}
 		relative := filepath.ToSlash(string(name))
+		if framingPathViolation(relative) && diagnostics < maxDiagnostics {
+			t.Errorf("product framing in tracked path %s", relative)
+			diagnostics++
+		}
 		if framingAllowed(relative) {
 			continue
 		}
@@ -81,7 +72,7 @@ func TestTrackedFilesContainNoProductFraming(t *testing.T) {
 		if !utf8.Valid(content) {
 			continue
 		}
-		lower := strings.ToLower(string(content))
+		lower := framingNormalizedContent(relative, strings.ToLower(string(content)))
 		for _, word := range framingBannedWords {
 			if strings.Contains(lower, word) && diagnostics < maxDiagnostics {
 				t.Errorf("product framing %q in %s", word, relative)
@@ -94,19 +85,45 @@ func TestTrackedFilesContainNoProductFraming(t *testing.T) {
 				diagnostics++
 			}
 		}
-		diagnostics += framingCheckSubmissions(t, relative, lower, maxDiagnostics-diagnostics)
+		diagnostics += framingCheckIntakeTerm(t, relative, lower, maxDiagnostics-diagnostics)
 	}
 	if diagnostics >= maxDiagnostics {
 		t.Errorf("product framing diagnostics truncated at %d", maxDiagnostics)
 	}
 }
 
-func framingCheckSubmissions(t *testing.T, relative, lower string, budget int) int {
+func TestProductFramingPathClassification(t *testing.T) {
+	legacy := "internal/doccheck/" + "sub" + "mission_test.go"
+	if !framingPathViolation(legacy) {
+		t.Fatalf("legacy product path accepted: %s", legacy)
+	}
+	archived := "docs/archive/source-material/NornRune_AI_Engineer_" + "Assign" + "ment.pdf"
+	if framingPathViolation(archived) {
+		t.Fatalf("historical archive path rejected: %s", archived)
+	}
+}
+
+func TestProductFramingAllowlistIsArchiveOnly(t *testing.T) {
+	for _, path := range []string{
+		"LICENSE",
+		"docs/plans/2026-08-20-nornrune-policy-engine.md",
+		"internal/doccheck/framing_test.go",
+	} {
+		if framingAllowed(path) {
+			t.Errorf("active path exempt from product framing checks: %s", path)
+		}
+	}
+	if path := "docs/archive/source-material/README.md"; !framingAllowed(path) {
+		t.Errorf("historical archive path is not exempt: %s", path)
+	}
+}
+
+func framingCheckIntakeTerm(t *testing.T, relative, lower string, budget int) int {
 	t.Helper()
 	found := 0
 	search := lower
 	for {
-		index := strings.Index(search, "submission")
+		index := strings.Index(search, framingIntakeTerm)
 		if index < 0 || found >= budget {
 			return found
 		}
@@ -120,30 +137,55 @@ func framingCheckSubmissions(t *testing.T, relative, lower string, budget int) i
 			preceding = words[len(words)-1]
 		}
 		allowed := false
-		for _, prefix := range framingSubmissionAllowedPrefixes {
+		for _, prefix := range framingIntakeAllowedPrefixes {
 			if strings.HasSuffix(preceding, strings.TrimSpace(prefix)) {
 				allowed = true
 				break
 			}
 		}
 		if !allowed {
-			t.Errorf("product framing %q in %s", "submission ("+preceding+")", relative)
+			t.Errorf("product framing %q in %s", framingIntakeTerm+" ("+preceding+")", relative)
 			found++
 		}
-		search = search[index+len("submission"):]
+		search = search[index+len(framingIntakeTerm):]
 	}
 }
 
 func framingAllowed(relative string) bool {
-	if framingAllowedPaths[relative] {
-		return true
-	}
 	for _, prefix := range framingAllowedPrefixes {
 		if strings.HasPrefix(relative, prefix) {
 			return true
 		}
 	}
 	return false
+}
+
+func framingPathViolation(relative string) bool {
+	if framingAllowed(relative) {
+		return false
+	}
+	lower := strings.ToLower(relative)
+	for _, word := range framingBannedWords {
+		if strings.Contains(lower, word) {
+			return true
+		}
+	}
+	for _, phrase := range framingBannedPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return strings.Contains(lower, framingIntakeTerm)
+}
+
+func framingNormalizedContent(relative, lower string) string {
+	if relative != "LICENSE" {
+		return lower
+	}
+	// Preserve verbatim legal boilerplate while allowing its necessary terms.
+	lower = strings.ReplaceAll(lower, "exer"+"cising permissions", "using permissions")
+	lower = strings.ReplaceAll(lower, "exer"+"cise of permissions", "use of permissions")
+	return strings.ReplaceAll(lower, "sub"+"mission of contributions", "contribution intake")
 }
 
 func TestArchiveHoldsOnlyHistoricalSourceMaterial(t *testing.T) {
@@ -159,8 +201,9 @@ func TestArchiveHoldsOnlyHistoricalSourceMaterial(t *testing.T) {
 			t.Errorf("archive notice does not state %q", required)
 		}
 	}
+	sourcePDF := "NornRune_AI_Engineer_" + "Assign" + "ment.pdf"
 	for _, path := range []string{
-		filepath.Join(archive, "NornRune_AI_Engineer_Assignment.pdf"),
+		filepath.Join(archive, sourcePDF),
 		filepath.Join(archive, "Requirements.md"),
 	} {
 		if _, err := os.Stat(path); err != nil {
@@ -170,7 +213,7 @@ func TestArchiveHoldsOnlyHistoricalSourceMaterial(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repositoryRoot, "Requirements.md")); !os.IsNotExist(err) {
 		t.Error("Requirements.md still exists at the repository root")
 	}
-	if _, err := os.Stat(filepath.Join(repositoryRoot, "NornRune_AI_Engineer_Assignment.pdf")); !os.IsNotExist(err) {
-		t.Error("assignment PDF still exists at the repository root")
+	if _, err := os.Stat(filepath.Join(repositoryRoot, sourcePDF)); !os.IsNotExist(err) {
+		t.Error("source PDF still exists at the repository root")
 	}
 }

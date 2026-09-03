@@ -16,7 +16,7 @@
 - Decision rows are exactly `Approve`, `Reject`, `Revise`, and `Escalate`; a policy with a different outcome catalog is unsupported and yields `Inconclusive`.
 - A caller supplies all 16 old/new decision transition classes and whether each transition is allowed. NornRune does not impose a universal decision ordering.
 - One `FieldDomain` binds by canonical field name and kind. String dimensions must be explicitly `Closed`; an open string domain can find a change but cannot prove equivalence.
-- Every referenced field must have a domain, every field domain must include Missing, and evidence-using Programs require at least one closed evidence-set dimension. Missing dimensions make a no-difference result `Inconclusive`.
+- Every referenced field must have a domain, every field domain must include Missing, and evidence-using Programs require at least one evidence-set scenario plus an explicit `EvidenceClosed` declaration. Missing dimensions or an open evidence universe make a no-difference result `Inconclusive`.
 - One `EvidenceSet` is an owned scenario containing zero or more typed evidence records. Scenarios cover absent, current, stale, unclear, and conflicting records without adding special evaluator semantics.
 - Candidate cardinality is the checked product of field-option counts and evidence-set count. Overflow, zero dimensions, `MaxCandidates` exhaustion, invalid `BatchRows`, cancellation, or evaluator errors are inconclusive/error boundaries, never equivalence.
 - Search order is deterministic: dimensions referenced by changed instructions first, then remaining referenced dimensions, then canonical field name. No referenced dimension is dropped from complete proof.
@@ -104,6 +104,7 @@ type Domain struct {
     EvidenceSets  []EvidenceSet
     MaxCandidates uint64
     BatchRows     uint32
+    EvidenceClosed bool
 }
 ```
 
@@ -288,7 +289,7 @@ Expected: PASS; swapping old/new and transposing the matrix produces the expecte
 
 **Step 1: Write failing provider tests**
 
-Cover nil provider, deterministic exhaustive provider, valid proposed witness, fabricated witness, mismatched decisions, unsupported claim, timeout, cancellation, provider panic containment decision, and advisory equivalence followed by concrete exhaustion.
+Cover nil provider, deterministic exhaustive provider, valid proposed witness, fabricated witness, mismatched decisions, unsupported claim, cooperative timeout, cancellation, provider panic containment decision, and advisory equivalence followed by concrete exhaustion.
 
 Contract:
 
@@ -311,7 +312,7 @@ type Prover interface {
 }
 ```
 
-`ProofRequest` owns source and domain snapshots; it exposes no mutable Program or evaluator state.
+`ProofRequest` owns source and domain snapshots; it exposes no mutable Program or evaluator state. Providers run synchronously and must return promptly when their context is done; the analyzer does not spawn an unbounded goroutine to preempt non-cooperative code.
 
 **Step 2: Run RED**
 
@@ -321,7 +322,7 @@ Expected: FAIL because provider contracts/replay are absent.
 
 **Step 3: Implement replay boundary**
 
-Call providers only on the cold path under caller context. Replay changed witnesses concretely before using them. Treat provider errors, unsupported claims, invalid witnesses, and disagreement as Inconclusive uncertainty. Always exhaust the finite domain before publishing provider-suggested equivalence.
+Call providers only on the cold path under caller context. Replay changed witnesses concretely before using them. Treat provider errors, cooperative cancellation or timeout, unsupported claims, invalid witnesses, and disagreement as Inconclusive uncertainty. Always exhaust the finite domain before publishing provider-suggested equivalence.
 
 **Step 4: Run GREEN and race**
 

@@ -1,14 +1,16 @@
 package jsondiff
 
 import (
+	"encoding/hex"
 	"strconv"
 
+	"github.com/sebishogun/nornrune/internal/adapters/wire"
 	policydiff "github.com/sebishogun/nornrune/policy/diff"
 )
 
 func AppendResultJSON(dst []byte, result policydiff.Result) []byte {
 	dst = append(dst, `{"outcome":`...)
-	dst = strconv.AppendQuote(dst, result.Outcome.String())
+	dst = wire.AppendJSONStringString(dst, result.Outcome.String())
 	dst = append(dst, `,"complete":`...)
 	dst = strconv.AppendBool(dst, result.Complete)
 	dst = append(dst, `,"forbidden":`...)
@@ -21,8 +23,32 @@ func AppendResultJSON(dst []byte, result policydiff.Result) []byte {
 	} else {
 		dst = appendCounterexampleJSON(dst, result.Counterexample)
 	}
+	dst = append(dst, `,"forbidden_counterexample":`...)
+	if !result.HasForbiddenCounterexample {
+		dst = append(dst, "null"...)
+	} else {
+		dst = appendCounterexampleJSON(dst, result.ForbiddenCounterexample)
+	}
+	dst = append(dst, `,"transitions":[`...)
+	for index, count := range result.Transitions {
+		if index != 0 {
+			dst = append(dst, ',')
+		}
+		oldDecision := policydiff.Decision(index/4 + 1)
+		newDecision := policydiff.Decision(index%4 + 1)
+		dst = append(dst, `{"old":`...)
+		dst = wire.AppendJSONStringString(dst, oldDecision.String())
+		dst = append(dst, `,"new":`...)
+		dst = wire.AppendJSONStringString(dst, newDecision.String())
+		dst = append(dst, `,"count":`...)
+		dst = strconv.AppendUint(dst, count, 10)
+		dst = append(dst, `,"forbidden_count":`...)
+		dst = strconv.AppendUint(dst, result.ForbiddenTransitions[index], 10)
+		dst = append(dst, '}')
+	}
+	dst = append(dst, ']')
 	dst = append(dst, `,"uncertainty":`...)
-	dst = strconv.AppendQuote(dst, result.Uncertainty)
+	dst = wire.AppendJSONStringString(dst, result.Uncertainty)
 	return append(dst, '}', '\n')
 }
 
@@ -35,7 +61,7 @@ func appendCounterexampleJSON(dst []byte, counterexample policydiff.Counterexamp
 			dst = append(dst, ',')
 		}
 		dst = append(dst, `{"name":`...)
-		dst = strconv.AppendQuote(dst, counterexample.Fields[row].Name)
+		dst = wire.AppendJSONStringString(dst, counterexample.Fields[row].Name)
 		dst = append(dst, `,"value":`...)
 		dst = appendValueJSON(dst, counterexample.Fields[row].Value)
 		dst = append(dst, '}')
@@ -47,15 +73,15 @@ func appendCounterexampleJSON(dst []byte, counterexample policydiff.Counterexamp
 		}
 		record := &counterexample.Evidence[row]
 		dst = append(dst, `{"kind":`...)
-		dst = strconv.AppendQuote(dst, record.Kind)
+		dst = wire.AppendJSONStringString(dst, record.Kind)
 		dst = append(dst, `,"state":`...)
-		dst = strconv.AppendQuote(dst, record.State)
+		dst = wire.AppendJSONStringString(dst, record.State)
 		dst = append(dst, `,"subject":`...)
-		dst = strconv.AppendQuote(dst, record.Subject)
+		dst = wire.AppendJSONStringString(dst, record.Subject)
 		dst = append(dst, `,"scope":`...)
-		dst = strconv.AppendQuote(dst, record.Scope)
+		dst = wire.AppendJSONStringString(dst, record.Scope)
 		dst = append(dst, `,"timing":`...)
-		dst = strconv.AppendQuote(dst, record.Timing)
+		dst = wire.AppendJSONStringString(dst, record.Timing)
 		dst = append(dst, '}')
 	}
 	dst = append(dst, `],"old":`...)
@@ -71,13 +97,13 @@ func appendValueJSON(dst []byte, value policydiff.Value) []byte {
 	if value.State == policydiff.ValuePresent {
 		state = "present"
 	}
-	dst = strconv.AppendQuote(dst, state)
+	dst = wire.AppendJSONStringString(dst, state)
 	dst = append(dst, `,"kind":`...)
-	dst = strconv.AppendQuote(dst, fieldKindName(value.Kind))
+	dst = wire.AppendJSONStringString(dst, fieldKindName(value.Kind))
 	switch value.Kind {
 	case policydiff.FieldKindString:
 		dst = append(dst, `,"string":`...)
-		dst = strconv.AppendQuote(dst, value.String)
+		dst = wire.AppendJSONStringString(dst, value.String)
 	case policydiff.FieldKindInteger, policydiff.FieldKindTimestamp:
 		dst = append(dst, `,"integer":`...)
 		dst = strconv.AppendInt(dst, value.Integer, 10)
@@ -90,7 +116,7 @@ func appendValueJSON(dst []byte, value policydiff.Value) []byte {
 
 func appendEvaluationJSON(dst []byte, evaluation policydiff.Evaluation) []byte {
 	dst = append(dst, `{"decision":`...)
-	dst = strconv.AppendQuote(dst, evaluation.Decision.String())
+	dst = wire.AppendJSONStringString(dst, evaluation.Decision.String())
 	dst = append(dst, `,"outcome_id":`...)
 	dst = strconv.AppendUint(dst, uint64(evaluation.OutcomeID), 10)
 	dst = append(dst, `,"source_start":`...)
@@ -109,7 +135,17 @@ func appendEvaluationJSON(dst []byte, evaluation policydiff.Evaluation) []byte {
 	dst = appendUint32JSON(dst, `,"reason_evidence_ids":`, evaluation.ReasonEvidenceIDs)
 	dst = appendUint32JSON(dst, `,"reason_evidence_states":`, evaluation.ReasonEvidenceStates)
 	dst = appendUint32JSON(dst, `,"remediation_ids":`, evaluation.RemediationIDs)
+	dst = appendDigestJSON(dst, `,"assumptions_digest":`, evaluation.AssumptionsDigest)
+	dst = appendDigestJSON(dst, `,"driver_templates_digest":`, evaluation.DriverTemplatesDigest)
+	dst = appendDigestJSON(dst, `,"evidence_issues_digest":`, evaluation.EvidenceIssuesDigest)
 	return append(dst, '}')
+}
+
+func appendDigestJSON(dst []byte, key string, digest [32]byte) []byte {
+	dst = append(dst, key...)
+	dst = append(dst, '"')
+	dst = hex.AppendEncode(dst, digest[:])
+	return append(dst, '"')
 }
 
 func appendUint32JSON(dst []byte, key string, values []uint32) []byte {
@@ -140,6 +176,26 @@ func AppendResultText(dst []byte, result policydiff.Result) []byte {
 		dst = append(dst, result.Counterexample.Old.Decision.String()...)
 		dst = append(dst, " -> "...)
 		dst = append(dst, result.Counterexample.New.Decision.String()...)
+	}
+	if result.HasForbiddenCounterexample {
+		dst = append(dst, "\nFirst forbidden transition: "...)
+		dst = append(dst, result.ForbiddenCounterexample.Old.Decision.String()...)
+		dst = append(dst, " -> "...)
+		dst = append(dst, result.ForbiddenCounterexample.New.Decision.String()...)
+	}
+	for index, count := range result.Transitions {
+		if count == 0 {
+			continue
+		}
+		dst = append(dst, "\nTransition "...)
+		dst = append(dst, policydiff.Decision(index/4+1).String()...)
+		dst = append(dst, " -> "...)
+		dst = append(dst, policydiff.Decision(index%4+1).String()...)
+		dst = append(dst, ": "...)
+		dst = strconv.AppendUint(dst, count, 10)
+		dst = append(dst, " (forbidden "...)
+		dst = strconv.AppendUint(dst, result.ForbiddenTransitions[index], 10)
+		dst = append(dst, ')')
 	}
 	if result.Uncertainty != "" {
 		dst = append(dst, "\nUncertainty: "...)

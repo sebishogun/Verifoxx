@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { createBrowserWASI } from "./browser-wasi.mjs";
-import { runNornRune } from "./harness.mjs";
+import { callWithBytes, runNornRune } from "./harness.mjs";
 
-const [modulePath, artifactPath, inputPath, expectedPath] = process.argv.slice(2);
-if (!modulePath || !artifactPath || !inputPath || !expectedPath) {
-  throw new Error("usage: browser-conformance.mjs MODULE ARTIFACT INPUT EXPECTED");
+const [modulePath, artifactPath, inputPath, expectedPath, mismatchPath] = process.argv.slice(2);
+if (!modulePath || !artifactPath || !inputPath || !expectedPath || !mismatchPath) {
+  throw new Error("usage: browser-conformance.mjs MODULE ARTIFACT INPUT EXPECTED MISMATCHED_ARTIFACT");
 }
 
 let instance;
@@ -14,6 +14,9 @@ instance = await WebAssembly.instantiate(module, {
 });
 instance.exports._initialize();
 
+if (callWithBytes(instance, await readFile(mismatchPath), "nornrune_load_program") !== 2) {
+  throw new Error("module accepted mismatched artifact limits");
+}
 const actual = runNornRune(instance, await readFile(artifactPath), await readFile(inputPath));
 const expected = await readFile(expectedPath);
 if (!Buffer.from(actual).equals(expected)) {

@@ -12,7 +12,7 @@ func regressionFixture(t *testing.T) (Result, []byte, []byte, [32]byte, [32]byte
 	oldSource := []byte("old policy")
 	newSource := []byte("new policy")
 	result := Result{
-		Outcome: Widened, Forbidden: true, HasCounterexample: true,
+		Outcome: Widened, Complete: true, Forbidden: true, HasCounterexample: true,
 		Counterexample: Counterexample{
 			Index:  7,
 			Fields: []CandidateField{{Name: "requester.trust", Value: Value{Kind: FieldKindString, State: ValuePresent, String: "external"}}},
@@ -20,7 +20,26 @@ func regressionFixture(t *testing.T) (Result, []byte, []byte, [32]byte, [32]byte
 			New:    Evaluation{Decision: Approve, OutcomeID: 1},
 		},
 	}
+	result.ForbiddenCounterexample = result.Counterexample
+	result.HasForbiddenCounterexample = true
+	index, _ := transitionIndex(Reject, Approve)
+	result.ForbiddenTransitions[index] = 1
 	return result, oldSource, newSource, SourceDigest(oldSource), SourceDigest(newSource), CounterexampleDigest(result.Counterexample)
+}
+
+func TestRegressionNeverAllowsIncompleteComparison(t *testing.T) {
+	result, oldSource, newSource, oldDigest, newDigest, witnessDigest := regressionFixture(t)
+	result.Complete = false
+	now := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
+	exception := Exception{
+		ID: "EX-7", Reason: "reviewed", Owner: "owner", Expires: now.Add(time.Hour),
+		OldDigest: oldDigest, NewDigest: newDigest, WitnessDigest: witnessDigest,
+		OldDecision: Reject, NewDecision: Approve,
+	}
+	decision := CheckRegression(result, oldSource, newSource, []Exception{exception}, now)
+	if decision.Allowed || decision.Reason != "comparison is incomplete" {
+		t.Fatalf("incomplete comparison decision: %+v", decision)
+	}
 }
 
 func TestRegressionRequiresExactCurrentException(t *testing.T) {
@@ -80,6 +99,57 @@ func TestRegressionNeverAllowsInconclusiveAndAllowsNonForbidden(t *testing.T) {
 	}
 }
 
+func TestRegressionExceptionMatchesOnlyOneForbiddenCandidate(t *testing.T) {
+	oldSource := []byte("old policy")
+	newSource := []byte("new policy")
+	firstDifference := Counterexample{
+		Index: 0,
+		Old:   Evaluation{Decision: Reject},
+		New:   Evaluation{Decision: Approve},
+	}
+	forbiddenWitness := Counterexample{
+		Index: 1,
+		Old:   Evaluation{Decision: Approve},
+		New:   Evaluation{Decision: Reject},
+	}
+	result := Result{
+		Outcome: Changed, Complete: true, Forbidden: true,
+		Counterexample: firstDifference, HasCounterexample: true,
+		ForbiddenCounterexample: forbiddenWitness, HasForbiddenCounterexample: true,
+	}
+	forbiddenIndex, _ := transitionIndex(Approve, Reject)
+	result.ForbiddenTransitions[forbiddenIndex] = 1
+	now := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	exception := Exception{
+		ID: "EX-1", Reason: "reviewed", Owner: "policy-team", Expires: now.Add(time.Hour),
+		OldDigest: SourceDigest(oldSource), NewDigest: SourceDigest(newSource),
+		WitnessDigest: CounterexampleDigest(firstDifference),
+		OldDecision:   Reject, NewDecision: Approve,
+	}
+	if decision := CheckRegression(result, oldSource, newSource, []Exception{exception}, now); decision.Allowed {
+		t.Fatalf("exception for unrelated first difference allowed forbidden witness: %+v", decision)
+	}
+	exception.WitnessDigest = CounterexampleDigest(forbiddenWitness)
+	exception.OldDecision = Approve
+	exception.NewDecision = Reject
+	if decision := CheckRegression(result, oldSource, newSource, []Exception{exception}, now); !decision.Allowed {
+		t.Fatalf("exact single forbidden witness rejected: %+v", decision)
+	}
+
+	result.ForbiddenTransitions[forbiddenIndex] = 2
+	if decision := CheckRegression(result, oldSource, newSource, []Exception{exception}, now); decision.Allowed {
+		t.Fatalf("one exception allowed multiple forbidden candidates: %+v", decision)
+	}
+}
+
+func TestCounterexampleDigestIncludesOwnedTemplateSemantics(t *testing.T) {
+	left := Counterexample{Old: Evaluation{AssumptionsDigest: [32]byte{1}}}
+	right := Counterexample{Old: Evaluation{AssumptionsDigest: [32]byte{2}}}
+	if CounterexampleDigest(left) == CounterexampleDigest(right) {
+		t.Fatal("template semantics did not affect witness digest")
+	}
+}
+
 func TestRegressionExceptionJSONIsStrictAndDeterministic(t *testing.T) {
 	_, _, _, oldDigest, newDigest, witnessDigest := regressionFixture(t)
 	payload := `[{"id":"EX-7","reason":"reviewed","owner":"policy-team",` +
@@ -96,5 +166,10 @@ func TestRegressionExceptionJSONIsStrictAndDeterministic(t *testing.T) {
 		if _, err := DecodeExceptions([]byte(malformed), 8); err == nil {
 			t.Fatalf("accepted malformed exceptions %q", malformed)
 		}
+	}
+	malformedUTF8 := []byte(payload)
+	malformedUTF8[strings.Index(payload, "EX-7")] = 0xff
+	if _, err := DecodeExceptions(malformedUTF8, 8); err == nil {
+		t.Fatal("accepted malformed UTF-8 exception")
 	}
 }

@@ -85,7 +85,7 @@ func newDiffCommand(deps dependencies) *cobra.Command {
 			if err := writeComplete(command.OutOrStdout(), encoded); err != nil {
 				return operationalError(err)
 			}
-			if result.Outcome == policydiff.Inconclusive {
+			if result.Outcome == policydiff.Inconclusive || !result.Complete {
 				return &commandError{err: errors.New("comparison inconclusive"), code: 4, quiet: true}
 			}
 			if result.Forbidden {

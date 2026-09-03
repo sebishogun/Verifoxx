@@ -164,6 +164,7 @@ func (store *memoryPolicyStore) LoadByHash(_ context.Context, hash [sha256.Size]
 type captureJournal struct {
 	batch    persistence.AuditBatch
 	capacity persistence.AuditCapacity
+	onSubmit func()
 	calls    int
 }
 
@@ -179,6 +180,9 @@ func (journal *captureJournal) Submit(_ context.Context, source *persistence.Aud
 		return err
 	}
 	journal.calls++
+	if journal.onSubmit != nil {
+		journal.onSubmit()
+	}
 	return nil
 }
 

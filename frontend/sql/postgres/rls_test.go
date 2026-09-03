@@ -38,6 +38,9 @@ CREATE POLICY bounded ON records AS RESTRICTIVE FOR ALL TO PUBLIC
 	if got, want := rls.RoleNames(), []string{"analyst", "auditor", "public"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("roles = %v, want %v", got, want)
 	}
+	if got, want := rls.RolePublic, []uint8{0, 0, 1}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("public role flags = %v, want %v", got, want)
+	}
 	if got, want := rls.PolicyNames(), []string{"visible", "bounded"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("policy names = %v, want %v", got, want)
 	}
@@ -63,6 +66,9 @@ func TestCompileRLSAppliesPostgreSQLClauseDefaults(t *testing.T) {
 	if got := rls.RoleNames(); len(got) != 1 || got[0] != "public" {
 		t.Fatalf("default roles = %v", got)
 	}
+	if len(rls.RolePublic) != 1 || rls.RolePublic[0] != 1 {
+		t.Fatalf("default public role flags = %v", rls.RolePublic)
+	}
 	if rls.UsingRoots[0] == 0 || rls.CheckRoots[0] != rls.UsingRoots[0] {
 		t.Fatalf("default roots = using %d check %d", rls.UsingRoots[0], rls.CheckRoots[0])
 	}
@@ -83,6 +89,9 @@ func TestCompileRLSRejectsMalformedOrUnsupportedPolicies(t *testing.T) {
 		{name: "select check", source: `CREATE POLICY p ON records FOR SELECT WITH CHECK (enabled);`, code: public.CodeUnsupported},
 		{name: "unbalanced", source: `CREATE POLICY p ON records USING (enabled;`, code: public.CodeSyntax},
 		{name: "trailing", source: `CREATE POLICY p ON records; junk`, code: public.CodeUnsupported},
+		{name: "current role", source: `CREATE POLICY p ON records TO CURRENT_ROLE;`, code: public.CodeUnsupported},
+		{name: "current user", source: `CREATE POLICY p ON records TO CURRENT_USER;`, code: public.CodeUnsupported},
+		{name: "session user", source: `CREATE POLICY p ON records TO SESSION_USER;`, code: public.CodeUnsupported},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -94,6 +103,45 @@ func TestCompileRLSRejectsMalformedOrUnsupportedPolicies(t *testing.T) {
 				t.Fatalf("diagnostics = %#v, want code %v", diagnostics, test.code)
 			}
 		})
+	}
+}
+
+func TestCompileRLSRejectsEmptyQuotedIdentifiers(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		source string
+		span   public.Span
+	}{
+		{name: "policy", source: `CREATE POLICY "" ON records;`, span: public.Span{Start: 14, End: 16}},
+		{name: "table", source: `CREATE POLICY p ON "";`, span: public.Span{Start: 19, End: 21}},
+		{name: "role", source: `CREATE POLICY p ON records TO "";`, span: public.Span{Start: 30, End: 32}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			rls, diagnostics := CompileRLS([]byte(test.source), rlsSchema(t), public.DefaultLimits())
+			if rls != nil {
+				t.Fatalf("CompileRLS() = %#v, want nil", rls)
+			}
+			if len(diagnostics) != 1 || diagnostics[0].Code != public.CodeSyntax || diagnostics[0].Span != test.span {
+				t.Fatalf("diagnostics = %#v, want syntax at %#v", diagnostics, test.span)
+			}
+		})
+	}
+}
+
+func TestCompileRLSKeepsQuotedSessionRoleNamesLiteral(t *testing.T) {
+	rls, diagnostics := CompileRLS(
+		[]byte(`CREATE POLICY p ON records TO "current_role", "CURRENT_USER", "session_user", "public";`),
+		rlsSchema(t),
+		public.DefaultLimits(),
+	)
+	if len(diagnostics) != 0 || rls == nil {
+		t.Fatalf("CompileRLS() = %#v, diagnostics %#v", rls, diagnostics)
+	}
+	if got, want := rls.RoleNames(), []string{"current_role", "CURRENT_USER", "session_user", "public"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("roles = %v, want %v", got, want)
+	}
+	if got, want := rls.RolePublic, []uint8{0, 0, 0, 0}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("public role flags = %v, want %v", got, want)
 	}
 }
 

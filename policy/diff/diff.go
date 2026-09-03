@@ -30,6 +30,8 @@ type ProofClaim = internaldiff.ProofClaim
 type Candidate = internaldiff.Candidate
 type Proof = internaldiff.Proof
 type ProofRequest = internaldiff.ProofRequest
+
+// Prover is called synchronously and must return promptly when its context is done.
 type Prover = internaldiff.Prover
 type Exception = internaldiff.Exception
 type RegressionDecision = internaldiff.RegressionDecision

@@ -130,7 +130,7 @@ Expected: FAIL on missing runtime.
 
 **Step 3: Implement the state machine**
 
-One `Runtime` owns Program, input slabs, evaluator scratch, result slabs, output bytes, bounded error bytes, generation counters, cancellation state, and fuel. Validate all lengths before slicing. Fuel is charged by bounded rows/instructions before execution; cancellation is checked at operation boundaries. Warm evaluation must not grow memory or call hosts.
+One `Runtime` owns Program, input slabs, evaluator scratch, result slabs, output bytes, bounded error bytes, generation counters, cancellation state, and fuel. Validate all lengths before slicing. Fuel is charged before execution from bounded Program work counts, Boolean operand-edge traversal, literal-list scans, input/evidence cells and references, evidence traversal, requirement/clause resolution, and conservative result edges; cancellation is checked at operation boundaries. Warm evaluation must not grow memory or call hosts.
 
 **Step 4: Re-run focused tests**
 

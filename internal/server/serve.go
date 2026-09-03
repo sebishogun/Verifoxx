@@ -89,9 +89,20 @@ func Serve(ctx context.Context, cfg config.Config) error {
 		pool.Close()
 		return err
 	}
+	var engine *Engine
 	journal, err := postgresadapter.NewJournal(auditStore, postgresadapter.JournalConfig{
 		Capacity: auditCapacity, WriteTimeout: cfg.AuditWriteTimeout, Mode: cfg.AuditMode,
 		Writers: cfg.AuditWriters, QueueDepth: cfg.AuditQueueDepth,
+		BestEffortComplete: func(persisted bool) {
+			if engine == nil {
+				return
+			}
+			if persisted {
+				engine.recordAudit(publictelemetry.AuditPersisted)
+			} else {
+				engine.recordAudit(publictelemetry.AuditOptionalDrop)
+			}
+		},
 	})
 	if err != nil {
 		pool.Close()
@@ -136,7 +147,7 @@ func Serve(ctx context.Context, cfg config.Config) error {
 		pool.Close()
 		return err
 	}
-	engine, err := NewEngine(EngineConfig{
+	engine, err = NewEngine(EngineConfig{
 		Registry: registry, Publisher: publisher, Journal: journal, Metrics: metrics, Telemetry: runtime, Health: pool.Ping,
 		EngineVersion: buildinfo.Version(), AuditCapacity: auditCapacity, AuditMode: cfg.AuditMode, Workers: cfg.Workers,
 		QueueDepth: cfg.QueueDepth, Limits: limits,

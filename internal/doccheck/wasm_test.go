@@ -12,6 +12,7 @@ func TestWASMGuideDefinesPortableSecurityAndCompatibilityBoundary(t *testing.T) 
 		"abi version", "schema version", "sha-256", "little-endian", "memory ownership",
 		"fuel", "cancellation", "wazero", "node", "browser", "scalar", "0 b/op",
 		"envoy", "istio", "cloudflare", "not certified", "scripts/check-wasm.sh",
+		"104-byte", "64-byte frame", "hash-bound", "exactly match", "operand edges",
 	} {
 		if !strings.Contains(content, phrase) {
 			t.Errorf("WebAssembly guide does not cover %q", phrase)

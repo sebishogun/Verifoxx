@@ -112,11 +112,12 @@ const (
 	NodeKindAny
 	NodeKindNot
 	NodeKindDefined
+	NodeKindExists
 )
 
-var nodeKindNames = [...]string{"boolean", "compare", "all", "any", "not", "defined"}
+var nodeKindNames = [...]string{"boolean", "compare", "all", "any", "not", "defined", "exists"}
 
-func (value NodeKind) Valid() bool { return value >= NodeKindBoolean && value <= NodeKindDefined }
+func (value NodeKind) Valid() bool { return value >= NodeKindBoolean && value <= NodeKindExists }
 func (value NodeKind) String() string {
 	return enumString(uint8(value), nodeKindNames[:])
 }

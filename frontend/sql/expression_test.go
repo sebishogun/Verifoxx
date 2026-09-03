@@ -3,6 +3,7 @@ package sql
 import (
 	"bytes"
 	"math"
+	"reflect"
 	"testing"
 
 	public "github.com/sebishogun/nornrune/frontend"
@@ -97,6 +98,78 @@ func TestCompileExpressionLowersNullDefinednessMembershipAndParameters(t *testin
 	}
 }
 
+func TestCompileExpressionConsumesQuestionParametersInOrder(t *testing.T) {
+	parameters := []Parameter{
+		{Name: "?", Value: public.IntegerLiteral(7)},
+		{Name: "?", Value: public.IntegerLiteral(9)},
+	}
+	for _, dialect := range []Dialect{DialectSnowflake, DialectDatabricks} {
+		t.Run(dialect.String(), func(t *testing.T) {
+			policy, diagnostics := CompileExpression(
+				[]byte(`count IN (?, ?)`), dialect, expressionSchema(t, dialect, parameters), public.DefaultLimits(),
+			)
+			if len(diagnostics) != 0 || policy == nil {
+				t.Fatalf("CompileExpression() = policy %#v diagnostics %#v", policy, diagnostics)
+			}
+			if got, want := policy.IntegerValues, []int64{7, 9}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("integer values = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestCompileExpressionRejectsMissingQuestionParameterByOccurrence(t *testing.T) {
+	parameters := []Parameter{{Name: "?", Value: public.IntegerLiteral(7)}}
+	policy, diagnostics := CompileExpression(
+		[]byte(`count IN (?, ?)`), DialectSnowflake,
+		expressionSchema(t, DialectSnowflake, parameters), public.DefaultLimits(),
+	)
+	if policy != nil {
+		t.Fatalf("CompileExpression() policy = %#v, want nil", policy)
+	}
+	wantSpan := public.Span{Start: 13, End: 14}
+	if len(diagnostics) != 1 || diagnostics[0].Code != public.CodeInvalidBinding || diagnostics[0].Span != wantSpan {
+		t.Fatalf("diagnostics = %#v, want invalid binding at %#v", diagnostics, wantSpan)
+	}
+}
+
+func TestCompileExpressionLowersBooleanKeywordLiteralsAsScalars(t *testing.T) {
+	tests := []struct {
+		name       string
+		source     string
+		operation  public.CompareOp
+		booleans   []uint8
+		listLength uint16
+	}{
+		{name: "right literal", source: `enabled = TRUE`, operation: public.CompareOpEqual, booleans: []uint8{1}},
+		{name: "left literal", source: `FALSE <> enabled`, operation: public.CompareOpNotEqual, booleans: []uint8{0}},
+		{name: "membership", source: `enabled IN (TRUE, FALSE)`, operation: public.CompareOpIn, booleans: []uint8{1, 0}, listLength: 2},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			policy, diagnostics := CompileExpression(
+				[]byte(test.source), DialectPostgreSQL,
+				expressionSchema(t, DialectPostgreSQL, nil), public.DefaultLimits(),
+			)
+			if len(diagnostics) != 0 {
+				t.Fatalf("CompileExpression() diagnostics = %#v", diagnostics)
+			}
+			root := policy.Root - 1
+			if policy.NodeKinds[root] != public.NodeKindCompare || policy.NodeFields[root] != 3 || policy.NodeOps[root] != test.operation {
+				t.Fatalf("root comparison = kind %v field %d op %v", policy.NodeKinds[root], policy.NodeFields[root], policy.NodeOps[root])
+			}
+			if !bytes.Equal(policy.BooleanValues, test.booleans) || policy.NodeListCounts[root] != test.listLength {
+				t.Fatalf("Boolean values = %v list count = %d, want %v/%d", policy.BooleanValues, policy.NodeListCounts[root], test.booleans, test.listLength)
+			}
+			for _, kind := range policy.LiteralKinds {
+				if kind != public.ValueKindBoolean {
+					t.Fatalf("literal kind = %v, want Boolean", kind)
+				}
+			}
+		})
+	}
+}
+
 func TestCompileExpressionReturnsExactDiagnostics(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -183,9 +256,6 @@ func expressionSchema(t *testing.T, dialect Dialect, parameters []Parameter) Sch
 			{Source: foldedName(dialect, "enabled"), Target: "context.enabled", Kind: public.ValueKindBoolean, Group: public.FieldGroupContext},
 			{Source: foldedName(dialect, "sql_role"), Target: "context.sql_role", Kind: public.ValueKindString, Group: public.FieldGroupContext},
 		},
-	}
-	if dialect != DialectPostgreSQL && len(parameters) != 0 {
-		parameters = []Parameter{{Name: ":team", Value: public.StringLiteral([]byte("blue"))}}
 	}
 	schema, err := NewSchema(dialect, bindings, parameters, "", foldedName(dialect, "sql_role"), public.DefaultLimits())
 	if err != nil {

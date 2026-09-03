@@ -3,6 +3,7 @@ package natural
 import (
 	"crypto/ed25519"
 	"errors"
+	"math"
 	"testing"
 
 	public "github.com/sebishogun/nornrune/frontend/natural"
@@ -20,6 +21,11 @@ func TestReviewedDraftDigestAcceptsCompleteProvenance(t *testing.T) {
 		t.Fatalf("DraftDigest() diagnostics = %#v", diagnostics)
 	}
 	draft.PolicySource = append([]byte(nil), draft.PolicySource...)
+	draft.SemanticKinds = cloneWithCapacity(draft.SemanticKinds, len(draft.SemanticKinds)+4)
+	draft.SemanticIDs = cloneWithCapacity(draft.SemanticIDs, len(draft.SemanticIDs)+4)
+	draft.MappingStarts = cloneWithCapacity(draft.MappingStarts, len(draft.MappingStarts)+4)
+	draft.MappingCounts = cloneWithCapacity(draft.MappingCounts, len(draft.MappingCounts)+4)
+	draft.MappingProposalItems = cloneWithCapacity(draft.MappingProposalItems, len(draft.MappingProposalItems)+4)
 	second, diagnostics, err := reviewer.DraftDigest(document, proposal, draft, public.DefaultLimits())
 	if err != nil || len(diagnostics) != 0 {
 		t.Fatalf("second DraftDigest() = diagnostics %#v, error %v", diagnostics, err)
@@ -36,17 +42,29 @@ func TestReviewedDraftRejectsInvalidMappings(t *testing.T) {
 	}{
 		{name: "empty source", mutate: func(draft *public.ReviewedDraft) { draft.PolicySource = nil }},
 		{name: "column mismatch", mutate: func(draft *public.ReviewedDraft) { draft.MappingCounts = nil }},
-		{name: "zero requirement", mutate: func(draft *public.ReviewedDraft) { draft.RequirementIDs[0] = 0 }},
-		{name: "duplicate requirement", mutate: func(draft *public.ReviewedDraft) {
-			draft.RequirementIDs = append(draft.RequirementIDs, 1)
-			draft.MappingStarts = append(draft.MappingStarts, 1)
+		{name: "zero semantic ID", mutate: func(draft *public.ReviewedDraft) { draft.SemanticIDs[0] = 0 }},
+		{name: "invalid semantic kind", mutate: func(draft *public.ReviewedDraft) { draft.SemanticKinds[0] = public.SemanticKindInvalid }},
+		{name: "duplicate semantic row", mutate: func(draft *public.ReviewedDraft) {
+			draft.SemanticKinds = append(draft.SemanticKinds, public.SemanticKindRequirement)
+			draft.SemanticIDs = append(draft.SemanticIDs, 1)
+			draft.MappingStarts = append(draft.MappingStarts, 2)
 			draft.MappingCounts = append(draft.MappingCounts, 1)
 			draft.MappingProposalItems = append(draft.MappingProposalItems, 1)
 		}},
 		{name: "non-owned range", mutate: func(draft *public.ReviewedDraft) { draft.MappingStarts[0] = 1 }},
 		{name: "empty mapping", mutate: func(draft *public.ReviewedDraft) { draft.MappingCounts[0] = 0 }},
 		{name: "invalid item", mutate: func(draft *public.ReviewedDraft) { draft.MappingProposalItems[0] = 99 }},
-		{name: "no requirement row", mutate: func(draft *public.ReviewedDraft) { draft.MappingProposalItems[0] = 2 }},
+		{name: "no requirement row", mutate: func(draft *public.ReviewedDraft) {
+			draft.MappingCounts[0] = 1
+			draft.MappingProposalItems = []public.ItemID{2}
+		}},
+		{name: "requirement proposal mapped only to clause", mutate: func(draft *public.ReviewedDraft) {
+			draft.SemanticKinds[0] = public.SemanticKindClause
+		}},
+		{name: "unmapped restriction", mutate: func(draft *public.ReviewedDraft) {
+			draft.MappingCounts[0] = 1
+			draft.MappingProposalItems = draft.MappingProposalItems[:1]
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -98,6 +116,9 @@ func TestApprovalTokenRejectsMutationAndTimeViolations(t *testing.T) {
 		{name: "draft", now: 150, skew: 5, want: public.ErrInvalidToken, mutate: func(_ *public.Document, _ *public.Proposal, draft *public.ReviewedDraft, _ *public.ApprovalToken) {
 			draft.PolicySource[1] = 'x'
 		}},
+		{name: "semantic mapping", now: 150, skew: 5, want: public.ErrInvalidToken, mutate: func(_ *public.Document, _ *public.Proposal, draft *public.ReviewedDraft, _ *public.ApprovalToken) {
+			draft.SemanticIDs[0]++
+		}},
 		{name: "reviewer", now: 150, skew: 5, want: public.ErrInvalidToken, mutate: func(_ *public.Document, _ *public.Proposal, _ *public.ReviewedDraft, token *public.ApprovalToken) {
 			token.Reviewer[0] ^= 1
 		}},
@@ -122,6 +143,37 @@ func TestApprovalTokenRejectsMutationAndTimeViolations(t *testing.T) {
 			}
 			test.mutate(document, proposal, draft, &token)
 			err = reviewer.VerifyApproval(document, proposal, draft, token, verifier, test.now, test.skew, public.DefaultLimits())
+			if !errors.Is(err, test.want) {
+				t.Fatalf("VerifyApproval() error = %v, want %v", err, test.want)
+			}
+		})
+	}
+}
+
+func TestApprovalTokenClassifiesTimesAtUnixBoundary(t *testing.T) {
+	document, proposal := reviewProposal(t)
+	draft := validDraft()
+	signer, verifier := approvalKeys(t)
+	tests := []struct {
+		name        string
+		issuedUnix  int64
+		expiresUnix int64
+		nowUnix     int64
+		want        error
+	}{
+		{name: "future within skew", issuedUnix: math.MaxInt64 - 2, expiresUnix: math.MaxInt64, nowUnix: math.MaxInt64 - 3},
+		{name: "expired", issuedUnix: math.MaxInt64 - 10, expiresUnix: math.MaxInt64 - 1, nowUnix: math.MaxInt64, want: public.ErrExpiredToken},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var reviewer Reviewer
+			token, diagnostics, err := reviewer.IssueApproval(
+				document, proposal, draft, []byte("reviewer-1"), test.issuedUnix, test.expiresUnix, signer, public.DefaultLimits(),
+			)
+			if err != nil || len(diagnostics) != 0 {
+				t.Fatalf("IssueApproval() = diagnostics %#v, error %v", diagnostics, err)
+			}
+			err = reviewer.VerifyApproval(document, proposal, draft, token, verifier, test.nowUnix, 5, public.DefaultLimits())
 			if !errors.Is(err, test.want) {
 				t.Fatalf("VerifyApproval() error = %v, want %v", err, test.want)
 			}
@@ -171,6 +223,25 @@ func TestApprovalTokenLimit(t *testing.T) {
 	}
 }
 
+func TestApprovalTokenRejectsGuaranteedOversizeBeforeSigning(t *testing.T) {
+	document, proposal := reviewProposal(t)
+	draft := validDraft()
+	reviewerID := make([]byte, 128)
+	for row := range reviewerID {
+		reviewerID[row] = 'x'
+	}
+	limits := public.DefaultLimits()
+	limits.MaxTokenBytes = 128
+	var reviewer Reviewer
+	_, diagnostics, err := reviewer.IssueApproval(document, proposal, draft, reviewerID, 100, 200, panicSigner{}, limits)
+	if len(diagnostics) != 0 {
+		t.Fatalf("IssueApproval() diagnostics = %#v", diagnostics)
+	}
+	if !errors.Is(err, public.ErrLimit) {
+		t.Fatalf("IssueApproval() error = %v, want ErrLimit", err)
+	}
+}
+
 func TestApprovalTokenLimitIncludesWireMagic(t *testing.T) {
 	document, proposal := reviewProposal(t)
 	draft := validDraft()
@@ -191,10 +262,11 @@ func TestApprovalTokenLimitIncludesWireMagic(t *testing.T) {
 func validDraft() *public.ReviewedDraft {
 	return &public.ReviewedDraft{
 		PolicySource:         []byte(`{"schema_version":1}`),
-		RequirementIDs:       []uint32{1},
+		SemanticKinds:        []public.SemanticKind{public.SemanticKindRequirement},
+		SemanticIDs:          []uint32{1},
 		MappingStarts:        []uint32{0},
-		MappingCounts:        []uint16{1},
-		MappingProposalItems: []public.ItemID{1},
+		MappingCounts:        []uint16{2},
+		MappingProposalItems: []public.ItemID{1, 2},
 	}
 }
 

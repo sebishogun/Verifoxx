@@ -8,7 +8,7 @@ import (
 )
 
 const proposalDigestVersion uint16 = 1
-const draftDigestVersion uint16 = 1
+const draftDigestVersion uint16 = 2
 const approvalTokenVersion uint16 = 1
 
 func (reviewer *Reviewer) proposalDigestUnchecked(proposal *public.Proposal) [sha256.Size]byte {
@@ -44,12 +44,21 @@ func (reviewer *Reviewer) draftDigestUnchecked(draft *public.ReviewedDraft) [sha
 	dst := reviewer.draftCanonical[:0]
 	dst = appendUint16(dst, draftDigestVersion)
 	dst = appendBytes(dst, draft.PolicySource)
-	dst = appendUint32s(dst, draft.RequirementIDs)
+	dst = appendSemanticKinds(dst, draft.SemanticKinds)
+	dst = appendUint32s(dst, draft.SemanticIDs)
 	dst = appendUint32s(dst, draft.MappingStarts)
 	dst = appendUint16s(dst, draft.MappingCounts)
 	dst = appendItemIDs(dst, draft.MappingProposalItems)
 	reviewer.draftCanonical = dst
 	return sha256.Sum256(dst)
+}
+
+func appendSemanticKinds(dst []byte, values []public.SemanticKind) []byte {
+	dst = appendUint32(dst, uint32(len(values)))
+	for _, value := range values {
+		dst = append(dst, byte(value))
+	}
+	return dst
 }
 
 func (reviewer *Reviewer) approvalMessage(token *public.ApprovalToken) [sha256.Size]byte {

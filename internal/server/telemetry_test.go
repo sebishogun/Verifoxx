@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -21,6 +22,15 @@ import (
 )
 
 func newTelemetryTestEngine(t *testing.T, runtime *publictelemetry.Runtime) (*Engine, *captureJournal) {
+	return newTelemetryTestEngineWithHooks(t, runtime, nil, nil)
+}
+
+func newTelemetryTestEngineWithHooks(
+	t *testing.T,
+	runtime *publictelemetry.Runtime,
+	now func() time.Time,
+	onSubmit func(),
+) (*Engine, *captureJournal) {
 	t.Helper()
 	capacity := persistence.AuditCapacity{Bytes: 64 << 10, Requests: 16, Evidence: 16, Rows: 16, EvidenceLinks: 64}
 	store := &memoryPolicyStore{}
@@ -29,7 +39,7 @@ func newTelemetryTestEngine(t *testing.T, runtime *publictelemetry.Runtime) (*En
 	if err != nil {
 		t.Fatalf("NewPublisher() error = %v", err)
 	}
-	journal := &captureJournal{capacity: capacity}
+	journal := &captureJournal{capacity: capacity, onSubmit: onSubmit}
 	metrics, err := observability.NewMetrics(observability.MetricsConfig{
 		Runtime:    runtime,
 		QueueDepth: func() uint64 { return 0 }, JournalFailures: func() uint64 { return 0 },
@@ -46,8 +56,80 @@ func newTelemetryTestEngine(t *testing.T, runtime *publictelemetry.Runtime) (*En
 	if err != nil {
 		t.Fatalf("NewEngine() error = %v", err)
 	}
+	if now != nil {
+		engine.now = now
+	}
 	t.Cleanup(func() { _ = engine.Close(context.Background()) })
 	return engine, journal
+}
+
+func TestEngineSuccessfulDurationIncludesRequiredAuditAcknowledgment(t *testing.T) {
+	runtime, err := publictelemetry.New(context.Background(), publictelemetry.Config{
+		Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	clock := manualEngineClock{current: time.Unix(100, 0).UTC()}
+	const auditAcknowledgment = 37 * time.Millisecond
+	engine, _ := newTelemetryTestEngineWithHooks(t, runtime, clock.Now, func() {
+		clock.current = clock.current.Add(auditAcknowledgment)
+	})
+	if _, err := engine.CompilePolicy(context.Background(), []byte(nornrune.Source())); err != nil {
+		t.Fatalf("CompilePolicy() error = %v", err)
+	}
+	if _, err := engine.EvaluateBatch(context.Background(), service.EvaluationRequest{
+		Requests: []byte(fixtures.RequestsJSON()), Evidence: []byte(fixtures.EvidenceJSON()),
+	}, nil); err != nil {
+		t.Fatalf("EvaluateBatch() error = %v", err)
+	}
+	if got, want := runtime.Snapshot().DurationNanoseconds, uint64(auditAcknowledgment); got != want {
+		t.Fatalf("recorded duration = %s, want %s", time.Duration(got), auditAcknowledgment)
+	}
+}
+
+func TestEngineToleratesWallClockRollback(t *testing.T) {
+	runtime, err := publictelemetry.New(context.Background(), publictelemetry.Config{
+		Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	engine, journal := newTelemetryTestEngine(t, runtime)
+	if _, err := engine.CompilePolicy(context.Background(), []byte(nornrune.Source())); err != nil {
+		t.Fatalf("CompilePolicy() error = %v", err)
+	}
+	clock := rollbackEngineClock{current: time.Unix(100, 0).UTC()}
+	engine.now = clock.Now
+	if _, err := engine.EvaluateBatch(context.Background(), service.EvaluationRequest{
+		Requests: []byte(fixtures.RequestsJSON()), Evidence: []byte(fixtures.EvidenceJSON()),
+	}, nil); err != nil {
+		t.Fatalf("EvaluateBatch() after clock rollback error = %v", err)
+	}
+	if journal.calls != 1 || journal.batch.CompletedAt.Before(journal.batch.StartedAt) {
+		t.Fatalf("audit after rollback: calls=%d started=%v completed=%v", journal.calls, journal.batch.StartedAt, journal.batch.CompletedAt)
+	}
+	if snapshot := runtime.Snapshot(); snapshot.Batches != 1 || snapshot.Rows != 5 || snapshot.DurationNanoseconds != 0 {
+		t.Fatalf("telemetry after rollback: %+v", snapshot)
+	}
+}
+
+type manualEngineClock struct {
+	current time.Time
+}
+
+func (clock *manualEngineClock) Now() time.Time { return clock.current }
+
+type rollbackEngineClock struct {
+	current time.Time
+}
+
+func (clock *rollbackEngineClock) Now() time.Time {
+	current := clock.current
+	clock.current = clock.current.Add(-time.Second)
+	return current
 }
 
 func TestEngineRecordsTelemetryForReloadsEvaluationAndAudit(t *testing.T) {
@@ -125,6 +207,60 @@ func TestEngineRecordsTelemetryForReloadsEvaluationAndAudit(t *testing.T) {
 	} {
 		if !containsLine(body, expected) {
 			t.Fatalf("metrics exposition missing %q\n%s", expected, body)
+		}
+	}
+}
+
+func TestEngineDoesNotReportBestEffortAdmissionAsPersisted(t *testing.T) {
+	runtime, err := publictelemetry.New(context.Background(), publictelemetry.Config{
+		Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	engine, _ := newTelemetryTestEngine(t, runtime)
+	engine.auditMode = persistence.AuditBestEffort
+	if _, err := engine.CompilePolicy(context.Background(), []byte(nornrune.Source())); err != nil {
+		t.Fatalf("CompilePolicy() error = %v", err)
+	}
+	if _, err := engine.EvaluateBatch(context.Background(), service.EvaluationRequest{
+		Requests: []byte(fixtures.RequestsJSON()), Evidence: []byte(fixtures.EvidenceJSON()),
+	}, nil); err != nil {
+		t.Fatalf("EvaluateBatch() error = %v", err)
+	}
+	if got := runtime.Snapshot().Audits[publictelemetry.AuditPersisted]; got != 0 {
+		t.Fatalf("persisted audit outcomes = %d after admission only, want 0", got)
+	}
+}
+
+func TestEngineRecordsFailedEvaluationBatchAfterDecode(t *testing.T) {
+	runtime, err := publictelemetry.New(context.Background(), publictelemetry.Config{
+		Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 8,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, _ := newTelemetryTestEngine(t, runtime)
+	if _, err := engine.CompilePolicy(context.Background(), []byte(nornrune.Source())); err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	_, err = engine.EvaluateBatch(context.Background(), service.EvaluationRequest{
+		Requests: []byte(fixtures.RequestsJSON()), Evidence: []byte(fixtures.EvidenceJSON()),
+	}, nil)
+	if !errors.Is(err, service.ErrUnavailable) {
+		t.Fatalf("EvaluateBatch() error = %v, want ErrUnavailable", err)
+	}
+	snapshot := runtime.Snapshot()
+	if snapshot.Batches != 1 || snapshot.Failures != 1 || snapshot.Rows != 5 {
+		t.Fatalf("failed batch = batches:%d failures:%d rows:%d", snapshot.Batches, snapshot.Failures, snapshot.Rows)
+	}
+	for decision, count := range snapshot.Decisions {
+		if count != 0 {
+			t.Fatalf("decision %d = %d after failed execution", decision, count)
 		}
 	}
 }

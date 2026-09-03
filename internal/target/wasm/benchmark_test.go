@@ -100,7 +100,7 @@ func BenchmarkWASMProgramLoad(b *testing.B) {
 	b.SetBytes(int64(len(artifact)))
 	b.ResetTimer()
 	for range b.N {
-		if _, _, err := DecodeProgram(artifact, manifest.Limits); err != nil {
+		if _, _, err := DecodeProgram(artifact, manifest); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -154,7 +154,7 @@ func BenchmarkWASMWazeroWarmEvaluate(b *testing.B) {
 	inputFrame, _ := EncodeInputFrame(nil, input, manifest.Limits)
 	callWithBytes(b, ctx, module, "nornrune_load_program", artifact, ErrorNone)
 	callWithBytes(b, ctx, module, "nornrune_upload_input", inputFrame, ErrorNone)
-	cost := uint64(input.Rows) * uint64(compiled.InstructionCount())
+	cost := wasmTestFuelCost(b, compiled, input)
 	fuel := module.ExportedFunction("nornrune_set_fuel")
 	evaluate := module.ExportedFunction("nornrune_evaluate")
 	b.ReportAllocs()

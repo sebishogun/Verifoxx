@@ -181,10 +181,8 @@ func validTelemetry(config Config) bool {
 	if config.OTelEndpoint != "" && !validOTelEndpoint(config.OTelEndpoint) {
 		return false
 	}
-	if !config.TelemetryEnabled {
-		return true
-	}
-	return config.TraceSampleRatio >= 0 && config.TraceSampleRatio <= 1 &&
+	return !math.IsNaN(config.TraceSampleRatio) && !math.IsInf(config.TraceSampleRatio, 0) &&
+		config.TraceSampleRatio >= 0 && config.TraceSampleRatio <= 1 &&
 		config.TelemetryExportInterval >= 100*time.Millisecond && config.TelemetryExportInterval <= time.Hour &&
 		config.TelemetryQueueSize >= 1 && config.TelemetryQueueSize <= 1<<16
 }

@@ -1,6 +1,7 @@
 package wasm
 
 import (
+	"encoding/binary"
 	"reflect"
 	"testing"
 
@@ -110,5 +111,19 @@ func TestFrameSchemaVersionPinsInputAndResultLayouts(t *testing.T) {
 	}
 	if got := frameLayoutDigest(reflect.TypeFor[result.Batch]()); got != version1ResultFrameLayoutDigest {
 		t.Errorf("result frame layout digest = %x, want %x; bump schema version for a wire-layout change", got, version1ResultFrameLayoutDigest)
+	}
+}
+
+func TestVersion1FramesKeepDescriptorsAtOffset64(t *testing.T) {
+	input := eval.Batch{Rows: 1, RequestIDs: []schema.RequestID{1}, EvidenceOffsets: []uint32{0, 0}}
+	encoded, err := EncodeInputFrame(nil, input, testManifest().Limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frameHeaderBytes != 64 {
+		t.Fatalf("frame header bytes = %d, want 64", frameHeaderBytes)
+	}
+	if firstDescriptor := binary.LittleEndian.Uint16(encoded[frameHeaderBytes : frameHeaderBytes+2]); firstDescriptor != 1 {
+		t.Fatalf("first frame descriptor ID = %d", firstDescriptor)
 	}
 }

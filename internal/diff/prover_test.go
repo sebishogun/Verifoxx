@@ -3,6 +3,7 @@ package diff
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -106,7 +107,9 @@ func TestProverInvalidClaimsErrorsAndPanicsAreInconclusive(t *testing.T) {
 func TestProverReceivesCallerCancellation(t *testing.T) {
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
+	called := false
 	provider := proverFunc(func(ctx context.Context, _ ProofRequest) (Proof, error) {
+		called = true
 		return Proof{}, ctx.Err()
 	})
 	var analyzer Analyzer
@@ -114,10 +117,32 @@ func TestProverReceivesCallerCancellation(t *testing.T) {
 	if err := analyzer.Compare(
 		cancelled, &result, []byte(nornrune.Source()), changedPolicySource(),
 		nativeFieldSchema(), comparisonDomain(), uniformRiskMatrix(Widened, true), provider,
-	); err != nil {
-		t.Fatalf("compare cancelled provider: %v", err)
+	); !errors.Is(err, context.Canceled) {
+		t.Fatalf("compare cancelled provider: got %v, want %v", err, context.Canceled)
 	}
-	if result.Outcome != Inconclusive {
-		t.Fatalf("cancelled provider result: %+v", result)
+	if called || !reflect.DeepEqual(result, Result{}) {
+		t.Fatalf("pre-canceled comparison invoked provider or changed result: called=%v result=%+v", called, result)
+	}
+}
+
+func TestProverCooperatesWithCallerCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	called := false
+	provider := proverFunc(func(providerCtx context.Context, _ ProofRequest) (Proof, error) {
+		called = true
+		cancel()
+		<-providerCtx.Done()
+		return Proof{}, providerCtx.Err()
+	})
+	var analyzer Analyzer
+	var result Result
+	if err := analyzer.Compare(
+		ctx, &result, []byte(nornrune.Source()), changedPolicySource(),
+		nativeFieldSchema(), comparisonDomain(), uniformRiskMatrix(Widened, true), provider,
+	); err != nil {
+		t.Fatalf("compare: %v", err)
+	}
+	if !called || result.Outcome != Inconclusive || result.Uncertainty != "proof provider was inconclusive" {
+		t.Fatalf("cooperative provider: called=%v result=%+v", called, result)
 	}
 }

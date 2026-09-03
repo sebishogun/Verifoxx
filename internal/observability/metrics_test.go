@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,17 @@ import (
 
 	publictelemetry "github.com/sebishogun/nornrune/telemetry"
 )
+
+func TestCumulativeBucketsSaturateInsteadOfWrapping(t *testing.T) {
+	var values [publictelemetry.LatencyBucketCount]uint64
+	values[0] = math.MaxUint64
+	values[1] = 1
+	buckets := cumulativeBuckets(values)
+	bounds := publictelemetry.DurationBucketBounds()
+	if got := buckets[bounds[1].Seconds()]; got != math.MaxUint64 {
+		t.Fatalf("second cumulative bucket = %d, want saturation", got)
+	}
+}
 
 func TestMetricsExposeBatchAggregates(t *testing.T) {
 	t.Parallel()

@@ -19,7 +19,7 @@ func fuzzSchemaAndDomain(budget uint64) (diff.FieldSchema, diff.Domain) {
 		{Name: "environment.execution_env", Kind: diff.FieldKindString, Group: diff.FieldGroupContext},
 		{Name: "environment.usage", Kind: diff.FieldKindString, Group: diff.FieldGroupContext},
 	}
-	domain := diff.Domain{MaxCandidates: budget, BatchRows: 64, EvidenceSets: []diff.EvidenceSet{{}}}
+	domain := diff.Domain{MaxCandidates: budget, BatchRows: 64, EvidenceSets: []diff.EvidenceSet{{}}, EvidenceClosed: true}
 	for _, field := range fields {
 		domain.Fields = append(domain.Fields, diff.FieldDomain{
 			Name: field.Name, Kind: field.Kind, Closed: true,

@@ -18,7 +18,7 @@ func FuzzProgramArtifactDecode(f *testing.F) {
 	f.Add(artifact)
 	f.Add([]byte("not an artifact"))
 	f.Fuzz(func(t *testing.T, source []byte) {
-		_, _, _ = DecodeProgram(source, manifest.Limits)
+		_, _, _ = DecodeProgram(source, manifest)
 	})
 }
 

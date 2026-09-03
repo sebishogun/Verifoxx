@@ -65,19 +65,30 @@ type EvidenceSet struct {
 	Records []Evidence
 }
 
-// Domain is the complete finite candidate declaration for one comparison.
+// Domain is the finite candidate declaration for one comparison.
 type Domain struct {
 	Fields       []FieldDomain
 	EvidenceSets []EvidenceSet
 
 	MaxCandidates uint64
 	BatchRows     uint32
+	// EvidenceClosed declares that EvidenceSets exhaust the relevant evidence scenarios.
+	EvidenceClosed bool
 }
 
-// Validate checks shape, computes cardinality, and reports whether all field
-// universes are caller-closed. Program-specific dependency coverage is checked
-// later by Analyzer.
+// Validate checks shape, computes cardinality, and reports whether all declared
+// field and evidence universes are caller-closed. Program-specific dependency
+// coverage is checked later by Analyzer.
 func (domain Domain) Validate() (uint64, bool, error) {
+	return domain.validate(true)
+}
+
+func (domain Domain) validateShape() error {
+	_, _, err := domain.validate(false)
+	return err
+}
+
+func (domain Domain) validate(computeCardinality bool) (uint64, bool, error) {
 	if domain.MaxCandidates == 0 || domain.BatchRows == 0 || domain.BatchRows > MaxBatchRows {
 		return 0, false, ErrInvalidDomain
 	}
@@ -104,10 +115,12 @@ func (domain Domain) Validate() (uint64, bool, error) {
 		if !missing {
 			return 0, false, ErrInvalidDomain
 		}
-		var ok bool
-		cardinality, ok = checkedProduct(cardinality, uint64(len(field.Values)))
-		if !ok {
-			return 0, false, ErrInvalidDomain
+		if computeCardinality {
+			var ok bool
+			cardinality, ok = checkedProduct(cardinality, uint64(len(field.Values)))
+			if !ok {
+				return math.MaxUint64, false, ErrCandidateBudget
+			}
 		}
 		complete = complete && field.Closed
 	}
@@ -118,14 +131,15 @@ func (domain Domain) Validate() (uint64, bool, error) {
 			}
 		}
 	}
-	if len(domain.EvidenceSets) != 0 {
+	if len(domain.EvidenceSets) != 0 && computeCardinality {
 		var ok bool
 		cardinality, ok = checkedProduct(cardinality, uint64(len(domain.EvidenceSets)))
 		if !ok {
-			return 0, false, ErrInvalidDomain
+			return math.MaxUint64, false, ErrCandidateBudget
 		}
+		complete = complete && domain.EvidenceClosed
 	}
-	if cardinality > domain.MaxCandidates {
+	if computeCardinality && cardinality > domain.MaxCandidates {
 		return cardinality, complete, ErrCandidateBudget
 	}
 	return cardinality, complete, nil

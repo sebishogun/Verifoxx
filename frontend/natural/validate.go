@@ -20,6 +20,7 @@ type Diagnostic struct {
 type Validator struct {
 	duplicateSlots []uint32
 	conflictSlots  []uint32
+	citationOrder  []uint32
 	owners         []ItemID
 	restrictions   []uint8
 }
@@ -67,6 +68,13 @@ func (validator *Validator) Validate(dst []Diagnostic, document *Document, propo
 }
 
 func (validator *Validator) validateCitations(diagnostics []Diagnostic, document *Document, proposal *Proposal, limits Limits) []Diagnostic {
+	rows := len(proposal.CitationPages)
+	if cap(validator.citationOrder) < rows {
+		validator.citationOrder = make([]uint32, rows)
+	} else {
+		validator.citationOrder = validator.citationOrder[:rows]
+	}
+	validRows := 0
 	quoteCursor := uint64(0)
 	for row := range proposal.CitationPages {
 		start := proposal.CitationSourceStarts[row]
@@ -80,7 +88,8 @@ func (validator *Validator) validateCitations(diagnostics []Diagnostic, document
 		if valid {
 			quoteCursor += uint64(quoteLength)
 		}
-		valid = valid && start < end && uint64(end) <= uint64(len(document.Source))
+		valid = valid && start < end && uint64(end) <= uint64(len(document.Source)) &&
+			utf8Boundary(document.Source, start) && utf8Boundary(document.Source, end)
 		if valid {
 			page := proposal.CitationPages[row]
 			valid = uint64(page) < uint64(len(document.PageStarts)) &&
@@ -88,15 +97,53 @@ func (validator *Validator) validateCitations(diagnostics []Diagnostic, document
 				pageForOffset(document.PageStarts, end-1) == page
 		}
 		if valid {
-			quote := proposal.CitationQuoteBytes[quoteStart : quoteStart+quoteLength]
-			valid = uint64(quoteLength) == uint64(end-start) && bytes.Equal(quote, document.Source[start:end])
+			quote := proposal.CitationQuoteBytes[int(quoteStart):int(uint64(quoteStart)+uint64(quoteLength))]
+			valid = utf8.Valid(quote) && uint64(quoteLength) == uint64(end-start) && bytes.Equal(quote, document.Source[start:end])
 		}
 		if !valid {
 			diagnostics = appendDiagnostic(diagnostics, limits, Diagnostic{Span: validDiagnosticSpan(span, document), Citation: citation, Code: CodeCitation})
+		} else {
+			validator.citationOrder[validRows] = uint32(row)
+			validRows++
 		}
 	}
 	if quoteCursor != uint64(len(proposal.CitationQuoteBytes)) {
 		diagnostics = appendDiagnostic(diagnostics, limits, Diagnostic{Code: CodeInvalidProposal})
+	}
+	return validator.validateCitationOverlaps(diagnostics, proposal, limits, validRows)
+}
+
+func (validator *Validator) validateCitationOverlaps(
+	diagnostics []Diagnostic,
+	proposal *Proposal,
+	limits Limits,
+	rows int,
+) []Diagnostic {
+	order := validator.citationOrder[:rows]
+	slices.SortFunc(order, func(left, right uint32) int {
+		if start := compare32(proposal.CitationSourceStarts[left], proposal.CitationSourceStarts[right]); start != 0 {
+			return start
+		}
+		if end := compare32(proposal.CitationSourceEnds[left], proposal.CitationSourceEnds[right]); end != 0 {
+			return end
+		}
+		return compare32(left, right)
+	})
+	if len(order) < 2 {
+		return diagnostics
+	}
+	maximumEnd := proposal.CitationSourceEnds[order[0]]
+	for _, row := range order[1:] {
+		start := proposal.CitationSourceStarts[row]
+		end := proposal.CitationSourceEnds[row]
+		if start < maximumEnd {
+			diagnostics = appendDiagnostic(diagnostics, limits, Diagnostic{
+				Span: Span{Start: start, End: end}, Citation: CitationID(row + 1), Code: CodeCitation,
+			})
+		}
+		if end > maximumEnd {
+			maximumEnd = end
+		}
 	}
 	return diagnostics
 }
@@ -121,6 +168,9 @@ func (validator *Validator) validateItems(diagnostics []Diagnostic, document *Do
 		span := itemDiagnosticSpan(document, proposal, row)
 
 		textOK := uint64(textStart) == textCursor && textLength != 0 && validRange(textStart, textLength, len(proposal.ItemBytes))
+		if textOK {
+			textOK = utf8.Valid(proposal.ItemBytes[int(textStart):int(uint64(textStart)+uint64(textLength))])
+		}
 		if textOK {
 			textCursor += uint64(textLength)
 		}
@@ -200,12 +250,15 @@ func (validator *Validator) validateItems(diagnostics []Diagnostic, document *Do
 }
 
 func exceedsProposalLimits(document *Document, proposal *Proposal, limits Limits) bool {
+	providerTextBytes := uint64(len(proposal.Provider.ID)) + uint64(len(proposal.Provider.Version)) + uint64(len(proposal.ItemBytes))
 	return overLimit(len(document.Source), limits.MaxSourceBytes) ||
 		overLimit(len(document.PageStarts), limits.MaxPages) ||
 		overLimit(len(proposal.ItemKinds), limits.MaxItems) ||
 		overLimit(len(proposal.CitationPages), limits.MaxCitations) ||
 		overLimit(len(proposal.ItemCitationIDs), limits.MaxCitationEdges) ||
-		overLimit(len(proposal.ItemBytes), limits.MaxClaimBytes) ||
+		limits.MaxClaimBytes != 0 && providerTextBytes > uint64(limits.MaxClaimBytes) ||
+		uint64(len(proposal.Provider.ID)) > uint64(^uint32(0)) ||
+		uint64(len(proposal.Provider.Version)) > uint64(^uint32(0)) ||
 		overLimit(len(proposal.CitationQuoteBytes), limits.MaxQuoteBytes)
 }
 
@@ -214,7 +267,8 @@ func validDocument(document *Document) bool {
 		return false
 	}
 	for row := 1; row < len(document.PageStarts); row++ {
-		if document.PageStarts[row] <= document.PageStarts[row-1] || uint64(document.PageStarts[row]) >= uint64(len(document.Source)) {
+		if document.PageStarts[row] <= document.PageStarts[row-1] || uint64(document.PageStarts[row]) >= uint64(len(document.Source)) ||
+			!utf8Boundary(document.Source, document.PageStarts[row]) {
 			return false
 		}
 	}
@@ -251,9 +305,27 @@ func itemDiagnosticSpan(document *Document, proposal *Proposal, row int) Span {
 
 func appendDiagnostic(dst []Diagnostic, limits Limits, diagnostic Diagnostic) []Diagnostic {
 	if limits.MaxDiagnostics != 0 && uint64(len(dst)) >= uint64(limits.MaxDiagnostics) {
+		if !blocksReview(diagnostic.Code) {
+			return dst
+		}
+		for _, retained := range dst {
+			if blocksReview(retained.Code) {
+				return dst
+			}
+		}
+		dst[len(dst)-1] = diagnostic
 		return dst
 	}
 	return append(dst, diagnostic)
+}
+
+func blocksReview(code DiagnosticCode) bool {
+	switch code {
+	case CodeDuplicate, CodeConflict, CodeAmbiguity, CodeOmittedRestriction:
+		return false
+	default:
+		return true
+	}
 }
 
 func sortDiagnostics(diagnostics []Diagnostic) []Diagnostic {

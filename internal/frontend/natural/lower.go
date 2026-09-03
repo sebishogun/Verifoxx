@@ -15,12 +15,15 @@ import (
 // Lowerer owns reusable review, decode, validation, and lowering scratch. It is
 // not safe for concurrent use. Published Programs never borrow it.
 type Lowerer struct {
-	reviewer    Reviewer
-	validator   compile.Validator
-	diagnostics []compile.Diagnostic
-	builder     ast.Builder
-	decoder     jsonpolicy.Decoder
-	lowerer     compile.Lowerer
+	reviewer      Reviewer
+	validator     compile.Validator
+	diagnostics   []compile.Diagnostic
+	semanticKinds []public.SemanticKind
+	semanticIDs   []uint32
+	semanticSlots []uint64
+	builder       ast.Builder
+	decoder       jsonpolicy.Decoder
+	lowerer       compile.Lowerer
 }
 
 // Compile authenticates and compiles one reviewer-owned native policy draft.
@@ -50,7 +53,7 @@ func (lowerer *Lowerer) Compile(
 		return nil, fmt.Errorf("%w: decode", public.ErrInvalidDraft)
 	}
 	policy := lowerer.builder.Document()
-	if !matchesReviewedRequirements(policy, draft) {
+	if !lowerer.matchesReviewedSemantics(policy, draft) {
 		return nil, public.ErrInvalidDraft
 	}
 	lowerer.diagnostics = lowerer.validator.Validate(lowerer.diagnostics[:0], policy, fields)
@@ -85,21 +88,94 @@ func naturalPolicyLimits(limits public.Limits) jsonpolicy.Limits {
 	}
 }
 
-func matchesReviewedRequirements(document *ast.Document, draft *public.ReviewedDraft) bool {
-	if document == nil || len(document.RequirementIDs) != len(draft.RequirementIDs) {
+func (lowerer *Lowerer) matchesReviewedSemantics(document *ast.Document, draft *public.ReviewedDraft) bool {
+	if lowerer == nil || document == nil || draft == nil {
 		return false
 	}
-	for _, requirement := range document.RequirementIDs {
-		found := false
-		for _, reviewed := range draft.RequirementIDs {
-			if uint32(requirement) == reviewed {
-				found = true
-				break
-			}
+	lowerer.semanticKinds, lowerer.semanticIDs = appendPolicySemanticRows(
+		lowerer.semanticKinds[:0], lowerer.semanticIDs[:0], document,
+	)
+	if len(lowerer.semanticKinds) != len(draft.SemanticKinds) || len(lowerer.semanticIDs) != len(draft.SemanticIDs) {
+		return false
+	}
+	lowerer.semanticSlots = resizeUint64(lowerer.semanticSlots, reviewHashTableSize(len(lowerer.semanticKinds)))
+	for row, kind := range lowerer.semanticKinds {
+		if !kind.Valid() || lowerer.semanticIDs[row] == 0 ||
+			insertSemanticKey(lowerer.semanticSlots, semanticKey(kind, lowerer.semanticIDs[row])) {
+			return false
 		}
-		if !found {
+	}
+	clear(lowerer.semanticSlots)
+	for row, kind := range draft.SemanticKinds {
+		if !kind.Valid() || draft.SemanticIDs[row] == 0 ||
+			insertSemanticKey(lowerer.semanticSlots, semanticKey(kind, draft.SemanticIDs[row])) {
+			return false
+		}
+	}
+	for row, kind := range lowerer.semanticKinds {
+		if !containsSemanticKey(lowerer.semanticSlots, semanticKey(kind, lowerer.semanticIDs[row])) {
 			return false
 		}
 	}
 	return true
+}
+
+func appendPolicySemanticRows(
+	kinds []public.SemanticKind,
+	ids []uint32,
+	document *ast.Document,
+) ([]public.SemanticKind, []uint32) {
+	for _, id := range document.RequirementIDs {
+		kinds = append(kinds, public.SemanticKindRequirement)
+		ids = append(ids, uint32(id))
+	}
+	for _, id := range document.RequirementIDs {
+		kinds = append(kinds, public.SemanticKindApplicability)
+		ids = append(ids, uint32(id))
+	}
+	for row := range document.ClauseAssertionRoots {
+		kinds = append(kinds, public.SemanticKindClause)
+		ids = append(ids, uint32(row+1))
+	}
+	for row := range document.ClauseAssertionRoots {
+		kinds = append(kinds, public.SemanticKindAssertion)
+		ids = append(ids, uint32(row+1))
+	}
+	for row := range document.ClauseEvidenceNodeIDs {
+		kinds = append(kinds, public.SemanticKindEvidence)
+		ids = append(ids, uint32(row+1))
+	}
+	for row := range document.ClauseAssertionRoots {
+		kinds = append(kinds, public.SemanticKindResolution)
+		ids = append(ids, uint32(row+1))
+	}
+	for row := range document.RemediationKinds {
+		kinds = append(kinds, public.SemanticKindRemediation)
+		ids = append(ids, uint32(row+1))
+	}
+	for row := range document.ExplanationRationaleIDs {
+		kinds = append(kinds, public.SemanticKindExplanation)
+		ids = append(ids, uint32(row+1))
+	}
+	for row := range document.OutcomeNames {
+		kinds = append(kinds, public.SemanticKindOutcome)
+		ids = append(ids, uint32(row+1))
+	}
+	for row := range document.AssumptionTemplateIDs {
+		kinds = append(kinds, public.SemanticKindAssumption)
+		ids = append(ids, uint32(row+1))
+	}
+	return kinds, ids
+}
+
+func containsSemanticKey(slots []uint64, key uint64) bool {
+	mask := uint64(len(slots) - 1)
+	slot := key * 11400714819323198485 & mask
+	for slots[slot] != 0 {
+		if slots[slot] == key {
+			return true
+		}
+		slot = (slot + 1) & mask
+	}
+	return false
 }

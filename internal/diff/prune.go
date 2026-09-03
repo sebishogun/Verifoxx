@@ -41,9 +41,10 @@ func collectDependencies(plan *searchPlan, oldProgram, newProgram *program.Progr
 		}
 		plan.fieldRows = append(plan.fieldRows, fieldRow)
 		plan.optionCounts = append(plan.optionCounts, uint32(len(domain.Fields[fieldRow].Values)))
-		oldField, oldOK := lookupFieldID(oldProgram, domain.Fields[fieldRow].Name)
-		newField, newOK := lookupFieldID(newProgram, domain.Fields[fieldRow].Name)
-		if !oldOK || !newOK {
+		oldField, oldKind, oldOK := lookupField(oldProgram, domain.Fields[fieldRow].Name)
+		newField, newKind, newOK := lookupField(newProgram, domain.Fields[fieldRow].Name)
+		domainKind := schema.ValueKind(domain.Fields[fieldRow].Kind)
+		if !oldOK || !newOK || oldKind != domainKind || newKind != domainKind {
 			return ErrInvalidDomain
 		}
 		plan.oldFieldIDs = append(plan.oldFieldIDs, oldField)
@@ -208,14 +209,17 @@ func bytesEqualString(value []byte, text string) bool {
 	return true
 }
 
-func lookupFieldID(compiled *program.Program, name string) (schema.FieldID, bool) {
+func lookupField(compiled *program.Program, name string) (schema.FieldID, schema.ValueKind, bool) {
+	if compiled == nil || len(compiled.FieldNames) != len(compiled.FieldKinds) {
+		return 0, schema.ValueKindInvalid, false
+	}
 	for row, symbol := range compiled.FieldNames {
 		value, ok := compiled.Symbol(symbol)
 		if ok && bytesEqualString(value, name) {
-			return schema.FieldID(row + 1), true
+			return schema.FieldID(row + 1), compiled.FieldKinds[row], compiled.FieldKinds[row].Valid()
 		}
 	}
-	return 0, false
+	return 0, schema.ValueKindInvalid, false
 }
 
 func sortPlanFields(plan *searchPlan, domain Domain) {

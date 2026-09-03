@@ -19,7 +19,8 @@ type Reviewer struct {
 	draftCanonical     []byte
 	tokenPayload       []byte
 	review             []byte
-	requirementSlots   []uint32
+	semanticSlots      []uint64
+	mappedItems        []uint8
 	mappedRequirements []uint8
 }
 
@@ -65,6 +66,9 @@ func (reviewer *Reviewer) IssueApproval(
 	if reviewer == nil || signer == nil || len(reviewerID) == 0 || !utf8.Valid(reviewerID) || issuedUnix >= expiresUnix {
 		return public.ApprovalToken{}, nil, public.ErrInvalidToken
 	}
+	if limits.MaxTokenBytes != 0 && tokenSize(len(reviewerID), 1) > uint64(limits.MaxTokenBytes) {
+		return public.ApprovalToken{}, nil, public.ErrLimit
+	}
 	proposalDigest, err := reviewer.ProposalDigest(document, proposal, limits)
 	if err != nil {
 		return public.ApprovalToken{}, reviewer.diagnostics, err
@@ -79,7 +83,7 @@ func (reviewer *Reviewer) IssueApproval(
 		IssuedUnix:     issuedUnix,
 		ExpiresUnix:    expiresUnix,
 		SchemaVersion:  approvalTokenVersion,
-		Reviewer:       append([]byte(nil), reviewerID...),
+		Reviewer:       reviewerID,
 	}
 	message := reviewer.approvalMessage(&token)
 	signature, err := signer.Sign(message[:])
@@ -89,6 +93,7 @@ func (reviewer *Reviewer) IssueApproval(
 	if len(signature) == 0 || limits.MaxTokenBytes != 0 && tokenSize(len(token.Reviewer), len(signature)) > uint64(limits.MaxTokenBytes) {
 		return public.ApprovalToken{}, nil, public.ErrLimit
 	}
+	token.Reviewer = append([]byte(nil), reviewerID...)
 	token.Signature = append([]byte(nil), signature...)
 	return token, reviewer.diagnostics, nil
 }
@@ -106,7 +111,10 @@ func (reviewer *Reviewer) VerifyApproval(
 ) error {
 	if reviewer == nil || verifier == nil || maxClockSkew < 0 || token.SchemaVersion != approvalTokenVersion ||
 		len(token.Reviewer) == 0 || !utf8.Valid(token.Reviewer) || len(token.Signature) == 0 ||
-		token.IssuedUnix >= token.ExpiresUnix || token.IssuedUnix > nowUnix+maxClockSkew {
+		token.IssuedUnix >= token.ExpiresUnix {
+		return public.ErrInvalidToken
+	}
+	if token.IssuedUnix > nowUnix && uint64(token.IssuedUnix)-uint64(nowUnix) > uint64(maxClockSkew) {
 		return public.ErrInvalidToken
 	}
 	if nowUnix >= token.ExpiresUnix {
@@ -133,20 +141,23 @@ func (reviewer *Reviewer) VerifyApproval(
 func (reviewer *Reviewer) validDraft(proposal *public.Proposal, draft *public.ReviewedDraft, limits public.Limits) bool {
 	if draft == nil || len(draft.PolicySource) == 0 || !utf8.Valid(draft.PolicySource) ||
 		overLimit(len(draft.PolicySource), limits.MaxDraftBytes) ||
-		overLimit(len(draft.RequirementIDs), limits.MaxMappings) ||
+		overLimit(len(draft.SemanticKinds), limits.MaxMappings) ||
 		overLimit(len(draft.MappingProposalItems), limits.MaxMappings) ||
-		len(draft.RequirementIDs) == 0 ||
-		len(draft.MappingStarts) != len(draft.RequirementIDs) ||
-		len(draft.MappingCounts) != len(draft.RequirementIDs) {
+		len(draft.SemanticKinds) == 0 ||
+		len(draft.SemanticIDs) != len(draft.SemanticKinds) ||
+		len(draft.MappingStarts) != len(draft.SemanticKinds) ||
+		len(draft.MappingCounts) != len(draft.SemanticKinds) {
 		return false
 	}
 
-	tableSize := reviewHashTableSize(len(draft.RequirementIDs))
-	reviewer.requirementSlots = resizeUint32(reviewer.requirementSlots, tableSize)
+	tableSize := reviewHashTableSize(len(draft.SemanticKinds))
+	reviewer.semanticSlots = resizeUint64(reviewer.semanticSlots, tableSize)
+	reviewer.mappedItems = resizeUint8(reviewer.mappedItems, len(proposal.ItemKinds))
 	reviewer.mappedRequirements = resizeUint8(reviewer.mappedRequirements, len(proposal.ItemKinds))
 	cursor := uint64(0)
-	for row, requirementID := range draft.RequirementIDs {
-		if requirementID == 0 || duplicateRequirementID(reviewer.requirementSlots, requirementID) {
+	for row, kind := range draft.SemanticKinds {
+		semanticID := draft.SemanticIDs[row]
+		if !kind.Valid() || semanticID == 0 || insertSemanticKey(reviewer.semanticSlots, semanticKey(kind, semanticID)) {
 			return false
 		}
 		start := draft.MappingStarts[row]
@@ -161,7 +172,8 @@ func (reviewer *Reviewer) validDraft(proposal *public.Proposal, draft *public.Re
 			if item == 0 || uint64(item) > uint64(len(proposal.ItemKinds)) || proposal.ItemKinds[item-1] == public.ItemKindAmbiguity {
 				return false
 			}
-			if proposal.ItemKinds[item-1] == public.ItemKindRequirement {
+			reviewer.mappedItems[item-1] = 1
+			if kind == public.SemanticKindRequirement && proposal.ItemKinds[item-1] == public.ItemKindRequirement {
 				hasRequirement = true
 				reviewer.mappedRequirements[item-1] = 1
 			}
@@ -171,7 +183,7 @@ func (reviewer *Reviewer) validDraft(proposal *public.Proposal, draft *public.Re
 				}
 			}
 		}
-		if !hasRequirement {
+		if kind == public.SemanticKindRequirement && !hasRequirement {
 			return false
 		}
 	}
@@ -179,7 +191,8 @@ func (reviewer *Reviewer) validDraft(proposal *public.Proposal, draft *public.Re
 		return false
 	}
 	for row, kind := range proposal.ItemKinds {
-		if kind == public.ItemKindRequirement && reviewer.mappedRequirements[row] == 0 {
+		if kind != public.ItemKindAmbiguity && reviewer.mappedItems[row] == 0 ||
+			kind == public.ItemKindRequirement && reviewer.mappedRequirements[row] == 0 {
 			return false
 		}
 	}
@@ -203,9 +216,9 @@ func reviewHashTableSize(rows int) int {
 	return size
 }
 
-func resizeUint32(values []uint32, length int) []uint32 {
+func resizeUint64(values []uint64, length int) []uint64 {
 	if cap(values) < length {
-		return make([]uint32, length)
+		return make([]uint64, length)
 	}
 	values = values[:length]
 	clear(values)
@@ -221,15 +234,19 @@ func resizeUint8(values []uint8, length int) []uint8 {
 	return values
 }
 
-func duplicateRequirementID(slots []uint32, requirementID uint32) bool {
-	mask := uint32(len(slots) - 1)
-	slot := requirementID * 2654435761 & mask
+func semanticKey(kind public.SemanticKind, id uint32) uint64 {
+	return uint64(kind)<<32 | uint64(id)
+}
+
+func insertSemanticKey(slots []uint64, key uint64) bool {
+	mask := uint64(len(slots) - 1)
+	slot := key * 11400714819323198485 & mask
 	for {
 		if slots[slot] == 0 {
-			slots[slot] = requirementID
+			slots[slot] = key
 			return false
 		}
-		if slots[slot] == requirementID {
+		if slots[slot] == key {
 			return true
 		}
 		slot = (slot + 1) & mask

@@ -157,8 +157,8 @@ func registerMetrics(
 		// The final +Inf bucket carries the total observation count.
 		var latencyTotal, queueTotal uint64
 		for row := range instruments.latency {
-			latencyTotal += snapshot.LatencyBuckets[row]
-			queueTotal += snapshot.QueueBuckets[row]
+			latencyTotal = internaltelemetry.SaturatingSum(latencyTotal, snapshot.LatencyBuckets[row])
+			queueTotal = internaltelemetry.SaturatingSum(queueTotal, snapshot.QueueBuckets[row])
 			observer.ObserveInt64(instruments.latency[row], clampMetric(latencyTotal),
 				metric.WithAttributes(attributes.latency[row]))
 			observer.ObserveInt64(instruments.queue[row], clampMetric(queueTotal),

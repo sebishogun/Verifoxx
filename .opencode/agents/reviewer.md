@@ -2,11 +2,46 @@
 description: Reviews completed tasks, features, and pre-merge changes for correctness, performance, and requirement compliance. Use when asked to review code, verify a task against its plan, or get a second pass on a change before merging.
 mode: subagent
 permission:
+  "*": deny
+  read:
+    "*": allow
+    "*.env": ask
+    "*.env.*": ask
+    "*.env.example": allow
+  glob: allow
+  grep: allow
+  list: allow
+  lsp: allow
   edit: deny
+  task: deny
+  external_directory: deny
+  bash:
+    "*": deny
+    "git status --short --branch": allow
+    "git diff": allow
+    "git diff --cached": allow
+    "git diff --check": allow
+    "git diff --cached --check": allow
+    "git diff --no-ext-diff --no-textconv origin/main...HEAD --": allow
+    "git log --oneline -10": allow
+    "git log --oneline origin/main..HEAD": allow
+    "git ls-files": allow
+    "git rev-parse --show-toplevel": allow
+    "timeout 300s go test -count=1 -timeout 240s ./...": allow
+    "timeout 300s go test -count=1 -race -gcflags=all=-d=checkptr=2 -timeout 240s ./...": allow
+    "timeout 300s go vet ./...": allow
+    "timeout 300s go build ./...": allow
+    "timeout 180s go build -gcflags=-m ./...": allow
+    "timeout 300s go mod tidy -diff": allow
+    "timeout 300s ./scripts/check-fieldalignment.sh": allow
+    "timeout 300s go run ./cmd/devx bench": allow
+    "timeout 180s go test -run NONE -bench BenchmarkCandidateBatch -benchmem -count=3 -timeout 150s ./internal/diff": allow
+    "timeout 180s go test -run NONE -bench BenchmarkWASMWarmRuntimeEvaluate -benchmem -count=3 -timeout 150s ./internal/target/wasm": allow
+    "timeout 300s go test -run NONE -bench BenchmarkTelemetry -benchmem -count=6 -timeout 270s ./telemetry": allow
 ---
 
 CORE TENETS — performance-aware programming (Casey Muratori's stance).
-Read the full version at the top of the repo's CLAUDE.md before reviewing code.
+Read and follow the repository's AGENTS.md before reviewing code.
 These are causally ordered, not independent good ideas:
   struct-of-arrays + grouped lifetimes + zero per-element allocation
     -> contiguous, uniformly-typed arrays -> the kernel can run at all

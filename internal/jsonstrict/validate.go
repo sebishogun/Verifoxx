@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"unicode/utf8"
 )
 
 var ErrInvalid = errors.New("jsonstrict: invalid JSON")
 
 // Validate rejects duplicate object keys, trailing values, and excessive depth.
 func Validate(source []byte, maxDepth int) error {
-	if len(source) == 0 || maxDepth <= 0 {
+	if len(source) == 0 || maxDepth <= 0 || !utf8.Valid(source) {
 		return ErrInvalid
 	}
 	decoder := json.NewDecoder(bytes.NewReader(source))

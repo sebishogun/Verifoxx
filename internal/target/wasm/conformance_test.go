@@ -53,6 +53,7 @@ func TestConformanceWazeroMatchesNativeResultFrame(t *testing.T) {
 	}
 	assertScalarExport(t, ctx, module, "nornrune_abi_version", uint64(CurrentABIVersion))
 	assertScalarExport(t, ctx, module, "nornrune_schema_version", uint64(CurrentSchemaVersion))
+	assertScalarExport(t, ctx, module, "nornrune_metadata_length", MetadataBytes)
 	values, err := module.ExportedFunction("nornrune_load_program").Call(ctx, 1, 16)
 	if err != nil || len(values) != 1 || ErrorCode(values[0]) != ErrorInvalidArgument {
 		t.Fatalf("invalid host pointer = %v/%v", values, err)
@@ -60,18 +61,34 @@ func TestConformanceWazeroMatchesNativeResultFrame(t *testing.T) {
 
 	compiled := compileWASMTestProgram(t)
 	manifest := testManifest()
+	moduleMetadata := readModuleMetadata(t, ctx, module)
+	if moduleMetadata.Limits != manifest.Limits || moduleMetadata.Profile != manifest.Profile {
+		t.Fatalf("module manifest = %+v, fixture manifest = %+v", moduleMetadata, manifest)
+	}
+	mismatchManifest := manifest
+	mismatchManifest.Limits.MaxInputBytes--
+	mismatch, err := EncodeProgram(nil, compiled, mismatchManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	callWithBytes(t, ctx, module, "nornrune_load_program", mismatch, ErrorIncompatibleVersion)
 	artifact, err := EncodeProgram(nil, compiled, manifest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	callWithBytes(t, ctx, module, "nornrune_load_program", artifact, ErrorNone)
+	metadata := readModuleMetadata(t, ctx, module)
+	if metadata.ABI != CurrentABIVersion || metadata.Schema != CurrentSchemaVersion || metadata.Profile != ProfileWASI ||
+		metadata.ProgramHash != compiled.ContentHash || metadata.ArtifactHash == [32]byte{} || metadata.Limits.Validate() != nil {
+		t.Fatalf("module metadata = %+v", metadata)
+	}
 	input := buildWASMTestBatchRows(t, compiled, 129)
 	inputFrame, err := EncodeInputFrame(nil, input, manifest.Limits)
 	if err != nil {
 		t.Fatal(err)
 	}
 	callWithBytes(t, ctx, module, "nornrune_upload_input", inputFrame, ErrorNone)
-	cost := uint64(input.Rows) * uint64(compiled.InstructionCount())
+	cost := wasmTestFuelCost(t, compiled, input)
 	callCode(t, ctx, module, "nornrune_set_fuel", ErrorNone, cost-1)
 	callCode(t, ctx, module, "nornrune_evaluate", ErrorFuelExhausted)
 	assertLastError(t, ctx, module)
@@ -107,6 +124,25 @@ func TestConformanceWazeroMatchesNativeResultFrame(t *testing.T) {
 	badArtifact[len(badArtifact)-1] ^= 0xff
 	callWithBytes(t, ctx, module, "nornrune_load_program", badArtifact, ErrorInvalidArtifact)
 	callCode(t, ctx, module, "nornrune_reset", ErrorNone)
+}
+
+func readModuleMetadata(t testing.TB, ctx context.Context, module api.Module) Metadata {
+	t.Helper()
+	allocation, err := module.ExportedFunction("nornrune_alloc").Call(ctx, MetadataBytes)
+	if err != nil || len(allocation) != 1 || allocation[0] == 0 {
+		t.Fatalf("allocate metadata: %v, %v", allocation, err)
+	}
+	pointer := uint32(allocation[0])
+	callCode(t, ctx, module, "nornrune_read_metadata", ErrorNone, uint64(pointer), MetadataBytes)
+	view, ok := module.Memory().Read(pointer, MetadataBytes)
+	if !ok {
+		t.Fatal("read metadata memory")
+	}
+	metadata, err := DecodeMetadata(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return metadata
 }
 
 func forbiddenWASIImport(name string) bool {

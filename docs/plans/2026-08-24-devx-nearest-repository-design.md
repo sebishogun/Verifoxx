@@ -38,5 +38,5 @@ Tests cover nearest and nested selection, exact argument forwarding,
 no-repository failure, dry-run output, installation as a regular executable,
 safe update and uninstall, migration of the current legacy Muzz-style symlink,
 refusal to replace unrelated destinations, and preservation of shell startup
-files. The installed command is then exercised from this worktree and from
+files. The installed command is then run from this worktree and from
 Muzz to prove each resolves its own repository.

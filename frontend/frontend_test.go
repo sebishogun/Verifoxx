@@ -15,7 +15,7 @@ func TestEnumValuesAreStableAndBounded(t *testing.T) {
 		{"language", []uint8{uint8(LanguageNative), uint8(LanguageCEL), uint8(LanguageRego), uint8(LanguageCedar), uint8(LanguageProtobuf), uint8(LanguageSQL)}, []uint8{1, 2, 3, 4, 5, 6}},
 		{"value kind", []uint8{uint8(ValueKindString), uint8(ValueKindInteger), uint8(ValueKindBoolean)}, []uint8{1, 2, 3}},
 		{"field group", []uint8{uint8(FieldGroupSubject), uint8(FieldGroupAction), uint8(FieldGroupResource), uint8(FieldGroupOutput), uint8(FieldGroupContext)}, []uint8{1, 2, 3, 4, 5}},
-		{"node kind", []uint8{uint8(NodeKindBoolean), uint8(NodeKindCompare), uint8(NodeKindAll), uint8(NodeKindAny), uint8(NodeKindNot), uint8(NodeKindDefined)}, []uint8{1, 2, 3, 4, 5, 6}},
+		{"node kind", []uint8{uint8(NodeKindBoolean), uint8(NodeKindCompare), uint8(NodeKindAll), uint8(NodeKindAny), uint8(NodeKindNot), uint8(NodeKindDefined), uint8(NodeKindExists)}, []uint8{1, 2, 3, 4, 5, 6, 7}},
 		{"compare op", []uint8{uint8(CompareOpEqual), uint8(CompareOpNotEqual), uint8(CompareOpLess), uint8(CompareOpLessEqual), uint8(CompareOpGreater), uint8(CompareOpGreaterEqual), uint8(CompareOpIn)}, []uint8{1, 2, 3, 4, 5, 6, 7}},
 		{"default", []uint8{uint8(DefaultEscalate), uint8(DefaultReject)}, []uint8{1, 2}},
 		{"support", []uint8{uint8(SupportSupported), uint8(SupportRestricted), uint8(SupportRejected)}, []uint8{1, 2, 3}},

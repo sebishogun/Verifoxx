@@ -44,6 +44,7 @@ type RLS struct {
 	NameLengths     []uint32
 	RoleNameStarts  []uint32
 	RoleNameLengths []uint32
+	RolePublic      []uint8
 }
 
 // PolicyNames returns owned policy names in source order.

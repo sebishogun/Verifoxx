@@ -133,6 +133,17 @@ func (builder *Builder) AddDefined(field FieldID, span Span) (NodeID, error) {
 	return builder.appendNode(NodeKindDefined, CompareOpInvalid, field, 0, 0, 0, 0, 0, span, 1), nil
 }
 
+// AddExists appends an unknown-preserving field-existence expression without a literal payload.
+func (builder *Builder) AddExists(field FieldID, span Span) (NodeID, error) {
+	if _, ok := builder.fieldKind(field); !ok {
+		return 0, ErrInvalidField
+	}
+	if err := builder.checkAppend(span, 1, 0, 0, 0); err != nil {
+		return 0, err
+	}
+	return builder.appendNode(NodeKindExists, CompareOpInvalid, field, 0, 0, 0, 0, 0, span, 1), nil
+}
+
 // AddCompare appends one field-to-scalar comparison.
 func (builder *Builder) AddCompare(field FieldID, operation CompareOp, literal Literal, span Span) (NodeID, error) {
 	fieldKind, ok := builder.fieldKind(field)

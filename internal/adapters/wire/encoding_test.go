@@ -24,6 +24,10 @@ func TestAppendJSONStringPreservesAdapterEncoding(t *testing.T) {
 		if string(got) != "prefix:"+test.want {
 			t.Errorf("AppendJSONString(%q) = %q, want %q", test.value, got, "prefix:"+test.want)
 		}
+		got = AppendJSONStringString([]byte("prefix:"), string(test.value))
+		if string(got) != "prefix:"+test.want {
+			t.Errorf("AppendJSONStringString(%q) = %q, want %q", test.value, got, "prefix:"+test.want)
+		}
 	}
 }
 
@@ -51,16 +55,18 @@ func TestWireEncodingWarmPathDoesNotAllocate(t *testing.T) {
 	hash := sha256.Sum256([]byte("nornrune"))
 	encoded := hex.EncodeToString(hash[:])
 	stringDst := make([]byte, 0, 128)
+	textDst := make([]byte, 0, 128)
 	hashDst := make([]byte, 0, sha256.Size*2)
 	var decoded [sha256.Size]byte
 	if allocations := testing.AllocsPerRun(100, func() {
 		stringDst = AppendJSONString(stringDst[:0], []byte("<nornrune>"))
+		textDst = AppendJSONStringString(textDst[:0], "<nornrune>")
 		hashDst = AppendSHA256(hashDst[:0], hash)
 		decoded, _ = DecodeSHA256(encoded)
 	}); allocations != 0 {
 		t.Fatalf("wire encoding warm allocations = %f, want 0", allocations)
 	}
-	if decoded != hash || len(stringDst) == 0 || len(hashDst) != sha256.Size*2 {
+	if decoded != hash || len(stringDst) == 0 || len(textDst) == 0 || len(hashDst) != sha256.Size*2 {
 		t.Fatal("wire encoding allocation check did not retain results")
 	}
 }

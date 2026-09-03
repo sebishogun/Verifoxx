@@ -29,6 +29,25 @@ the `nornrune_` namespace:
 | `nornrune_evaluation_workers` | gauge | Configured worker count |
 | `nornrune_simd_tier_info{tier}` | gauge | Selected SIMD tier (one value from the runtime SIMD tier set) |
 
+An evaluation batch becomes observable after request and evidence decoding has
+produced a valid row count. From that boundary onward, success or failure is
+recorded exactly once. A failed scheduler, encoder, output-limit, or required
+audit path contributes one batch, one failure, its decoded row count, and no
+completed decisions. A decode rejection has no trusted row count and is not an
+evaluation-batch metric.
+
+End-to-end duration retains Go's monotonic clock component through evaluation
+and required audit acknowledgment. UTC audit timestamps are derived from that
+nonnegative elapsed duration, so a wall-clock correction cannot discard
+telemetry or make an otherwise valid required-audit batch fail.
+
+Required-mode audit persistence is recorded after its synchronous commit
+acknowledgment. Best-effort queue admission records no terminal outcome; the
+journal writer records `persisted` or `optional_drop` only after its asynchronous
+commit attempt finishes. Immediate queue rejection is also an `optional_drop`,
+and journal write failures remain available through the separate journal-failure
+counter.
+
 ## OTLP instrument names and encoding
 
 The OTLP pipeline exports the same snapshot under dotted names, all cumulative
@@ -44,7 +63,9 @@ Duration and queue buckets are counters labeled with a numeric-second `le`
 bound (`0.00001` … `10`) plus `+Inf`, carrying **cumulative monotonic**
 counts; the `+Inf` bucket equals the total observation count, so
 `histogram_quantile` works on OTLP-to-Prometheus converted series exactly as
-it does on the native Prometheus histograms.
+it does on the native Prometheus histograms. OTLP integer counters saturate at
+`2^63 - 1024`, the largest SDK-safe sum below the signed boundary, rather than
+wrapping after the internal `uint64` counters exceed that range.
 
 ## Fixed cardinality and privacy
 
@@ -93,16 +114,27 @@ match.
 
 ## Backpressure and shutdown
 
-Export queues are bounded and non-blocking: the OTLP batch span processor
-silently drops spans past its queue limit, and any failed or dropped export
-flush increments `nornrune_telemetry_export_drops_total`. Queue-full span
-drops are dropped by the SDK without a counter; the queue size bound is the
-configured `NORNRUNE_TELEMETRY_QUEUE_SIZE`. Exporter availability never gates
-policy evaluation or required audit persistence. Shutdown flushes both
-providers within the caller-supplied deadline as the lifecycle
-`FlushTelemetry` hook, after the database closes and before workers join; a
-flush failure increments `nornrune_shutdown_failures_total` and joins the
-shutdown error without blocking cleanup of other components.
+Export queues are bounded and non-blocking. The custom span processor increments
+`nornrune_telemetry_export_drops_total` for each sampled span rejected by a full
+queue, for each late sampled span delivered after shutdown admission closes, and
+once for each failed span batch export. Accepted spans left queued when the
+internally bounded cleanup deadline expires are removed and counted so span
+snapshots are not retained. The metric exporter increments the same counter once
+per failed metric export. `ForceFlush` adds one fallback drop only when a provider
+reports an error and the shared drop count did not otherwise advance during that
+call, avoiding double counting. The queue size bound is the configured
+`NORNRUNE_TELEMETRY_QUEUE_SIZE`. Exporter availability never gates policy
+evaluation or required audit persistence.
+
+Shutdown processes traces before metrics so a trace shutdown failure is visible
+in the final metric export. Shutdown admission closes atomically before the final
+drain, and no span can enqueue after that drain. Exactly-once cleanup continues
+under an internal bounded context even if the initiating caller cancels. A
+caller-supplied deadline bounds only that caller's wait; later callers can wait
+independently and receive the terminal exporter result. The lifecycle
+`FlushTelemetry` hook still runs after the database closes and before workers
+join. A failed terminal shutdown increments `nornrune_shutdown_failures_total`
+once and joins provider errors without blocking cleanup of other components.
 
 ## Readiness and liveness
 
@@ -115,7 +147,11 @@ version appear only as bounded gauge metadata, not as alert labels.
 `deploy/telemetry/prometheus-rules.yaml` defines bounded multi-window alerts
 for decision-rate changes, escalation spikes, audit failures, queue
 saturation, reload failures, and shutdown timeouts. Alerts carry only fixed
-`severity` labels; annotations never interpolate protected values.
+`severity` labels; annotations never interpolate protected values. The decision
+mix rule compares per-outcome shares only when both windows contain traffic, so
+uniform volume changes and idle windows do not alert. Queue pressure alerts at
+two waiting requests per configured evaluation worker, matching the default
+admission bound.
 
 ## Verification and overhead
 

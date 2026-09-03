@@ -25,8 +25,8 @@ func NewSchema(
 	limits public.Limits,
 ) (Schema, error) {
 	schema := Schema{
-		Bindings:     cloneBindingSet(bindings),
-		Parameters:   cloneParameters(parameters),
+		Bindings:     bindings,
+		Parameters:   parameters,
 		CommandField: commandField,
 		RoleField:    roleField,
 		Dialect:      dialect,
@@ -34,6 +34,8 @@ func NewSchema(
 	if err := schema.Validate(limits); err != nil {
 		return Schema{}, err
 	}
+	schema.Bindings = cloneBindingSet(bindings)
+	schema.Parameters = cloneParameters(parameters)
 	return schema, nil
 }
 
@@ -48,26 +50,32 @@ func (schema Schema) Validate(limits public.Limits) error {
 	if !validSpecialField(schema.Bindings, schema.CommandField) || !validSpecialField(schema.Bindings, schema.RoleField) {
 		return ErrInvalidSchema
 	}
+	if uint64(len(schema.Parameters)) > uint64(limits.MaxLiterals) {
+		return ErrInvalidSchema
+	}
 
 	stringBytes := uint64(len(schema.Bindings.Name) + len(schema.Bindings.Version) + len(schema.Bindings.Decision))
 	for row := range schema.Bindings.Fields {
 		stringBytes += uint64(len(schema.Bindings.Fields[row].Source) + len(schema.Bindings.Fields[row].Target))
 	}
 	stringBytes += uint64(len(schema.CommandField) + len(schema.RoleField))
+	if stringBytes > uint64(limits.MaxStringBytes) {
+		return ErrInvalidSchema
+	}
 	for row := range schema.Parameters {
 		parameter := &schema.Parameters[row]
 		if !validParameterName(schema.Dialect, parameter.Name) || !validParameterLiteral(parameter.Value) {
 			return ErrInvalidSchema
 		}
 		stringBytes += uint64(len(parameter.Name) + len(parameter.Value.String))
+		if stringBytes > uint64(limits.MaxStringBytes) {
+			return ErrInvalidSchema
+		}
 		for previous := 0; previous < row; previous++ {
-			if schema.Parameters[previous].Name == parameter.Name {
+			if parameter.Name != "?" && schema.Parameters[previous].Name == parameter.Name {
 				return ErrInvalidSchema
 			}
 		}
-	}
-	if stringBytes > uint64(limits.MaxStringBytes) {
-		return ErrInvalidSchema
 	}
 	return nil
 }
@@ -151,10 +159,20 @@ func cloneParameters(parameters []Parameter) []Parameter {
 	if parameters == nil {
 		return nil
 	}
+	stringBytes := 0
+	for row := range parameters {
+		stringBytes += len(parameters[row].Value.String)
+	}
 	cloned := make([]Parameter, len(parameters))
+	strings := make([]byte, stringBytes)
+	cursor := 0
 	for row := range parameters {
 		cloned[row] = parameters[row]
-		cloned[row].Value.String = append([]byte(nil), parameters[row].Value.String...)
+		length := copy(strings[cursor:], parameters[row].Value.String)
+		if length != 0 {
+			cloned[row].Value.String = strings[cursor : cursor+length : cursor+length]
+		}
+		cursor += length
 	}
 	return cloned
 }

@@ -2,6 +2,8 @@ package telemetry
 
 import (
 	"context"
+	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -11,7 +13,43 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
+
+var errTraceShutdown = errors.New("trace shutdown failed")
+
+type shutdownFailingSpanExporter struct{}
+
+func (*shutdownFailingSpanExporter) ExportSpans(context.Context, []sdktrace.ReadOnlySpan) error {
+	return nil
+}
+
+func (*shutdownFailingSpanExporter) Shutdown(context.Context) error { return errTraceShutdown }
+
+type shutdownMetricExporter struct {
+	values    chan int64
+	exportErr error
+}
+
+func (*shutdownMetricExporter) Temporality(kind sdkmetric.InstrumentKind) metricdata.Temporality {
+	return sdkmetric.DefaultTemporalitySelector(kind)
+}
+
+func (*shutdownMetricExporter) Aggregation(kind sdkmetric.InstrumentKind) sdkmetric.Aggregation {
+	return sdkmetric.DefaultAggregationSelector(kind)
+}
+
+func (exporter *shutdownMetricExporter) Export(_ context.Context, metrics *metricdata.ResourceMetrics) error {
+	value, _ := metricInt64(*metrics, "nornrune.shutdown.failures", nil)
+	select {
+	case exporter.values <- value:
+	default:
+	}
+	return exporter.exportErr
+}
+
+func (*shutdownMetricExporter) ForceFlush(context.Context) error { return nil }
+func (*shutdownMetricExporter) Shutdown(context.Context) error   { return nil }
 
 func TestRuntimeExportsSnapshotToConfiguredOTLPEndpoint(t *testing.T) {
 	var metricRequests atomic.Uint64
@@ -66,6 +104,47 @@ func TestDisabledRuntimeDoesNotRecord(t *testing.T) {
 	defer cancel()
 	if err := runtime.Shutdown(ctx); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTraceShutdownFailureAppearsInFinalMetricExport(t *testing.T) {
+	metricExporter := &shutdownMetricExporter{values: make(chan int64, 1)}
+	reader := sdkmetric.NewPeriodicReader(metricExporter, sdkmetric.WithInterval(time.Hour))
+	runtime, err := New(
+		context.Background(), validConfig(),
+		WithMetricReader(reader), WithSpanExporter(&shutdownFailingSpanExporter{}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := runtime.Shutdown(ctx); !errors.Is(err, errTraceShutdown) {
+		t.Fatalf("Shutdown() error = %v, want trace failure", err)
+	}
+	select {
+	case value := <-metricExporter.values:
+		if value != 1 {
+			t.Fatalf("final exported shutdown failures = %d, want 1", value)
+		}
+	case <-ctx.Done():
+		t.Fatal("meter did not perform final export")
+	}
+}
+
+func TestAsynchronousMetricExportFailureIncrementsExportDrops(t *testing.T) {
+	runtime, err := New(context.Background(), validConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := errors.New("metric export failed")
+	exporter := &shutdownMetricExporter{values: make(chan int64, 1), exportErr: want}
+	counted := newCountingMetricExporter(exporter, runtime.counters)
+	if err := counted.Export(context.Background(), &metricdata.ResourceMetrics{}); !errors.Is(err, want) {
+		t.Fatalf("Export() error = %v, want %v", err, want)
+	}
+	if got := runtime.Snapshot().ExportDrops; got != 1 {
+		t.Fatalf("export drops = %d, want 1", got)
 	}
 }
 
@@ -140,11 +219,47 @@ func TestRuntimeSnapshotAndOTelMetricUseSameCounters(t *testing.T) {
 	}
 }
 
+func TestOTelCumulativeBucketsSaturateInsteadOfWrapping(t *testing.T) {
+	const maxOTelSum = int64(math.MaxInt64 - 1023)
+
+	reader := sdkmetric.NewManualReader()
+	runtime, err := New(context.Background(), validConfig(), WithMetricReader(reader))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Record(BatchDelta{Batches: math.MaxUint64}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Record(BatchDelta{Batches: 1, Duration: 100 * time.Microsecond}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := runtime.Snapshot()
+	if snapshot.Batches != math.MaxUint64 || snapshot.LatencyBuckets[0] != math.MaxUint64 || snapshot.LatencyBuckets[1] != 1 {
+		t.Fatalf("saturated snapshot = %+v", snapshot)
+	}
+	if got := clampMetric(snapshot.Batches); got != maxOTelSum {
+		t.Fatalf("clampMetric(MaxUint64) = %d, want %d", got, maxOTelSum)
+	}
+	var exported metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &exported); err != nil {
+		t.Fatal(err)
+	}
+	for _, bound := range []string{"0.0001", "+Inf"} {
+		got, ok := metricInt64(exported, "nornrune.evaluation.duration_bucket", [][2]string{{"le", bound}})
+		if !ok || got != maxOTelSum {
+			t.Fatalf("OTel cumulative bucket %s = (%d, %t), want (%d, true)", bound, got, ok, maxOTelSum)
+		}
+	}
+}
+
 func TestRuntimeRejectsInvalidConfiguration(t *testing.T) {
 	tests := []Config{
 		{Enabled: true},
 		{Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 1, TraceSampleRatio: -1},
 		{Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 1, TraceSampleRatio: 1.1},
+		{Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 1, TraceSampleRatio: math.NaN()},
+		{Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 1, TraceSampleRatio: math.Inf(-1)},
+		{Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 1, TraceSampleRatio: math.Inf(1)},
 		{Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportQueueSize: 1},
 		{Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second},
 		{Enabled: true, ServiceVersion: "test", BuildVersion: "test", ExportInterval: time.Second, ExportQueueSize: 1, Endpoint: "ftp://collector"},

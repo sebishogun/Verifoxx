@@ -41,7 +41,6 @@ func semanticIdentity(oldProgram, newProgram *program.Program) bool {
 		slices.Equal(oldProgram.TemplateOpStarts, newProgram.TemplateOpStarts) &&
 		slices.Equal(oldProgram.TemplateOpCounts, newProgram.TemplateOpCounts) &&
 		slices.Equal(oldProgram.TemplateLiteralStarts, newProgram.TemplateLiteralStarts) &&
-		slices.Equal(oldProgram.TemplateMaxBytes, newProgram.TemplateMaxBytes) &&
 		slices.Equal(oldProgram.TemplateOps, newProgram.TemplateOps) &&
 		slices.Equal(oldProgram.TemplateArgs, newProgram.TemplateArgs) &&
 		slices.Equal(oldProgram.ExplanationRationaleTemplateIDs, newProgram.ExplanationRationaleTemplateIDs) &&

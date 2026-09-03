@@ -28,17 +28,18 @@ type expressionOperand struct {
 }
 
 type expressionParser struct {
-	tokens          *Tokens
-	schema          *Schema
-	builder         *public.Builder
-	diagnostics     []Diagnostic
-	literalBytes    []byte
-	identifierBytes []byte
-	nodeSpans       []public.Span
-	list            []public.Literal
-	limits          public.Limits
-	position        int
-	nesting         uint32
+	tokens           *Tokens
+	schema           *Schema
+	builder          *public.Builder
+	diagnostics      []Diagnostic
+	literalBytes     []byte
+	identifierBytes  []byte
+	nodeSpans        []public.Span
+	list             []public.Literal
+	limits           public.Limits
+	position         int
+	nesting          uint32
+	unnamedParameter uint32
 }
 
 func (parser *expressionParser) parseOr() public.NodeID {
@@ -225,9 +226,7 @@ func (parser *expressionParser) parsePrimary() expressionOperand {
 		return expressionOperand{kind: operandNode, node: node, span: groupSpan}
 	case TokenTrue, TokenFalse:
 		parser.position++
-		node, err := parser.builder.AddBoolean(kind == TokenTrue, tokenSpan)
-		node = parser.completedNode(node, err, tokenSpan)
-		return expressionOperand{kind: operandNode, node: node, span: tokenSpan}
+		return expressionOperand{kind: operandLiteral, literal: public.BooleanLiteral(kind == TokenTrue), span: tokenSpan}
 	case TokenNull:
 		parser.position++
 		return expressionOperand{kind: operandNull, span: tokenSpan}
@@ -291,6 +290,10 @@ func (parser *expressionParser) ensureNode(value expressionOperand) public.NodeI
 		node, err := parser.builder.AddCompare(value.field, public.CompareOpEqual, public.BooleanLiteral(true), value.span)
 		return parser.completedNode(node, err, value.span)
 	}
+	if value.kind == operandLiteral && value.literal.Kind == public.ValueKindBoolean {
+		node, err := parser.builder.AddBoolean(value.literal.Boolean, value.span)
+		return parser.completedNode(node, err, value.span)
+	}
 	parser.fail(public.CodeType, value.span)
 	return 0
 }
@@ -346,6 +349,21 @@ func (parser *expressionParser) field(token []byte) (public.FieldID, bool) {
 }
 
 func (parser *expressionParser) parameter(token []byte) (public.Literal, bool) {
+	if len(token) == 1 && token[0] == '?' {
+		unnamed := parser.unnamedParameter
+		parser.unnamedParameter++
+		for row := range parser.schema.Parameters {
+			parameter := &parser.schema.Parameters[row]
+			if parameter.Name != "?" {
+				continue
+			}
+			if unnamed == 0 {
+				return parameter.Value, true
+			}
+			unnamed--
+		}
+		return public.Literal{}, false
+	}
 	for row := range parser.schema.Parameters {
 		parameter := &parser.schema.Parameters[row]
 		if len(token) == len(parameter.Name) && bytes.Equal(token, []byte(parameter.Name)) {

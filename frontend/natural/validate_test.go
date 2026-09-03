@@ -31,6 +31,79 @@ func TestValidatorRejectsFabricatedCitation(t *testing.T) {
 	assertDiagnosticCode(t, document, proposal, CodeCitation)
 }
 
+func TestValidatorRejectsCitationRangesThatSplitUTF8Runes(t *testing.T) {
+	source := []byte("é")
+	document, err := NewDocument(source, []uint32{0}, DefaultLimits())
+	if err != nil {
+		t.Fatalf("NewDocument() error = %v", err)
+	}
+	proposal := &Proposal{
+		Provider:             ProviderInfo{ID: "fixture", Version: "1"},
+		ItemKinds:            []ItemKind{ItemKindRequirement, ItemKindRestriction},
+		ItemParents:          []ItemID{0, 1},
+		ItemTextStarts:       []uint32{0, 2},
+		ItemTextLengths:      []uint32{2, 11},
+		ItemCitationStarts:   []uint32{0, 1},
+		ItemCitationCounts:   []uint16{1, 1},
+		ItemBytes:            []byte("R1restriction"),
+		ItemCitationIDs:      []CitationID{1, 2},
+		CitationPages:        []uint32{0, 0},
+		CitationSourceStarts: []uint32{0, 1},
+		CitationSourceEnds:   []uint32{1, 2},
+		CitationQuoteStarts:  []uint32{0, 1},
+		CitationQuoteLengths: []uint32{1, 1},
+		CitationQuoteBytes:   append([]byte(nil), source...),
+		DocumentDigest:       document.Digest,
+	}
+	assertDiagnosticCode(t, document, proposal, CodeCitation)
+}
+
+func TestValidatorRejectsItemRangesThatSplitUTF8Runes(t *testing.T) {
+	document, proposal := validProposal(t)
+	proposal.ItemBytes = []byte("éapproval")
+	proposal.ItemTextStarts = []uint32{0, 1, 2}
+	proposal.ItemTextLengths = []uint32{1, 1, 8}
+	assertDiagnosticCode(t, document, proposal, CodeInvalidProposal)
+}
+
+func TestValidatorRejectsOverlappingCitations(t *testing.T) {
+	source := []byte("abcdef")
+	document, err := NewDocument(source, []uint32{0}, DefaultLimits())
+	if err != nil {
+		t.Fatalf("NewDocument() error = %v", err)
+	}
+	var builder Builder
+	builder.Reset(document.Digest, ProviderInfo{ID: "fixture", Version: "1"}, DefaultLimits())
+	first, err := builder.AddCitation(0, Span{Start: 0, End: 4}, source[0:4])
+	if err != nil {
+		t.Fatalf("first AddCitation() error = %v", err)
+	}
+	second, err := builder.AddCitation(0, Span{Start: 2, End: 6}, source[2:6])
+	if err != nil {
+		t.Fatalf("second AddCitation() error = %v", err)
+	}
+	requirement, err := builder.AddItem(ItemKindRequirement, 0, []byte("requirement"), []CitationID{first})
+	if err != nil {
+		t.Fatalf("AddItem(requirement) error = %v", err)
+	}
+	if _, err := builder.AddItem(ItemKindRestriction, requirement, []byte("restriction"), []CitationID{second}); err != nil {
+		t.Fatalf("AddItem(restriction) error = %v", err)
+	}
+	proposal := builder.Finish()
+	assertDiagnosticCode(t, document, &proposal, CodeCitation)
+}
+
+func TestValidatorBoundsProviderMetadataBeforeReview(t *testing.T) {
+	document, proposal := validProposal(t)
+	limits := DefaultLimits()
+	limits.MaxClaimBytes = uint32(len(proposal.ItemBytes) + len(proposal.Provider.ID) + len(proposal.Provider.Version) - 1)
+	var validator Validator
+	diagnostics := validator.Validate(nil, document, proposal, limits)
+	if len(diagnostics) != 1 || diagnostics[0].Code != CodeLimit {
+		t.Fatalf("Validate() diagnostics = %#v, want provider metadata limit", diagnostics)
+	}
+}
+
 func TestValidatorRejectsNonOwnedCitationRanges(t *testing.T) {
 	document, proposal := validProposal(t)
 	proposal.ItemCitationStarts[1] = 0

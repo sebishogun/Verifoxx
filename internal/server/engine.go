@@ -84,6 +84,7 @@ type Engine struct {
 	journal        auditJournal
 	metrics        *observability.Metrics
 	health         func(context.Context) error
+	now            func() time.Time
 	scheduler      *scheduler.Scheduler
 	workers        chan *engineWorker
 	versions       map[[32]byte]persistence.PolicyVersionID
@@ -106,7 +107,7 @@ func NewEngine(config EngineConfig) (*Engine, error) {
 	}
 	engine := &Engine{
 		telemetry: config.Telemetry, publisher: config.Publisher, registry: config.Registry,
-		journal: config.Journal, metrics: config.Metrics, health: config.Health,
+		journal: config.Journal, metrics: config.Metrics, health: config.Health, now: time.Now,
 		workers:  make(chan *engineWorker, config.Workers),
 		versions: make(map[[32]byte]persistence.PolicyVersionID), engineVersion: config.EngineVersion,
 		batchLimits: batchDecoderLimits(config.Limits), limits: config.Limits, maxPolicyBytes: config.Limits.MaxPolicyBytes,
@@ -236,11 +237,17 @@ func (engine *Engine) EvaluateBatch(
 		return nil, err
 	}
 	defer func() { engine.workers <- worker }()
-	started := time.Now().UTC()
+	started := engine.now()
 	batch, err := worker.decoder.Decode(&worker.builder, compiled, request.Requests, request.Evidence, engine.batchLimits)
 	if err != nil {
 		return nil, fmt.Errorf("%w: decode batch: %v", service.ErrInvalidRequest, err)
 	}
+	recorded := false
+	defer func() {
+		if !recorded {
+			engine.recordEvaluationFailure(uint64(batch.Rows), nonNegativeElapsed(started, engine.now()))
+		}
+	}()
 	if err := engine.scheduler.Execute(ctx, &worker.results, compiled, batch); err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
@@ -261,13 +268,14 @@ func (engine *Engine) EvaluateBatch(
 	if len(output) > engine.maxOutputBytes {
 		return nil, fmt.Errorf("%w: encoded output exceeds service limit", service.ErrInvalidRequest)
 	}
-	completed := time.Now().UTC()
+	completed := engine.now()
 	if engine.auditMode != persistence.AuditOff {
 		_, auditSpan := engine.telemetry.Start(ctx, publictelemetry.OperationAuditAcknowledgment)
+		auditStarted := started.UTC()
 		if err := buildAuditBatch(&worker.audit, auditInput{
 			policyVersionID: versionID, policyHash: compiled.ContentHash, engineVersion: engine.engineVersion,
 			requests: request.Requests, evidence: request.Evidence, results: output,
-			started: started, completed: completed, sequence: engine.sequence.Add(1),
+			started: auditStarted, completed: auditStarted.Add(nonNegativeElapsed(started, completed)), sequence: engine.sequence.Add(1),
 		}); err != nil {
 			auditSpan.End()
 			return nil, fmt.Errorf("%w: materialize audit: %v", service.ErrAuditUnavailable, err)
@@ -279,13 +287,22 @@ func (engine *Engine) EvaluateBatch(
 				return nil, fmt.Errorf("%w: persist audit: %v", service.ErrAuditUnavailable, err)
 			}
 			engine.recordAudit(publictelemetry.AuditOptionalDrop)
-		} else {
+		} else if engine.auditMode == persistence.AuditRequired {
 			engine.recordAudit(publictelemetry.AuditPersisted)
 		}
 		auditSpan.End()
 	}
-	engine.recordEvaluation(compiled, &worker.results, completed.Sub(started))
+	engine.recordEvaluation(compiled, &worker.results, nonNegativeElapsed(started, engine.now()))
+	recorded = true
 	return output, nil
+}
+
+func nonNegativeElapsed(started, completed time.Time) time.Duration {
+	elapsed := completed.Sub(started)
+	if elapsed < 0 {
+		return 0
+	}
+	return elapsed
 }
 
 func (engine *Engine) recordAudit(outcome publictelemetry.AuditOutcome) {
@@ -304,6 +321,10 @@ func (engine *Engine) recordEvaluation(compiled *program.Program, batch *result.
 		}
 	}
 	_ = engine.metrics.ObserveBatch(batchObservation(compiled, batch, elapsed))
+}
+
+func (engine *Engine) recordEvaluationFailure(rows uint64, elapsed time.Duration) {
+	_ = engine.metrics.ObserveBatch(observability.BatchObservation{Rows: rows, Duration: elapsed, Failed: true})
 }
 
 var errUnknownOutcomeIDs = errors.New("server: policy does not define the four fixed decisions")
@@ -371,7 +392,7 @@ func (engine *Engine) Close(ctx context.Context) error {
 
 func (engine *Engine) valid() bool {
 	return engine != nil && engine.publisher != nil && engine.registry != nil && engine.journal != nil &&
-		engine.metrics != nil && engine.health != nil && engine.scheduler != nil && engine.workers != nil && cap(engine.workers) > 0 &&
+		engine.metrics != nil && engine.health != nil && engine.now != nil && engine.scheduler != nil && engine.workers != nil && cap(engine.workers) > 0 &&
 		engine.engineVersion != "" && engine.maxPolicyBytes > 0 && engine.maxOutputBytes > 0 && engine.auditMode.Valid()
 }
 

@@ -113,7 +113,9 @@ func (encoder *frameEncoder) encode(dst []byte, kind frameKind, value reflect.Va
 	if err := fillProgramSections(value, encoder.sections, &row); err != nil || row != count {
 		return nil, errInvalidFrame
 	}
-	encoded, err := buildSections(dst, FrameMagic, byte(kind), 0, maxBytes, maxSections, encoder.sections)
+	encoded, err := buildSections(
+		dst, FrameMagic, byte(kind), 0, frameHeaderBytes, maxBytes, maxSections, Limits{}, encoder.sections,
+	)
 	if err != nil {
 		return nil, errInvalidFrame
 	}
@@ -166,7 +168,7 @@ func decodeFrame(dst reflect.Value, src []byte, want frameKind, maxBytes uint64,
 	if !frameLayoutSupported(want) {
 		return errInvalidFrame
 	}
-	header, descriptors, err := preflightSections(src, FrameMagic, maxBytes, maxSections)
+	header, descriptors, err := preflightSections(src, FrameMagic, frameHeaderBytes, maxBytes, maxSections)
 	if err != nil || frameKind(header.profile) != want || header.capabilities != 0 {
 		return errInvalidFrame
 	}

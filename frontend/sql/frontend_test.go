@@ -70,7 +70,10 @@ func TestNewSchemaValidatesAndOwnsBindingsAndParameters(t *testing.T) {
 			{Source: "sql_role", Target: "context.sql_role", Kind: public.ValueKindString, Group: public.FieldGroupContext},
 		},
 	}
-	parameters := []Parameter{{Name: "$1", Value: public.StringLiteral([]byte("blue"))}}
+	parameters := []Parameter{
+		{Name: "$1", Value: public.StringLiteral([]byte("blue"))},
+		{Name: "$2", Value: public.StringLiteral([]byte("green"))},
+	}
 	schema, err := NewSchema(DialectPostgreSQL, bindings, parameters, "sql_command", "sql_role", public.DefaultLimits())
 	if err != nil {
 		t.Fatalf("NewSchema() error = %v", err)
@@ -78,8 +81,17 @@ func TestNewSchemaValidatesAndOwnsBindingsAndParameters(t *testing.T) {
 	bindings.Fields[0].Source = "mutated"
 	parameters[0].Name = "$2"
 	parameters[0].Value.String[0] = 'X'
-	if schema.Bindings.Fields[0].Source != "team" || schema.Parameters[0].Name != "$1" || string(schema.Parameters[0].Value.String) != "blue" {
+	parameters[1].Value.String[0] = 'X'
+	if schema.Bindings.Fields[0].Source != "team" || schema.Parameters[0].Name != "$1" || string(schema.Parameters[0].Value.String) != "blue" ||
+		string(schema.Parameters[1].Value.String) != "green" {
 		t.Fatalf("schema borrowed input: %#v", schema)
+	}
+	if cap(schema.Parameters[0].Value.String) != len(schema.Parameters[0].Value.String) {
+		t.Fatalf("first parameter capacity = %d, want %d", cap(schema.Parameters[0].Value.String), len(schema.Parameters[0].Value.String))
+	}
+	schema.Parameters[0].Value.String = append(schema.Parameters[0].Value.String, '!')
+	if got := string(schema.Parameters[1].Value.String); got != "green" {
+		t.Fatalf("second parameter changed after append: %q", got)
 	}
 	if schema.CommandField != "sql_command" || schema.RoleField != "sql_role" || schema.Dialect != DialectPostgreSQL {
 		t.Fatalf("schema metadata = %#v", schema)
@@ -119,6 +131,10 @@ func TestNewSchemaRejectsMalformedDeclarations(t *testing.T) {
 		{name: "duplicate parameter", mutate: func(_ *Dialect, _ *public.BindingSet, p *[]Parameter, _ *string, _ *string, _ *public.Limits) {
 			*p = append(*p, (*p)[0])
 		}},
+		{name: "parameter count", mutate: func(_ *Dialect, _ *public.BindingSet, p *[]Parameter, _ *string, _ *string, l *public.Limits) {
+			*p = append(*p, Parameter{Name: "$2", Value: public.StringLiteral([]byte("green"))})
+			l.MaxLiterals = 1
+		}},
 		{name: "unknown command field", mutate: func(_ *Dialect, _ *public.BindingSet, _ *[]Parameter, c *string, _ *string, _ *public.Limits) {
 			*c = "unknown"
 		}},
@@ -140,6 +156,29 @@ func TestNewSchemaRejectsMalformedDeclarations(t *testing.T) {
 				t.Fatal("NewSchema() error = nil")
 			}
 		})
+	}
+}
+
+func TestNewSchemaRejectsParameterLimitBeforeAllocating(t *testing.T) {
+	bindings := public.BindingSet{
+		Name: "sql-policy", Version: "v1",
+		Fields: []public.Binding{
+			{Source: "team", Target: "subject.team", Kind: public.ValueKindString, Group: public.FieldGroupSubject},
+		},
+	}
+	parameters := []Parameter{
+		{Name: "$1", Value: public.StringLiteral([]byte("blue"))},
+		{Name: "$2", Value: public.StringLiteral([]byte("green"))},
+	}
+	limits := public.DefaultLimits()
+	limits.MaxLiterals = 1
+	allocations := testing.AllocsPerRun(100, func() {
+		if _, err := NewSchema(DialectPostgreSQL, bindings, parameters, "", "", limits); err == nil {
+			t.Fatal("NewSchema() error = nil")
+		}
+	})
+	if allocations != 0 {
+		t.Fatalf("NewSchema() allocations = %v, want 0", allocations)
 	}
 }
 

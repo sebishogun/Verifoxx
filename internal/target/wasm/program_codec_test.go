@@ -2,6 +2,7 @@ package wasm
 
 import (
 	"crypto/sha256"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -28,13 +29,13 @@ func TestProgramArtifactRoundTripOwnsEveryCanonicalColumn(t *testing.T) {
 		t.Fatal("same Program produced different artifacts")
 	}
 
-	decoded, metadata, err := DecodeProgram(artifact, manifest.Limits)
+	decoded, metadata, err := DecodeProgram(artifact, manifest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if metadata.ABI != manifest.ABI || metadata.Schema != manifest.Schema || metadata.Profile != manifest.Profile ||
 		metadata.RequiredCapabilities != manifest.RequiredCapabilities || metadata.ProgramHash != compiled.ContentHash ||
-		metadata.ArtifactHash == [sha256.Size]byte{} {
+		metadata.ArtifactHash == [sha256.Size]byte{} || metadata.Limits != manifest.Limits {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	want, err := program.Freeze(compiled)
@@ -83,8 +84,38 @@ func TestProgramArtifactDecodeRejectsInvalidExecutionSemantics(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, _, err := DecodeProgram(artifact, manifest.Limits); err == nil {
+			if _, _, err := DecodeProgram(artifact, manifest); err == nil {
 				t.Fatal("DecodeProgram accepted invalid execution semantics")
+			}
+		})
+	}
+}
+
+func TestProgramArtifactRequiresExactHostManifestLimits(t *testing.T) {
+	compiled := compileWASMTestProgram(t)
+	artifactManifest := testManifest()
+	artifact, err := EncodeProgram(nil, compiled, artifactManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name   string
+		mutate func(*Limits)
+	}{
+		{name: "artifact bytes", mutate: func(limits *Limits) { limits.MaxArtifactBytes++ }},
+		{name: "input bytes", mutate: func(limits *Limits) { limits.MaxInputBytes++ }},
+		{name: "output bytes", mutate: func(limits *Limits) { limits.MaxOutputBytes++ }},
+		{name: "fuel", mutate: func(limits *Limits) { limits.MaxFuel++ }},
+		{name: "rows", mutate: func(limits *Limits) { limits.MaxRows++ }},
+		{name: "Program columns", mutate: func(limits *Limits) { limits.MaxProgramColumns++ }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			host := artifactManifest
+			test.mutate(&host.Limits)
+			decoded, metadata, gotErr := DecodeProgram(artifact, host)
+			if decoded != nil || metadata != (Metadata{}) || !errors.Is(gotErr, ErrIncompatibleVersion) {
+				t.Fatalf("DecodeProgram() = (%p,%+v,%v), want nil metadata and incompatible version", decoded, metadata, gotErr)
 			}
 		})
 	}

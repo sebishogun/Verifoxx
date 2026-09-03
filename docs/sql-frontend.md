@@ -20,7 +20,8 @@ All three profiles accept the same deliberately small expression shape:
 - Field `IS NULL` and `IS NOT NULL` tests.
 - Declared compile-time parameters: `$n` for PostgreSQL and `:name` or `?` for
   Snowflake and Databricks. Parameter values are typed schema declarations, not
-  values read during evaluation.
+  values read during evaluation. Named markers may be reused; each `?`
+  occurrence consumes the next `?` declaration in schema order.
 
 SQL NULL becomes NornRune Missing. A standalone unresolved expression uses
 `DefaultEscalate`; true maps to `Approve`, false to `Reject`, and NULL therefore
@@ -31,6 +32,7 @@ Unquoted identifiers follow each profile's folding rule: PostgreSQL and
 Databricks use lowercase declarations, while Snowflake uses uppercase
 declarations. Quoted identifiers match exactly. Diagnostics are bounded,
 pointerless rows with exact half-open source spans measured as UTF-8 byte offsets.
+PostgreSQL zero-length quoted identifiers are rejected as syntax errors.
 
 The parser rejects unsupported syntax atomically. Rejected forms include field
 comparisons, `NOT IN`, comparison with a NULL literal, functions, casts, joins,
@@ -66,6 +68,9 @@ for one unqualified table. It supports `AS PERMISSIVE` and `AS RESTRICTIVE`,
 subset. Policy names must be unique. Qualified tables and clauses PostgreSQL
 does not allow for a command are rejected. Policy, table, and role names that
 collide with this subset's grammar keywords must use PostgreSQL double quotes.
+Unquoted `CURRENT_ROLE`, `CURRENT_USER`, and `SESSION_USER` are rejected because
+the offline frontend cannot resolve session state. Their double-quoted forms
+remain literal named roles.
 
 The caller declares two string fields: the runtime command and role. Command
 values are `select`, `insert`, `update_using`, `update_check`, and `delete`.
@@ -80,12 +85,13 @@ effective = permissive AND restrictive
 ```
 
 No applicable permissive policy denies. A restrictive policy only constrains a
-matching role. `PUBLIC` matches every role. `ALL` participates in every command
-phase. Omitted `USING` is true; omitted `WITH CHECK` reuses `USING`. INSERT only
-uses `WITH CHECK`; SELECT and DELETE only use `USING`; UPDATE evaluates each
-phase separately. RLS uses `DefaultReject`, so SQL NULL, a missing runtime
-command or role, and any other unresolved policy result fail closed while
-retaining the original Missing reason.
+matching role. Unquoted `PUBLIC` matches every role; quoted `"public"` is a
+literal named role. `ALL` participates in every command phase. Omitted `USING`
+is true; omitted `WITH CHECK` reuses `USING`. INSERT only uses `WITH CHECK`;
+SELECT and DELETE only use `USING`; UPDATE evaluates each phase separately. RLS
+uses `DefaultReject`, so SQL NULL, a missing runtime command or role, and any
+other unresolved policy result fail closed while retaining the original
+Missing reason.
 
 This role model compares one declared runtime role. It does not resolve
 PostgreSQL role membership, ownership, `BYPASSRLS`, leakproof functions,

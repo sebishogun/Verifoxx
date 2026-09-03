@@ -357,7 +357,7 @@ timeout 180s go test -count=1 -timeout 150s ./frontend/sql/... ./internal/fronte
 timeout 240s go test -count=1 -timeout 210s -race ./frontend/sql/... ./internal/frontend/sql
 ```
 
-Expected: PASS; existing assignment baseline R1-R5 remains unchanged.
+Expected: PASS; existing conformance baseline R1-R5 remains unchanged.
 
 ### Task 6: Add PostgreSQL 19 Differential Tests And Profile Corpora
 

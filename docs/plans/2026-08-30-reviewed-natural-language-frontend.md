@@ -329,22 +329,24 @@ and reusable reviewer capacity.
 **Step 1: Write failing draft and token tests**
 
 Define a reviewer-owned draft containing native policy JSON plus one provenance
-row per native requirement:
+row per resulting native semantic row:
 
 ```go
 type ReviewedDraft struct {
 	PolicySource          []byte
-	RequirementIDs       []uint32
+	SemanticKinds        []SemanticKind
+	SemanticIDs          []uint32
 	MappingStarts        []uint32
 	MappingCounts        []uint16
 	MappingProposalItems []ItemID
 }
 ```
 
-Require every native requirement to map to at least one validated requirement
-proposal row and all mapped rows to belong to the same proposal. Reject duplicate
-requirement IDs, orphan mappings, mappings to ambiguity/conflict rows, empty
-policy source, and oversized drafts.
+Require every native semantic row to map to reviewed proposal items, every
+non-ambiguity proposal item to be covered, and requirement proposal items to map
+to native requirement rows. Reject duplicate semantic kind/ID pairs, orphan
+mappings, mappings to ambiguity/conflict rows, empty policy source, and
+oversized drafts.
 
 Define:
 

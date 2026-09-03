@@ -1,6 +1,7 @@
 package wasm
 
 import (
+	"errors"
 	"math"
 	"reflect"
 	"sync/atomic"
@@ -8,7 +9,18 @@ import (
 	"github.com/sebishogun/nornrune/internal/eval"
 	"github.com/sebishogun/nornrune/internal/program"
 	"github.com/sebishogun/nornrune/internal/result"
+	"github.com/sebishogun/nornrune/internal/truth"
 )
+
+type evaluationFuelProfile struct {
+	instructions         uint64
+	evidenceInstructions uint64
+	listItems            uint64
+	operandEdges         uint64
+	requirements         uint64
+	requirementClauses   uint64
+	maxRemediations      uint64
+}
 
 type Runtime struct {
 	program     *program.Program
@@ -19,6 +31,7 @@ type Runtime struct {
 	executor    eval.Executor
 	input       eval.Batch
 	manifest    Manifest
+	fuelProfile evaluationFuelProfile
 	fuel        uint64
 	metadata    Metadata
 	cancelled   atomic.Bool
@@ -32,6 +45,7 @@ func NewRuntime(manifest Manifest) (*Runtime, error) {
 	}
 	runtime := &Runtime{manifest: manifest}
 	runtime.metadata = Metadata{
+		Limits:               manifest.Limits,
 		RequiredCapabilities: manifest.RequiredCapabilities,
 		ABI:                  manifest.ABI, Schema: manifest.Schema, Profile: manifest.Profile,
 	}
@@ -50,21 +64,22 @@ func (runtime *Runtime) LoadProgram(artifact []byte) ErrorCode {
 		return ErrorInvalidState
 	}
 	runtime.program = nil
+	runtime.fuelProfile = evaluationFuelProfile{}
 	runtime.metadata = Metadata{
+		Limits:               runtime.manifest.Limits,
 		RequiredCapabilities: runtime.manifest.RequiredCapabilities,
 		ABI:                  runtime.manifest.ABI, Schema: runtime.manifest.Schema, Profile: runtime.manifest.Profile,
 	}
 	runtime.clearEvaluation()
-	decoded, metadata, err := DecodeProgram(artifact, runtime.manifest.Limits)
+	decoded, metadata, err := DecodeProgram(artifact, runtime.manifest)
 	if err != nil {
+		if errors.Is(err, ErrIncompatibleVersion) {
+			return runtime.fail(ErrorIncompatibleVersion, "artifact manifest mismatch")
+		}
 		return runtime.fail(ErrorInvalidArtifact, "invalid program artifact")
 	}
-	if metadata.ABI != runtime.manifest.ABI || metadata.Schema != runtime.manifest.Schema ||
-		metadata.Profile != runtime.manifest.Profile ||
-		metadata.RequiredCapabilities != runtime.manifest.RequiredCapabilities {
-		return runtime.fail(ErrorIncompatibleVersion, "artifact manifest mismatch")
-	}
 	runtime.program = decoded
+	runtime.fuelProfile = newEvaluationFuelProfile(decoded)
 	runtime.metadata = metadata
 	runtime.executor = eval.Executor{}
 	runtime.clearEvaluation()
@@ -95,18 +110,17 @@ func (runtime *Runtime) Evaluate() (code ErrorCode) {
 	runtime.hasResult = false
 	defer func() {
 		if recover() != nil {
+			runtime.clearEvaluation()
 			code = runtime.fail(ErrorInternal, "evaluation trapped")
 		}
 	}()
 	if runtime.cancelled.Load() {
 		return runtime.fail(ErrorCancelled, "evaluation cancelled")
 	}
-	rows := uint64(runtime.input.Rows)
-	instructions := uint64(runtime.program.InstructionCount())
-	if rows != 0 && instructions > math.MaxUint64/rows {
+	cost, ok := evaluationFuelCost(runtime.fuelProfile, runtime.input)
+	if !ok {
 		return runtime.fail(ErrorFuelExhausted, "evaluation fuel exhausted")
 	}
-	cost := rows * instructions
 	if runtime.fuel < cost {
 		return runtime.fail(ErrorFuelExhausted, "evaluation fuel exhausted")
 	}
@@ -130,6 +144,87 @@ func (runtime *Runtime) Evaluate() (code ErrorCode) {
 	return ErrorNone
 }
 
+func newEvaluationFuelProfile(compiled *program.Program) evaluationFuelProfile {
+	profile := evaluationFuelProfile{
+		instructions:       uint64(len(compiled.Opcodes)),
+		requirements:       uint64(len(compiled.RequirementIDs)),
+		requirementClauses: uint64(len(compiled.RequirementClauseIDs)),
+	}
+	for _, opcode := range compiled.Opcodes {
+		if opcode == program.OpcodeEvidence {
+			profile.evidenceInstructions++
+		}
+	}
+	for _, count := range compiled.ListCounts {
+		profile.listItems += uint64(count)
+	}
+	for _, count := range compiled.OperandCounts {
+		profile.operandEdges += uint64(count)
+	}
+	for _, count := range compiled.ClauseRemediationCounts {
+		profile.maxRemediations = max(profile.maxRemediations, uint64(count))
+	}
+	for _, count := range compiled.Resolutions.RemediationCounts {
+		profile.maxRemediations = max(profile.maxRemediations, uint64(count))
+	}
+	return profile
+}
+
+func evaluationFuelCost(profile evaluationFuelProfile, input eval.Batch) (uint64, bool) {
+	rows := uint64(input.Rows)
+	workRows := max(rows, uint64(1))
+	evidenceRows := uint64(input.Evidence.Len())
+	evidenceRefs := uint64(len(input.EvidenceRefs))
+	cost := uint64(1)
+
+	for _, term := range [...]uint64{
+		uint64(len(input.SymbolValues)), uint64(len(input.IntegerValues)), uint64(len(input.TimestampValues)),
+		uint64(len(input.BooleanValues)), uint64(len(input.PresenceMasks)), uint64(len(input.RequestIDs)),
+		uint64(len(input.EvidenceOffsets)), evidenceRefs,
+	} {
+		if !addFuel(&cost, term) {
+			return 0, false
+		}
+	}
+	for _, product := range [...][2]uint64{
+		{workRows, profile.instructions},
+		{workRows, profile.operandEdges},
+		{rows, profile.listItems},
+		{evidenceRows, 8},
+		{evidenceRefs, profile.evidenceInstructions},
+		{rows, profile.requirements},
+		{rows, profile.requirementClauses},
+		{rows + 1, 5},
+		{rows, 6},
+		{rows, profile.requirements},
+		{rows, uint64(truth.ReasonCount) * 4},
+		{rows, profile.maxRemediations},
+	} {
+		if !addFuelProduct(&cost, product[0], product[1]) {
+			return 0, false
+		}
+	}
+	if !addFuel(&cost, evidenceRefs) {
+		return 0, false
+	}
+	return cost, true
+}
+
+func addFuel(total *uint64, value uint64) bool {
+	if value > math.MaxUint64-*total {
+		return false
+	}
+	*total += value
+	return true
+}
+
+func addFuelProduct(total *uint64, left, right uint64) bool {
+	if left != 0 && right > math.MaxUint64/left {
+		return false
+	}
+	return addFuel(total, left*right)
+}
+
 func (runtime *Runtime) ResultLength() uint32 {
 	if runtime == nil || !runtime.hasResult {
 		return 0
@@ -145,6 +240,21 @@ func (runtime *Runtime) ReadResult(dst []byte) (int, ErrorCode) {
 		return 0, runtime.fail(ErrorOutputTooSmall, "result buffer is too small")
 	}
 	written := copy(dst, runtime.resultBytes)
+	runtime.lastError = ""
+	return written, ErrorNone
+}
+
+func (runtime *Runtime) ReadMetadata(dst []byte) (int, ErrorCode) {
+	if runtime == nil {
+		return 0, ErrorInvalidState
+	}
+	if len(dst) < MetadataBytes {
+		return 0, runtime.fail(ErrorOutputTooSmall, "metadata buffer is too small")
+	}
+	written, err := encodeMetadata(dst, runtime.metadata)
+	if err != nil {
+		return 0, runtime.fail(ErrorInternal, "metadata encoding failed")
+	}
 	runtime.lastError = ""
 	return written, ErrorNone
 }
@@ -181,6 +291,14 @@ func (runtime *Runtime) LastError() string {
 		return "invalid runtime"
 	}
 	return runtime.lastError
+}
+
+func (runtime *Runtime) RecordTrap() ErrorCode {
+	if runtime == nil {
+		return ErrorInternal
+	}
+	runtime.clearEvaluation()
+	return runtime.fail(ErrorInternal, "module operation trapped")
 }
 
 func (runtime *Runtime) clearEvaluation() {

@@ -59,7 +59,8 @@ func (command Command) String() string {
 	return commandNames[row]
 }
 
-// Parameter is one typed compile-time SQL parameter binding.
+// Parameter is one typed compile-time SQL parameter binding. Named markers may
+// be reused; each ? marker consumes the next ? declaration in slice order.
 type Parameter struct {
 	Name  string
 	Value public.Literal

@@ -414,7 +414,7 @@ timeout 60s go mod tidy -diff
 Expected: all commands pass; formatting and module-diff commands print
 nothing. Review every changed line before marking Task 7 complete.
 
-### Step 6: Update measured design notes
+### Step 6: Update measured architecture records
 
 Record only the isolated benchmark numbers and confirmed allocation behavior
 in the main design. Do not add speculative optimization or fuse passes unless

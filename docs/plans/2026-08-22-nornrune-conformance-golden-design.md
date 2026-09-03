@@ -6,9 +6,9 @@
 
 ## Goal
 
-Exercise the complete semantic path over the five supplied requests: decode a
-bounded policy, compile it, decode the assignment request/evidence pack,
-execute it, and compare assignment-facing machine-readable results. Expected
+Run the complete semantic path over the five baseline requests: decode a
+bounded policy, compile it, decode the baseline request/evidence pack,
+execute it, and compare product-facing machine-readable results. Expected
 decisions are Approve, Reject, Revise, Escalate, and Escalate.
 
 ## Policy Model
@@ -33,7 +33,7 @@ fixtures, and runs `eval.Executor`. It asserts decisions and applied
 requirement IDs for all five rows.
 
 A test-local projector converts outcome, driver, reason, remediation, and
-request evidence CSR IDs into the assignment-facing fields. It branches on
+request evidence CSR IDs into the product-facing fields. It branches on
 semantic driver IDs, never request IDs. Canonical JSON must match both
 `results/requests.json` and `testdata/golden/requests.json`. Task 25 will replace
 the projector with the production encoder without changing this contract.
